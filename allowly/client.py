@@ -15,6 +15,7 @@ from .types import (
     ReceiptEnvelopeSigned,
     ReceiptEnvelope,
     ScopeEntry,
+    FallbackMode,
     ScopeCheckResultAllow,
     ScopeCheckResultConfirm,
     ScopeCheckResultDeny,
@@ -40,8 +41,19 @@ class Allowly:
         *,
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = 10.0,
+        check_timeout_ms: int = 1000,
+        default_fallback: FallbackMode = "fail_closed",
+        fallback_by_scope: dict[str, FallbackMode] | None = None,
     ) -> None:
         self._api_key = api_key
+        if check_timeout_ms <= 0:
+            raise ValueError("check_timeout_ms must be positive")
+        self._check_timeout = check_timeout_ms / 1000
+        self._default_fallback = _validate_fallback_mode(default_fallback)
+        self._fallback_by_scope = {
+            scope: _validate_fallback_mode(mode)
+            for scope, mode in (fallback_by_scope or {}).items()
+        }
         self._http = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {api_key}"},
@@ -79,14 +91,71 @@ class Allowly:
     ) -> CheckResponse:
         """Check whether an authorization permits each requested scope."""
         path = "/v1/check" + ("?wait=true" if wait else "")
-        raw = await self._request("POST", path, json={
+        body = {
             "authorization_id": authorization_id,
             "scopes": scopes,
             "resource": resource,
             "session_id": session_id,
             "context": context or {},
-        })
+        }
+        try:
+            raw = await self._request("POST", path, json=body, timeout=self._check_timeout)
+        except httpx.TimeoutException:
+            return self._fallback_check_response(
+                authorization_id=authorization_id,
+                scopes=scopes,
+                failure="timeout",
+            )
+        except httpx.TransportError:
+            return self._fallback_check_response(
+                authorization_id=authorization_id,
+                scopes=scopes,
+                failure="unreachable",
+            )
+        except AllowlyAPIError as exc:
+            if exc.status >= 500:
+                return self._fallback_check_response(
+                    authorization_id=authorization_id,
+                    scopes=scopes,
+                    failure="unreachable",
+                )
+            raise
         return _parse_check_response(raw)
+
+    def _fallback_mode_for_scope(self, scope: str) -> FallbackMode:
+        return self._fallback_by_scope.get(scope, self._default_fallback)
+
+    def _fallback_check_response(
+        self,
+        *,
+        authorization_id: str,
+        scopes: list[str],
+        failure: str,
+    ) -> CheckResponse:
+        results = {}
+        for scope in scopes:
+            mode = self._fallback_mode_for_scope(scope)
+            decision = "allow" if mode == "fail_open" else "deny"
+            reason = f"fallback_{'open' if mode == 'fail_open' else 'closed'}_{failure}"
+            base = {
+                "decision": decision,
+                "reason": reason,
+                "receipt": None,
+                "is_fallback": True,
+                "fallback_mode": mode,
+            }
+            if decision == "allow":
+                results[scope] = ScopeCheckResultAllow(**base)
+            else:
+                results[scope] = ScopeCheckResultDeny(**base)
+        return CheckResponse(
+            authorization_id=authorization_id,
+            user_id=None,
+            agent_id=None,
+            authorization_expires_at=None,
+            policy_version="sdk_fallback",
+            results=results,
+        )
 
 
 class _AuthorizationsResource:
@@ -222,6 +291,12 @@ def _parse_receipt_envelope(raw: dict[str, Any]) -> ReceiptEnvelope:
     )
 
 
+def _validate_fallback_mode(mode: str) -> FallbackMode:
+    if mode not in {"fail_open", "fail_closed"}:
+        raise ValueError("fallback mode must be 'fail_open' or 'fail_closed'")
+    return mode  # type: ignore[return-value]
+
+
 def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
     # The API returns a map keyed by requested scope. Preserve those keys so
     # callers can safely handle mixed allow/deny/confirm results in one check.
@@ -231,6 +306,8 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
             decision=item["decision"],
             reason=item["reason"],
             receipt=_parse_receipt_envelope(item["receipt"]),
+            is_fallback=bool(item.get("is_fallback", False)),
+            fallback_mode=item.get("fallback_mode"),
         )
         if item["decision"] == "deny":
             results[scope] = ScopeCheckResultDeny(**base)

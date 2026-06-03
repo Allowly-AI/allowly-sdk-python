@@ -18,6 +18,7 @@ mcp = [
     "mcp>=1.0",
 ]
 dev = [
+    "cryptography>=42",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "respx>=0.21",

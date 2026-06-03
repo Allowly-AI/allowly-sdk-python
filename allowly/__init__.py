@@ -8,6 +8,7 @@ from .types import (
     AuthorizationCreateResponse,
     AuthorizationRevokeResponse,
     Decision,
+    FallbackMode,
     ReceiptEnvelope,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
@@ -34,6 +35,7 @@ __all__ = [
     "ReceiptEnvelopeSigned",
     "ScopeEntry",
     "Decision",
+    "FallbackMode",
 ]
 
 

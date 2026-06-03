@@ -6,6 +6,7 @@ from typing import Any, Literal, Union
 
 
 Decision = Literal["allow", "deny", "confirm"]
+FallbackMode = Literal["fail_open", "fail_closed"]
 
 
 @dataclass
@@ -38,7 +39,9 @@ ReceiptEnvelope = Union[ReceiptEnvelopePending, ReceiptEnvelopeSigned]
 class ScopeCheckResultBase:
     decision: Decision
     reason: str
-    receipt: ReceiptEnvelope
+    receipt: ReceiptEnvelope | None
+    is_fallback: bool = False
+    fallback_mode: FallbackMode | None = None
 
 
 @dataclass
