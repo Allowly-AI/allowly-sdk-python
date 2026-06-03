@@ -6,6 +6,7 @@ FastMCP usage:
     mcp = FastMCP("my-server")
     mcp.add_middleware(AllowlyMCPMiddleware(
         api_key="allowly_live_...",
+        user_id_fn=lambda context: context.fastmcp_context.session.user_id,
         authorization_id_fn=lambda user_id: db.get_authorization_id(user_id),
     ))
 
@@ -14,11 +15,13 @@ Low-level Server usage:
     AllowlyMCPMiddleware.wrap(
         server,
         api_key="allowly_live_...",
+        user_id_fn=lambda context: trusted_current_user_id(),
         authorization_id_fn=lambda user_id: db.get_authorization_id(user_id),
     )
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Optional, Union
 
 from allowly.client import Allowly
@@ -26,6 +29,18 @@ from allowly.client import Allowly
 
 AuthorizationIdResult = Optional[str]
 AuthorizationIdFn = Callable[[str], Union[AuthorizationIdResult, Awaitable[AuthorizationIdResult]]]
+UserIdResult = Optional[str]
+
+
+@dataclass(frozen=True)
+class MCPAuthorizationContext:
+    tool_name: str
+    arguments: dict[str, Any]
+    request: Any | None = None
+    fastmcp_context: Any | None = None
+
+
+UserIdFn = Callable[[MCPAuthorizationContext], Union[UserIdResult, Awaitable[UserIdResult]]]
 
 
 class AllowlyMCPMiddleware:
@@ -34,9 +49,11 @@ class AllowlyMCPMiddleware:
     Works with both FastMCP (via ``on_call_tool`` middleware hook) and the
     low-level ``mcp.server.Server`` (via :meth:`wrap`).
 
-    ``authorization_id_fn`` is called with the ``user_id`` from the tool arguments
-    and must return the corresponding Allowly authorization ID. It may be sync or async.
-    If it returns ``None`` the check is denied immediately.
+    ``user_id_fn`` must resolve identity from trusted host context, not
+    caller-controlled tool arguments. ``authorization_id_fn`` is then called with
+    that trusted user ID and must return the corresponding Allowly authorization
+    ID. Both callbacks may be sync or async. If either returns ``None`` the check
+    is denied immediately.
     """
 
     def __init__(
@@ -45,18 +62,36 @@ class AllowlyMCPMiddleware:
         authorization_id_fn: AuthorizationIdFn,
         *,
         base_url: Optional[str] = None,
+        user_id_fn: UserIdFn | None = None,
+        allow_user_id_argument: bool = False,
     ) -> None:
         kwargs: dict[str, Any] = {}
         if base_url:
             kwargs["base_url"] = base_url
         self.client = Allowly(api_key, **kwargs)
         self.authorization_id_fn = authorization_id_fn
+        self.user_id_fn = user_id_fn
+        self.allow_user_id_argument = allow_user_id_argument
 
-    async def _resolve_authorization_id(self, user_id: str) -> Optional[str]:
+    async def _resolve_authorization_id(self, context: MCPAuthorizationContext) -> Optional[str]:
+        user_id = await self._resolve_user_id(context)
+        if not user_id:
+            return None
         result = self.authorization_id_fn(user_id)
         if hasattr(result, "__await__"):
             return await result  # type: ignore[return-value]
         return result  # type: ignore[return-value]
+
+    async def _resolve_user_id(self, context: MCPAuthorizationContext) -> Optional[str]:
+        if self.user_id_fn is not None:
+            result = self.user_id_fn(context)
+            if hasattr(result, "__await__"):
+                return await result  # type: ignore[return-value]
+            return result  # type: ignore[return-value]
+        if self.allow_user_id_argument:
+            user_id = context.arguments.get("user_id")
+            return user_id if isinstance(user_id, str) and user_id else None
+        return None
 
     # ------------------------------------------------------------------
     # FastMCP middleware protocol
@@ -68,9 +103,13 @@ class AllowlyMCPMiddleware:
 
         name: str = context.message.name
         args: dict[str, Any] = context.message.arguments or {}
-        user_id: str = args.get("user_id") or ""
 
-        authorization_id = await self._resolve_authorization_id(user_id)
+        auth_context = MCPAuthorizationContext(
+            tool_name=name,
+            arguments=args,
+            fastmcp_context=context,
+        )
+        authorization_id = await self._resolve_authorization_id(auth_context)
         if authorization_id is None:
             return CallToolResult(
                 content=[TextContent(type="text", text="authorization_not_found")],
@@ -127,6 +166,8 @@ class AllowlyMCPMiddleware:
         api_key: str,
         authorization_id_fn: AuthorizationIdFn,
         base_url: Optional[str] = None,
+        user_id_fn: UserIdFn | None = None,
+        allow_user_id_argument: bool = False,
     ) -> "AllowlyMCPMiddleware":
         """Wrap a low-level ``mcp.server.Server`` instance.
 
@@ -135,14 +176,20 @@ class AllowlyMCPMiddleware:
 
         Returns the middleware instance in case further configuration is needed.
         """
-        middleware = cls(api_key, authorization_id_fn, base_url=base_url)
+        middleware = cls(
+            api_key,
+            authorization_id_fn,
+            base_url=base_url,
+            user_id_fn=user_id_fn,
+            allow_user_id_argument=allow_user_id_argument,
+        )
         original_call = server.call_tool
 
         async def _checked_call(name: str, arguments: Optional[dict[str, Any]]) -> Any:
             args = arguments or {}
-            user_id: str = args.get("user_id") or ""
 
-            authorization_id = await middleware._resolve_authorization_id(user_id)
+            auth_context = MCPAuthorizationContext(tool_name=name, arguments=args)
+            authorization_id = await middleware._resolve_authorization_id(auth_context)
             if authorization_id is None:
                 return {"decision": "deny", "reason": "authorization_not_found"}
 

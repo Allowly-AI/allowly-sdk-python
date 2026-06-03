@@ -74,6 +74,14 @@ def test_fetch_keys_doc_enforces_hash_pin():
     ) == VALID_DOC
 
 
+def test_fetch_keys_doc_rejects_workspace_id_mismatch():
+    body = httpx.Response(200, json={**VALID_DOC, "workspace_id": "ws_other"}).text
+    client = _client_for(body)
+
+    with pytest.raises(VerificationError, match="workspace_id mismatch"):
+        fetch_keys_doc("ws_1", base_url="https://api.example.com", client=client)
+
+
 def test_zero_ttl_bypasses_stale_cache():
     """cache_ttl_seconds=0 must not reuse an entry cached with a longer TTL."""
     calls = {"count": 0}

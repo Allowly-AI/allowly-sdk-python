@@ -102,6 +102,10 @@ def fetch_keys_doc(
         doc = json.loads(body)
     except json.JSONDecodeError as exc:
         raise VerificationError("keys document was not valid JSON") from exc
+    if isinstance(doc, dict) and doc.get("workspace_id") != workspace_id:
+        raise VerificationError(
+            f"keys document workspace_id mismatch: got {doc.get('workspace_id')!r}, want {workspace_id!r}"
+        )
 
     load_keys_from_json(doc)
     _keys_doc_cache[cache_key] = (now + cache_ttl_seconds, doc)

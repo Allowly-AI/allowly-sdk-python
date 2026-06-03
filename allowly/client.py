@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -48,8 +49,10 @@ class Allowly:
         check_timeout_ms: int = 1000,
         default_fallback: FallbackMode = "fail_closed",
         fallback_by_scope: dict[str, FallbackMode] | None = None,
+        dangerously_allow_insecure_base_url: bool = False,
     ) -> None:
         self._api_key = api_key
+        base_url = _validate_base_url(base_url, dangerously_allow_insecure_base_url)
         if check_timeout_ms <= 0:
             raise ValueError("check_timeout_ms must be positive")
         self._check_timeout = check_timeout_ms / 1000
@@ -59,7 +62,7 @@ class Allowly:
             for scope, mode in (fallback_by_scope or {}).items()
         }
         self._http = httpx.AsyncClient(
-            base_url=base_url.rstrip("/"),
+            base_url=base_url,
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=timeout,
         )
@@ -369,6 +372,16 @@ def _validate_fallback_mode(mode: str) -> FallbackMode:
     if mode not in {"fail_open", "fail_closed"}:
         raise ValueError("fallback mode must be 'fail_open' or 'fail_closed'")
     return mode  # type: ignore[return-value]
+
+
+def _validate_base_url(base_url: str, allow_insecure: bool) -> str:
+    normalized = base_url.rstrip("/")
+    parsed = urlparse(normalized)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError("base_url must be a valid URL")
+    if parsed.scheme != "https" and not allow_insecure:
+        raise ValueError("base_url must use HTTPS")
+    return normalized
 
 
 def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:

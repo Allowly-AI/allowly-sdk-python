@@ -19,6 +19,19 @@ def client():
     return Allowly(api_key="test-key", base_url=BASE)
 
 
+def test_client_rejects_insecure_base_url_by_default():
+    with pytest.raises(ValueError, match="HTTPS"):
+        Allowly(api_key="test-key", base_url="http://api.example.com")
+
+
+def test_client_allows_insecure_base_url_with_explicit_opt_in():
+    Allowly(
+        api_key="test-key",
+        base_url="http://localhost:8000",
+        dangerously_allow_insecure_base_url=True,
+    )
+
+
 # ---------------------------------------------------------------------------
 # check()
 # ---------------------------------------------------------------------------

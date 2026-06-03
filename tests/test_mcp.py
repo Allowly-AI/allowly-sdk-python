@@ -51,6 +51,11 @@ def _authorization_id_fn(user_id: str) -> str | None:
     return "auth_1" if user_id else None
 
 
+def _trusted_user_id_fn(context) -> str | None:
+    assert context.tool_name
+    return "u1"
+
+
 def _response(scope: str, result) -> CheckResponse:
     return CheckResponse(
         user_id="u1",
@@ -109,7 +114,10 @@ async def test_wrap_allows_tool_call():
     server.call_tool = original_call
 
     middleware = AllowlyMCPMiddleware.wrap(
-        server, api_key="test-key", authorization_id_fn=_authorization_id_fn
+        server,
+        api_key="test-key",
+        authorization_id_fn=_authorization_id_fn,
+        user_id_fn=_trusted_user_id_fn,
     )
 
     with patch.object(middleware.client, "check", AsyncMock(return_value=_allow_response())):
@@ -126,7 +134,10 @@ async def test_wrap_blocks_tool_call_on_deny():
     server.call_tool = original_call
 
     middleware = AllowlyMCPMiddleware.wrap(
-        server, api_key="test-key", authorization_id_fn=_authorization_id_fn
+        server,
+        api_key="test-key",
+        authorization_id_fn=_authorization_id_fn,
+        user_id_fn=_trusted_user_id_fn,
     )
 
     with patch.object(middleware.client, "check", AsyncMock(return_value=_deny_response())):
@@ -157,12 +168,55 @@ async def test_wrap_missing_user_id_denies():
 
 
 @pytest.mark.asyncio
+async def test_wrap_ignores_user_id_argument_by_default():
+    server = MagicMock()
+    original_call = AsyncMock(return_value={})
+    server.call_tool = original_call
+
+    middleware = AllowlyMCPMiddleware.wrap(
+        server,
+        api_key="test-key",
+        authorization_id_fn=_authorization_id_fn,
+    )
+
+    check_mock = AsyncMock(return_value=_allow_response())
+    with patch.object(middleware.client, "check", check_mock):
+        result = await server.call_tool("read_email", {"user_id": "u1"})
+
+    check_mock.assert_not_awaited()
+    original_call.assert_not_awaited()
+    assert result["decision"] == "deny"
+
+
+@pytest.mark.asyncio
+async def test_wrap_can_opt_into_legacy_user_id_argument():
+    server = MagicMock()
+    server.call_tool = AsyncMock(return_value={})
+
+    middleware = AllowlyMCPMiddleware.wrap(
+        server,
+        api_key="test-key",
+        authorization_id_fn=_authorization_id_fn,
+        allow_user_id_argument=True,
+    )
+
+    check_mock = AsyncMock(return_value=_allow_response())
+    with patch.object(middleware.client, "check", check_mock):
+        await server.call_tool("read_email", {"user_id": "u1"})
+
+    check_mock.assert_awaited_once_with(authorization_id="auth_1", scopes=["read_email"])
+
+
+@pytest.mark.asyncio
 async def test_wrap_check_called_with_authorization_id():
     server = MagicMock()
     server.call_tool = AsyncMock(return_value={})
 
     middleware = AllowlyMCPMiddleware.wrap(
-        server, api_key="test-key", authorization_id_fn=_authorization_id_fn
+        server,
+        api_key="test-key",
+        authorization_id_fn=_authorization_id_fn,
+        user_id_fn=_trusted_user_id_fn,
     )
 
     check_mock = AsyncMock(return_value=_allow_response())
@@ -178,7 +232,11 @@ async def test_wrap_check_called_with_authorization_id():
 
 @pytest.mark.asyncio
 async def test_fastmcp_allows_tool_call():
-    middleware = AllowlyMCPMiddleware(api_key="test-key", authorization_id_fn=_authorization_id_fn)
+    middleware = AllowlyMCPMiddleware(
+        api_key="test-key",
+        authorization_id_fn=_authorization_id_fn,
+        user_id_fn=_trusted_user_id_fn,
+    )
 
     context = MagicMock()
     context.message.name = "read_email"
@@ -195,7 +253,11 @@ async def test_fastmcp_allows_tool_call():
 
 @pytest.mark.asyncio
 async def test_fastmcp_blocks_tool_call_on_deny():
-    middleware = AllowlyMCPMiddleware(api_key="test-key", authorization_id_fn=_authorization_id_fn)
+    middleware = AllowlyMCPMiddleware(
+        api_key="test-key",
+        authorization_id_fn=_authorization_id_fn,
+        user_id_fn=_trusted_user_id_fn,
+    )
 
     context = MagicMock()
     context.message.name = "send_email"
@@ -213,7 +275,11 @@ async def test_fastmcp_blocks_tool_call_on_deny():
 
 @pytest.mark.asyncio
 async def test_fastmcp_confirm_returns_nonce():
-    middleware = AllowlyMCPMiddleware(api_key="test-key", authorization_id_fn=_authorization_id_fn)
+    middleware = AllowlyMCPMiddleware(
+        api_key="test-key",
+        authorization_id_fn=_authorization_id_fn,
+        user_id_fn=_trusted_user_id_fn,
+    )
 
     context = MagicMock()
     context.message.name = "send_email"
@@ -235,7 +301,11 @@ async def test_fastmcp_confirm_returns_nonce():
 
 @pytest.mark.asyncio
 async def test_fastmcp_escalate_returns_escalation_payload():
-    middleware = AllowlyMCPMiddleware(api_key="test-key", authorization_id_fn=_authorization_id_fn)
+    middleware = AllowlyMCPMiddleware(
+        api_key="test-key",
+        authorization_id_fn=_authorization_id_fn,
+        user_id_fn=_trusted_user_id_fn,
+    )
 
     context = MagicMock()
     context.message.name = "delete_candidate"
@@ -262,7 +332,10 @@ async def test_wrap_confirm_returns_nonce():
     server.call_tool = original_call
 
     middleware = AllowlyMCPMiddleware.wrap(
-        server, api_key="test-key", authorization_id_fn=_authorization_id_fn
+        server,
+        api_key="test-key",
+        authorization_id_fn=_authorization_id_fn,
+        user_id_fn=_trusted_user_id_fn,
     )
 
     with patch.object(middleware.client, "check", AsyncMock(return_value=_confirm_response())):
@@ -280,7 +353,10 @@ async def test_wrap_escalate_returns_escalation_payload():
     server.call_tool = original_call
 
     middleware = AllowlyMCPMiddleware.wrap(
-        server, api_key="test-key", authorization_id_fn=_authorization_id_fn
+        server,
+        api_key="test-key",
+        authorization_id_fn=_authorization_id_fn,
+        user_id_fn=_trusted_user_id_fn,
     )
 
     with patch.object(middleware.client, "check", AsyncMock(return_value=_escalate_response())):

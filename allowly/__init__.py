@@ -23,6 +23,7 @@ from .types import (
 __all__ = [
     "Allowly",
     "AllowlyMCPMiddleware",
+    "MCPAuthorizationContext",
     "AllowlyAPIError",
     "FieldError",
     "VerificationError",
@@ -52,10 +53,13 @@ def __getattr__(name: str):
     if name == "identifiers":
         return import_module(".identifiers", __name__)
 
-    if name == "AllowlyMCPMiddleware":
-        from .mcp import AllowlyMCPMiddleware
+    if name in {"AllowlyMCPMiddleware", "MCPAuthorizationContext"}:
+        from .mcp import AllowlyMCPMiddleware, MCPAuthorizationContext
 
-        return AllowlyMCPMiddleware
+        return {
+            "AllowlyMCPMiddleware": AllowlyMCPMiddleware,
+            "MCPAuthorizationContext": MCPAuthorizationContext,
+        }[name]
 
     if name in {
         "VerificationError",
