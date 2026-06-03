@@ -45,9 +45,12 @@ with `await allowly.escalations.approve(escalation_id, resolved_by="manager:123"
 or `reject(...)`, then re-check before running the action.
 
 If you need lookup by email later, store a keyed hash such as
-`HMAC_SHA256(APP_PII_PEPPER, normalize(email))` in your app. Keep raw names,
-emails, documents, and profile URLs out of Allowly receipts unless those fields
-are intentionally part of your audit record.
+`allowly.identifiers.from_email(email, pepper=APP_PII_PEPPER)` in your app.
+The helper trims and lowercases only, prefixes the result with `email_hmac:v1`,
+and never sends the raw email or pepper to Allowly. Keep the pepper stable and
+backed up; changing it changes derived user IDs. Keep raw names, emails,
+documents, and profile URLs out of Allowly receipts unless those fields are
+intentionally part of your audit record.
 
 Do not add raw HTTP fallbacks in application code for APIs the SDK is missing.
 Patch this SDK first, then use the typed client from the app. That keeps the

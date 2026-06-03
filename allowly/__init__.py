@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from importlib import import_module
+
 from .client import Allowly
 from .error import AllowlyAPIError, FieldError
 from .types import (
@@ -24,6 +26,7 @@ __all__ = [
     "AllowlyAPIError",
     "FieldError",
     "VerificationError",
+    "identifiers",
     "PublicKey",
     "fetch_keys_doc",
     "clear_keys_doc_cache",
@@ -46,6 +49,9 @@ __all__ = [
 
 
 def __getattr__(name: str):
+    if name == "identifiers":
+        return import_module(".identifiers", __name__)
+
     if name == "AllowlyMCPMiddleware":
         from .mcp import AllowlyMCPMiddleware
 
