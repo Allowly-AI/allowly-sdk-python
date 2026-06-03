@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Literal, Union
 
 
-Decision = Literal["allow", "deny", "confirm"]
+Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
 
 
@@ -45,6 +45,14 @@ class BudgetInfo:
 
 
 @dataclass
+class EscalationInfo:
+    escalation_id: str
+    status: str
+    escalation_to: str | None = None
+    expires_at: str | None = None
+
+
+@dataclass
 class ScopeCheckResultBase:
     decision: Decision
     reason: str
@@ -52,6 +60,7 @@ class ScopeCheckResultBase:
     is_fallback: bool = False
     fallback_mode: FallbackMode | None = None
     budget: BudgetInfo | None = None
+    escalation: EscalationInfo | None = None
 
 
 @dataclass
@@ -72,7 +81,20 @@ class ScopeCheckResultConfirm(ScopeCheckResultBase):
     confirm_prompt_hint: str = ""
 
 
-ScopeCheckResult = Union[ScopeCheckResultAllow, ScopeCheckResultDeny, ScopeCheckResultConfirm]
+@dataclass
+class ScopeCheckResultEscalate(ScopeCheckResultBase):
+    decision: Literal["escalate"]
+    escalation_id: str = ""
+    escalation_to: str | None = None
+    escalation_expires_at: str | None = None
+
+
+ScopeCheckResult = Union[
+    ScopeCheckResultAllow,
+    ScopeCheckResultDeny,
+    ScopeCheckResultConfirm,
+    ScopeCheckResultEscalate,
+]
 
 
 @dataclass
@@ -99,6 +121,8 @@ class AuthorizationCreateRequest:
     expires_at: datetime | str | None = None
     bundle_id: str | None = None
     requires_confirm_for: list[str] = field(default_factory=list)
+    requires_escalation_for: list[str] = field(default_factory=list)
+    escalation_targets: dict[str, str] = field(default_factory=dict)
     budget_limit_micros: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -110,6 +134,9 @@ class AuthorizationCreateResponse:
     expires_at: str
     receipt: ReceiptEnvelopePending
     bundle_id: str | None = None
+    requires_confirm_for: list[str] = field(default_factory=list)
+    requires_escalation_for: list[str] = field(default_factory=list)
+    escalation_targets: dict[str, str] = field(default_factory=dict)
     budget_limit_micros: int | None = None
     budget_spent_micros: int | None = None
 
@@ -132,3 +159,12 @@ class ConfirmationApproveResponse:
     decision: Literal["approved", "denied_by_user"]
     authorization_id: str | None = None
     expires_at: str | None = None
+
+
+@dataclass
+class EscalationResolveResponse:
+    escalation_id: str
+    status: Literal["approved", "rejected"]
+    resolved_by: str | None = None
+    resolved_at: str | None = None
+    receipt: ReceiptEnvelopePending | None = None

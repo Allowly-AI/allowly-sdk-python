@@ -96,6 +96,39 @@ async def test_check_confirm(client):
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_check_escalate(client):
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
+        "authorization_id": "auth_esc",
+        "authorization_expires_at": "2026-12-31T00:00:00Z",
+        "policy_version": "2026-04-19.1",
+        "results": {
+            "candidate.delete": {
+                "decision": "escalate",
+                "reason": "escalation_required",
+                "escalation_id": "esc_abc",
+                "escalation_to": "compliance",
+                "escalation_expires_at": "2026-04-21T17:00:00Z",
+                "escalation": {
+                    "escalation_id": "esc_abc",
+                    "status": "pending",
+                    "escalation_to": "compliance",
+                    "expires_at": "2026-04-21T17:00:00Z",
+                },
+                "receipt": PENDING_RECEIPT,
+            }
+        },
+    }))
+    res = await client.check(authorization_id="auth_esc", scopes=["candidate.delete"])
+    item = res.results["candidate.delete"]
+    assert item.decision == "escalate"
+    assert item.escalation_id == "esc_abc"  # type: ignore[union-attr]
+    assert item.escalation_to == "compliance"  # type: ignore[union-attr]
+    assert item.escalation is not None
+    assert item.escalation.status == "pending"
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_check_raises_on_401(client):
     respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(401, json={
         "error": {"code": "unauthorized", "message": "Invalid or revoked API key"}
@@ -367,6 +400,32 @@ async def test_authorizations_create_with_budget(client):
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_authorizations_create_with_escalation(client):
+    route = respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(201, json={
+        "authorization_id": "auth_esc",
+        "created_at": "2026-04-20T00:00:00Z",
+        "expires_at": "2026-12-31T00:00:00Z",
+        "requires_escalation_for": ["candidate.delete"],
+        "escalation_targets": {"candidate.delete": "compliance"},
+        "receipt": PENDING_RECEIPT,
+    }))
+    res = await client.authorizations.create(
+        user_id="u1",
+        agent_id="a1",
+        scopes=["candidate.delete"],
+        requires_escalation_for=["candidate.delete"],
+        escalation_targets={"candidate.delete": "compliance"},
+    )
+    import json
+    body = json.loads(route.calls[0].request.content)
+    assert body["requires_escalation_for"] == ["candidate.delete"]
+    assert body["escalation_targets"] == {"candidate.delete": "compliance"}
+    assert res.requires_escalation_for == ["candidate.delete"]
+    assert res.escalation_targets == {"candidate.delete": "compliance"}
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_authorizations_create_no_session_id(client):
     """session_id must not be sent — it was removed in v6."""
     route = respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(201, json={
@@ -468,6 +527,45 @@ async def test_confirmations_denied(client):
     }))
     res = await client.confirmations.approve("nonce123", approved=False)
     assert res.decision == "denied_by_user"
+
+
+# ---------------------------------------------------------------------------
+# escalations.resolve()
+# ---------------------------------------------------------------------------
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_escalations_approve(client):
+    route = respx.post(f"{BASE}/v1/escalations/esc_abc/resolve").mock(return_value=httpx.Response(200, json={
+        "escalation_id": "esc_abc",
+        "status": "approved",
+        "resolved_by": "compliance:1",
+        "resolved_at": "2026-04-21T16:15:00Z",
+        "receipt": PENDING_RECEIPT,
+    }))
+    res = await client.escalations.approve("esc_abc", resolved_by="compliance:1", note="ok")
+    import json
+    body = json.loads(route.calls[0].request.content)
+    assert body == {"resolution": "approved", "resolved_by": "compliance:1", "note": "ok"}
+    assert res.escalation_id == "esc_abc"
+    assert res.status == "approved"
+    assert res.receipt is not None
+    assert res.receipt.status == "pending"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_escalations_reject_idempotent_without_new_receipt(client):
+    respx.post(f"{BASE}/v1/escalations/esc_abc/resolve").mock(return_value=httpx.Response(200, json={
+        "escalation_id": "esc_abc",
+        "status": "rejected",
+        "resolved_by": "compliance:1",
+        "resolved_at": "2026-04-21T16:15:00Z",
+        "receipt": None,
+    }))
+    res = await client.escalations.reject("esc_abc", resolved_by="compliance:1")
+    assert res.status == "rejected"
+    assert res.receipt is None
 
 
 # ---------------------------------------------------------------------------

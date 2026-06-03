@@ -39,6 +39,11 @@ if decision.results["web.search"].decision != "allow":
     raise RuntimeError("Action is not authorized")
 ```
 
+For scopes that need third-party approval, create the authorization with
+`requires_escalation_for=["scope.name"]` and resolve returned escalation results
+with `await allowly.escalations.approve(escalation_id, resolved_by="manager:123")`
+or `reject(...)`, then re-check before running the action.
+
 If you need lookup by email later, store a keyed hash such as
 `HMAC_SHA256(APP_PII_PEPPER, normalize(email))` in your app. Keep raw names,
 emails, documents, and profile URLs out of Allowly receipts unless those fields

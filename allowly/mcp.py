@@ -96,6 +96,20 @@ class AllowlyMCPMiddleware:
                 isError=True,
             )
 
+        if scope_result.decision == "escalate":
+            import json
+            payload = json.dumps({
+                "decision": "escalate",
+                "reason": scope_result.reason,
+                "escalation_id": scope_result.escalation_id,
+                "escalation_to": scope_result.escalation_to,
+                "escalation_expires_at": scope_result.escalation_expires_at,
+            })
+            return CallToolResult(
+                content=[TextContent(type="text", text=payload)],
+                isError=True,
+            )
+
         return CallToolResult(
             content=[TextContent(type="text", text=scope_result.reason)],
             isError=True,
@@ -144,6 +158,15 @@ class AllowlyMCPMiddleware:
                     "reason": scope_result.reason,
                     "confirm_nonce": scope_result.confirm_nonce,
                     "confirm_prompt_hint": scope_result.confirm_prompt_hint,
+                }
+
+            if scope_result.decision == "escalate":
+                return {
+                    "decision": "escalate",
+                    "reason": scope_result.reason,
+                    "escalation_id": scope_result.escalation_id,
+                    "escalation_to": scope_result.escalation_to,
+                    "escalation_expires_at": scope_result.escalation_expires_at,
                 }
 
             return {"decision": scope_result.decision, "reason": scope_result.reason}

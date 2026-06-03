@@ -34,6 +34,7 @@ from allowly.types import (
     ScopeCheckResultAllow,
     ScopeCheckResultConfirm,
     ScopeCheckResultDeny,
+    ScopeCheckResultEscalate,
 )
 
 BASE = "https://api.example.com"
@@ -79,6 +80,20 @@ def _confirm_response(scope: str = "send_email") -> CheckResponse:
             confirm_nonce="cnf_abc",
             confirm_expires_at="2026-04-20T00:15:00Z",
             confirm_prompt_hint="email.send",
+        ),
+    )
+
+
+def _escalate_response(scope: str = "delete_candidate") -> CheckResponse:
+    return _response(
+        scope,
+        ScopeCheckResultEscalate(
+            decision="escalate",
+            reason="escalation_required",
+            receipt=PENDING,
+            escalation_id="esc_abc",
+            escalation_to="compliance",
+            escalation_expires_at="2026-04-21T17:00:00Z",
         ),
     )
 
@@ -219,6 +234,28 @@ async def test_fastmcp_confirm_returns_nonce():
 
 
 @pytest.mark.asyncio
+async def test_fastmcp_escalate_returns_escalation_payload():
+    middleware = AllowlyMCPMiddleware(api_key="test-key", authorization_id_fn=_authorization_id_fn)
+
+    context = MagicMock()
+    context.message.name = "delete_candidate"
+    context.message.arguments = {"user_id": "u1"}
+
+    call_next = AsyncMock()
+
+    with patch.object(middleware.client, "check", AsyncMock(return_value=_escalate_response())):
+        result = await middleware.on_call_tool(context, call_next)
+
+    call_next.assert_not_awaited()
+    assert result.isError is True
+    import json
+    payload = json.loads(result.content[0].text)
+    assert payload["decision"] == "escalate"
+    assert payload["escalation_id"] == "esc_abc"
+    assert payload["escalation_to"] == "compliance"
+
+
+@pytest.mark.asyncio
 async def test_wrap_confirm_returns_nonce():
     server = MagicMock()
     original_call = AsyncMock(return_value={})
@@ -234,3 +271,22 @@ async def test_wrap_confirm_returns_nonce():
     original_call.assert_not_awaited()
     assert result["decision"] == "confirm"
     assert result["confirm_nonce"] == "cnf_abc"
+
+
+@pytest.mark.asyncio
+async def test_wrap_escalate_returns_escalation_payload():
+    server = MagicMock()
+    original_call = AsyncMock(return_value={})
+    server.call_tool = original_call
+
+    middleware = AllowlyMCPMiddleware.wrap(
+        server, api_key="test-key", authorization_id_fn=_authorization_id_fn
+    )
+
+    with patch.object(middleware.client, "check", AsyncMock(return_value=_escalate_response())):
+        result = await server.call_tool("delete_candidate", {"user_id": "u1"})
+
+    original_call.assert_not_awaited()
+    assert result["decision"] == "escalate"
+    assert result["escalation_id"] == "esc_abc"
+    assert result["escalation_to"] == "compliance"

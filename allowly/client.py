@@ -12,6 +12,8 @@ from .types import (
     AuthorizationCreateResponse,
     AuthorizationRevokeResponse,
     BudgetInfo,
+    EscalationInfo,
+    EscalationResolveResponse,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
     ReceiptEnvelope,
@@ -20,6 +22,7 @@ from .types import (
     ScopeCheckResultAllow,
     ScopeCheckResultConfirm,
     ScopeCheckResultDeny,
+    ScopeCheckResultEscalate,
 )
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"
@@ -62,6 +65,7 @@ class Allowly:
         )
         self.authorizations = _AuthorizationsResource(self)
         self.confirmations = _ConfirmationsResource(self)
+        self.escalations = _EscalationsResource(self)
         self.receipts = _ReceiptsResource(self)
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
@@ -175,6 +179,8 @@ class _AuthorizationsResource:
         expires_at: datetime | str | None = None,
         bundle_id: str | None = None,
         requires_confirm_for: list[str] | None = None,
+        requires_escalation_for: list[str] | None = None,
+        escalation_targets: dict[str, str] | None = None,
         budget_limit_micros: int | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AuthorizationCreateResponse:
@@ -190,6 +196,8 @@ class _AuthorizationsResource:
             "bundle_id": bundle_id,
             "scopes": scope_list,
             "requires_confirm_for": requires_confirm_for or [],
+            "requires_escalation_for": requires_escalation_for or [],
+            "escalation_targets": escalation_targets or {},
             "budget_limit_micros": budget_limit_micros,
             "expires_at": expires_iso,
             "metadata": metadata or {},
@@ -200,6 +208,9 @@ class _AuthorizationsResource:
             expires_at=raw["expires_at"],
             receipt=_parse_pending_envelope(raw["receipt"]),
             bundle_id=raw.get("bundle_id"),
+            requires_confirm_for=raw.get("requires_confirm_for", []),
+            requires_escalation_for=raw.get("requires_escalation_for", []),
+            escalation_targets=raw.get("escalation_targets", {}),
             budget_limit_micros=raw.get("budget_limit_micros"),
             budget_spent_micros=raw.get("budget_spent_micros"),
         )
@@ -245,6 +256,61 @@ class _ConfirmationsResource:
             decision=raw["decision"],
             authorization_id=raw.get("authorization_id"),
             expires_at=raw.get("expires_at"),
+        )
+
+
+class _EscalationsResource:
+    def __init__(self, client: Allowly) -> None:
+        self._client = client
+
+    async def resolve(
+        self,
+        escalation_id: str,
+        *,
+        resolution: str,
+        resolved_by: str,
+        note: str | None = None,
+    ) -> EscalationResolveResponse:
+        raw = await self._client._request("POST", f"/v1/escalations/{escalation_id}/resolve", json={
+            "resolution": resolution,
+            "resolved_by": resolved_by,
+            "note": note,
+        })
+        receipt = raw.get("receipt")
+        return EscalationResolveResponse(
+            escalation_id=raw["escalation_id"],
+            status=raw["status"],
+            resolved_by=raw.get("resolved_by"),
+            resolved_at=raw.get("resolved_at"),
+            receipt=_parse_pending_envelope(receipt) if receipt is not None else None,
+        )
+
+    async def approve(
+        self,
+        escalation_id: str,
+        *,
+        resolved_by: str,
+        note: str | None = None,
+    ) -> EscalationResolveResponse:
+        return await self.resolve(
+            escalation_id,
+            resolution="approved",
+            resolved_by=resolved_by,
+            note=note,
+        )
+
+    async def reject(
+        self,
+        escalation_id: str,
+        *,
+        resolved_by: str,
+        note: str | None = None,
+    ) -> EscalationResolveResponse:
+        return await self.resolve(
+            escalation_id,
+            resolution="rejected",
+            resolved_by=resolved_by,
+            note=note,
         )
 
 
@@ -307,7 +373,7 @@ def _validate_fallback_mode(mode: str) -> FallbackMode:
 
 def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
     # The API returns a map keyed by requested scope. Preserve those keys so
-    # callers can safely handle mixed allow/deny/confirm results in one check.
+    # callers can safely handle mixed allow/deny/confirm/escalate results in one check.
     results = {}
     for scope, item in raw["results"].items():
         base = dict(
@@ -317,6 +383,7 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
             is_fallback=bool(item.get("is_fallback", False)),
             fallback_mode=item.get("fallback_mode"),
             budget=_parse_budget_info(item.get("budget")),
+            escalation=_parse_escalation_info(item.get("escalation")),
         )
         if item["decision"] == "deny":
             results[scope] = ScopeCheckResultDeny(**base)
@@ -326,6 +393,13 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
                 confirm_nonce=item.get("confirm_nonce", ""),
                 confirm_expires_at=item.get("confirm_expires_at", ""),
                 confirm_prompt_hint=item.get("confirm_prompt_hint", ""),
+            )
+        elif item["decision"] == "escalate":
+            results[scope] = ScopeCheckResultEscalate(
+                **base,
+                escalation_id=item.get("escalation_id", ""),
+                escalation_to=item.get("escalation_to"),
+                escalation_expires_at=item.get("escalation_expires_at"),
             )
         else:
             results[scope] = ScopeCheckResultAllow(**base)
@@ -347,4 +421,15 @@ def _parse_budget_info(raw: Any) -> BudgetInfo | None:
         spent_micros=raw["spent_micros"],
         estimated_cost_micros=raw["estimated_cost_micros"],
         spent_after_micros=raw.get("spent_after_micros"),
+    )
+
+
+def _parse_escalation_info(raw: Any) -> EscalationInfo | None:
+    if raw is None:
+        return None
+    return EscalationInfo(
+        escalation_id=raw["escalation_id"],
+        status=raw["status"],
+        escalation_to=raw.get("escalation_to"),
+        expires_at=raw.get("expires_at"),
     )
