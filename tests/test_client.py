@@ -45,6 +45,7 @@ async def test_check_allow(client):
     assert item.decision == "allow"
     assert item.is_fallback is False
     assert item.fallback_mode is None
+    assert item.budget is None
     assert item.receipt is not None
     assert item.receipt.receipt_id == "rcp_abc"
     assert item.receipt.status == "pending"
@@ -134,15 +135,51 @@ async def test_check_sends_multi_scope_v10_body(client):
         authorization_id="auth_1",
         scopes=["public.web.search", "public.page.read"],
         resource="subject:s_123",
+        estimated_cost_micros=12345,
         context={"stage": "filter3"},
     )
     import json
     body = json.loads(route.calls[0].request.content)
     assert body["scopes"] == ["public.web.search", "public.page.read"]
     assert body["resource"] == "subject:s_123"
+    assert body["estimated_cost_micros"] == 12345
     assert body["context"] == {"stage": "filter3"}
     assert res.results["public.web.search"].decision == "allow"
     assert res.results["public.page.read"].decision == "deny"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_parses_budget_result(client):
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
+        "authorization_id": "auth_1",
+        "policy_version": "2026-04-19.1",
+        "results": {
+            "llm.enrich": {
+                "decision": "allow",
+                "reason": "authorization_granted_scope_active",
+                "receipt": PENDING_RECEIPT,
+                "budget": {
+                    "limit_micros": 1_000_000,
+                    "spent_micros": 100_000,
+                    "estimated_cost_micros": 25_000,
+                    "spent_after_micros": 125_000,
+                },
+            }
+        },
+    }))
+    res = await client.check(
+        authorization_id="auth_1",
+        scopes=["llm.enrich"],
+        estimated_cost_micros=25_000,
+    )
+
+    budget = res.results["llm.enrich"].budget
+    assert budget is not None
+    assert budget.limit_micros == 1_000_000
+    assert budget.spent_micros == 100_000
+    assert budget.estimated_cost_micros == 25_000
+    assert budget.spent_after_micros == 125_000
 
 
 @respx.mock
@@ -164,6 +201,7 @@ async def test_check_timeout_fail_open_returns_local_fallback():
     assert item.is_fallback is True
     assert item.fallback_mode == "fail_open"
     assert item.receipt is None
+    assert item.budget is None
     assert res.authorization_id == "auth_1"
     assert res.policy_version == "sdk_fallback"
 
@@ -300,6 +338,31 @@ async def test_authorizations_create(client):
     )
     assert res.authorization_id == "auth_new"
     assert res.receipt.status == "pending"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_authorizations_create_with_budget(client):
+    route = respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(201, json={
+        "authorization_id": "auth_budget",
+        "created_at": "2026-04-20T00:00:00Z",
+        "expires_at": "2026-12-31T00:00:00Z",
+        "budget_limit_micros": 50_000_000,
+        "budget_spent_micros": 0,
+        "receipt": PENDING_RECEIPT,
+    }))
+    res = await client.authorizations.create(
+        user_id="u1",
+        agent_id="a1",
+        scopes=["llm.enrich"],
+        budget_limit_micros=50_000_000,
+    )
+    import json
+    body = json.loads(route.calls[0].request.content)
+    assert body["budget_limit_micros"] == 50_000_000
+    assert res.authorization_id == "auth_budget"
+    assert res.budget_limit_micros == 50_000_000
+    assert res.budget_spent_micros == 0
 
 
 @respx.mock

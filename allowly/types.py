@@ -15,6 +15,7 @@ class CheckRequest:
     scopes: list[str]
     resource: str | None = None
     session_id: str | None = None
+    estimated_cost_micros: int | None = None
     context: dict[str, Any] = field(default_factory=dict)
 
 
@@ -36,12 +37,21 @@ ReceiptEnvelope = Union[ReceiptEnvelopePending, ReceiptEnvelopeSigned]
 
 
 @dataclass
+class BudgetInfo:
+    limit_micros: int
+    spent_micros: int
+    estimated_cost_micros: int
+    spent_after_micros: int | None = None
+
+
+@dataclass
 class ScopeCheckResultBase:
     decision: Decision
     reason: str
     receipt: ReceiptEnvelope | None
     is_fallback: bool = False
     fallback_mode: FallbackMode | None = None
+    budget: BudgetInfo | None = None
 
 
 @dataclass
@@ -89,6 +99,7 @@ class AuthorizationCreateRequest:
     expires_at: datetime | str | None = None
     bundle_id: str | None = None
     requires_confirm_for: list[str] = field(default_factory=list)
+    budget_limit_micros: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -99,6 +110,8 @@ class AuthorizationCreateResponse:
     expires_at: str
     receipt: ReceiptEnvelopePending
     bundle_id: str | None = None
+    budget_limit_micros: int | None = None
+    budget_spent_micros: int | None = None
 
 
 @dataclass

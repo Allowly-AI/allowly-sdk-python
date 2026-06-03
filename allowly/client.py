@@ -11,6 +11,7 @@ from .types import (
     ConfirmationApproveResponse,
     AuthorizationCreateResponse,
     AuthorizationRevokeResponse,
+    BudgetInfo,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
     ReceiptEnvelope,
@@ -86,6 +87,7 @@ class Allowly:
         scopes: list[str],
         resource: str | None = None,
         session_id: str | None = None,
+        estimated_cost_micros: int | None = None,
         context: dict[str, Any] | None = None,
         wait: bool = False,
     ) -> CheckResponse:
@@ -96,6 +98,7 @@ class Allowly:
             "scopes": scopes,
             "resource": resource,
             "session_id": session_id,
+            "estimated_cost_micros": estimated_cost_micros,
             "context": context or {},
         }
         try:
@@ -143,6 +146,7 @@ class Allowly:
                 "receipt": None,
                 "is_fallback": True,
                 "fallback_mode": mode,
+                "budget": None,
             }
             if decision == "allow":
                 results[scope] = ScopeCheckResultAllow(**base)
@@ -171,6 +175,7 @@ class _AuthorizationsResource:
         expires_at: datetime | str | None = None,
         bundle_id: str | None = None,
         requires_confirm_for: list[str] | None = None,
+        budget_limit_micros: int | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AuthorizationCreateResponse:
         expires_iso = expires_at.isoformat() if isinstance(expires_at, datetime) else expires_at
@@ -185,6 +190,7 @@ class _AuthorizationsResource:
             "bundle_id": bundle_id,
             "scopes": scope_list,
             "requires_confirm_for": requires_confirm_for or [],
+            "budget_limit_micros": budget_limit_micros,
             "expires_at": expires_iso,
             "metadata": metadata or {},
         })
@@ -194,6 +200,8 @@ class _AuthorizationsResource:
             expires_at=raw["expires_at"],
             receipt=_parse_pending_envelope(raw["receipt"]),
             bundle_id=raw.get("bundle_id"),
+            budget_limit_micros=raw.get("budget_limit_micros"),
+            budget_spent_micros=raw.get("budget_spent_micros"),
         )
 
     async def revoke(
@@ -308,6 +316,7 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
             receipt=_parse_receipt_envelope(item["receipt"]),
             is_fallback=bool(item.get("is_fallback", False)),
             fallback_mode=item.get("fallback_mode"),
+            budget=_parse_budget_info(item.get("budget")),
         )
         if item["decision"] == "deny":
             results[scope] = ScopeCheckResultDeny(**base)
@@ -327,4 +336,15 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
         authorization_expires_at=raw.get("authorization_expires_at", ""),
         policy_version=raw.get("policy_version", ""),
         results=results,
+    )
+
+
+def _parse_budget_info(raw: Any) -> BudgetInfo | None:
+    if raw is None:
+        return None
+    return BudgetInfo(
+        limit_micros=raw["limit_micros"],
+        spent_micros=raw["spent_micros"],
+        estimated_cost_micros=raw["estimated_cost_micros"],
+        spent_after_micros=raw.get("spent_after_micros"),
     )
