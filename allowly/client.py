@@ -34,7 +34,7 @@ class Allowly:
 
     Usage::
 
-        allowly = Allowly(api_key="allowly_live_...")
+        allowly = Allowly(api_key="allowly_l1_s001_...")
         result = await allowly.check(authorization_id="auth_...", scopes=["email.send"])
         if result.results["email.send"].decision == "allow":
             ...

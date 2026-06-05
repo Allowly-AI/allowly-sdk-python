@@ -5,7 +5,7 @@ Supports both FastMCP and low-level mcp.server.Server.
 FastMCP usage:
     mcp = FastMCP("my-server")
     mcp.add_middleware(AllowlyMCPMiddleware(
-        api_key="allowly_live_...",
+        api_key="allowly_l1_s001_...",
         user_id_fn=lambda context: context.fastmcp_context.session.user_id,
         authorization_id_fn=lambda user_id: db.get_authorization_id(user_id),
     ))
@@ -14,7 +14,7 @@ Low-level Server usage:
     server = Server("my-server")
     AllowlyMCPMiddleware.wrap(
         server,
-        api_key="allowly_live_...",
+        api_key="allowly_l1_s001_...",
         user_id_fn=lambda context: trusted_current_user_id(),
         authorization_id_fn=lambda user_id: db.get_authorization_id(user_id),
     )
