@@ -53,6 +53,19 @@ class EscalationInfo:
 
 
 @dataclass
+class PolicyConditionEvidence:
+    field: str
+    op: str
+    value: str | int | bool | None | list[str | int | bool | None]
+
+
+@dataclass
+class PolicyEvalInfo:
+    matched_condition: PolicyConditionEvidence | None
+    field_value: str | int | bool | None
+
+
+@dataclass
 class ScopeCheckResultBase:
     decision: Decision
     reason: str
@@ -61,6 +74,7 @@ class ScopeCheckResultBase:
     fallback_mode: FallbackMode | None = None
     budget: BudgetInfo | None = None
     escalation: EscalationInfo | None = None
+    policy_eval: PolicyEvalInfo | None = None
 
 
 @dataclass

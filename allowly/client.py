@@ -15,6 +15,8 @@ from .types import (
     BudgetInfo,
     EscalationInfo,
     EscalationResolveResponse,
+    PolicyConditionEvidence,
+    PolicyEvalInfo,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
     ReceiptEnvelope,
@@ -154,6 +156,8 @@ class Allowly:
                 "is_fallback": True,
                 "fallback_mode": mode,
                 "budget": None,
+                "escalation": None,
+                "policy_eval": None,
             }
             if decision == "allow":
                 results[scope] = ScopeCheckResultAllow(**base)
@@ -397,6 +401,7 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
             fallback_mode=item.get("fallback_mode"),
             budget=_parse_budget_info(item.get("budget")),
             escalation=_parse_escalation_info(item.get("escalation")),
+            policy_eval=_parse_policy_eval(item.get("policy_eval")),
         )
         if item["decision"] == "deny":
             results[scope] = ScopeCheckResultDeny(**base)
@@ -445,4 +450,22 @@ def _parse_escalation_info(raw: Any) -> EscalationInfo | None:
         status=raw["status"],
         escalation_to=raw.get("escalation_to"),
         expires_at=raw.get("expires_at"),
+    )
+
+
+def _parse_policy_eval(raw: Any) -> PolicyEvalInfo | None:
+    if raw is None:
+        return None
+    matched = raw.get("matched_condition")
+    return PolicyEvalInfo(
+        matched_condition=(
+            PolicyConditionEvidence(
+                field=matched["field"],
+                op=matched["op"],
+                value=matched["value"],
+            )
+            if isinstance(matched, dict)
+            else None
+        ),
+        field_value=raw.get("field_value"),
     )

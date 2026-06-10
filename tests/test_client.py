@@ -59,6 +59,7 @@ async def test_check_allow(client):
     assert item.is_fallback is False
     assert item.fallback_mode is None
     assert item.budget is None
+    assert item.policy_eval is None
     assert item.receipt is not None
     assert item.receipt.receipt_id == "rcp_abc"
     assert item.receipt.status == "pending"
@@ -105,6 +106,43 @@ async def test_check_confirm(client):
     item = res.results["email.send"]
     assert item.decision == "confirm"
     assert item.confirm_nonce == "cnf_abc"  # type: ignore[union-attr]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_parses_policy_eval(client):
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
+        "authorization_id": "auth_policy",
+        "authorization_expires_at": "2026-12-31T00:00:00Z",
+        "policy_version": "2026-04-19.1",
+        "results": {
+            "hiring.reject_application": {
+                "decision": "confirm",
+                "reason": "condition_requires_user_confirmation",
+                "confirm_nonce": "cnf_policy",
+                "confirm_expires_at": "2026-04-20T00:15:00Z",
+                "confirm_prompt_hint": "hiring.reject_application",
+                "policy_eval": {
+                    "matched_condition": {
+                        "field": "rule_fired",
+                        "op": "in",
+                        "value": ["employment_gap", "availability"],
+                    },
+                    "field_value": "employment_gap",
+                },
+                "receipt": PENDING_RECEIPT,
+            }
+        },
+    }))
+    res = await client.check(authorization_id="auth_policy", scopes=["hiring.reject_application"])
+    item = res.results["hiring.reject_application"]
+    assert item.decision == "confirm"
+    assert item.policy_eval is not None
+    assert item.policy_eval.matched_condition is not None
+    assert item.policy_eval.matched_condition.field == "rule_fired"
+    assert item.policy_eval.matched_condition.op == "in"
+    assert item.policy_eval.matched_condition.value == ["employment_gap", "availability"]
+    assert item.policy_eval.field_value == "employment_gap"
 
 
 @respx.mock
