@@ -20,10 +20,10 @@ allowly = Allowly(
 subject_id = "subject_abc123"
 
 # Store this in your app table, for example:
-# allowly_authorizations(subject_id, bundle_id, allowly_authorization_id, status)
+# allowly_authorizations(subject_id, policy_id, allowly_authorization_id, status)
 authorization = await allowly.authorizations.create(
     user_id=f"subject:{subject_id}",
-    bundle_id="research_agent",
+    policy_id="research_agent",
     metadata={"source": "import"},
 )
 
@@ -39,9 +39,10 @@ if decision.results["web.search"].decision != "allow":
     raise RuntimeError("Action is not authorized")
 ```
 
-For scopes that need third-party approval, create the authorization with
-`requires_escalation_for=["scope.name"]` and resolve returned escalation results
-with `await allowly.escalations.approve(escalation_id, resolved_by="manager:123")`
+For actions that need third-party approval, define the escalation rule on the
+agent policy, create the authorization from that `policy_id`, and then resolve
+returned escalation results with
+`await allowly.escalations.approve(escalation_id, resolved_by="manager:123")`
 or `reject(...)`, then re-check before running the action.
 
 If you need lookup by email later, store a keyed hash such as

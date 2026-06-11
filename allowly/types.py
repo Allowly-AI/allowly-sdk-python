@@ -133,7 +133,7 @@ class AuthorizationCreateRequest:
     agent_id: str | None = None
     scopes: list[ScopeEntry] | None = None
     expires_at: datetime | str | None = None
-    bundle_id: str | None = None
+    policy_id: str | None = None
     requires_confirm_for: list[str] = field(default_factory=list)
     requires_escalation_for: list[str] = field(default_factory=list)
     escalation_targets: dict[str, str] = field(default_factory=dict)
@@ -148,7 +148,7 @@ class AuthorizationCreateResponse:
     created_at: str
     expires_at: str
     receipt: ReceiptEnvelopePending
-    bundle_id: str | None = None
+    policy_id: str | None = None
     requires_confirm_for: list[str] = field(default_factory=list)
     requires_escalation_for: list[str] = field(default_factory=list)
     escalation_targets: dict[str, str] = field(default_factory=dict)

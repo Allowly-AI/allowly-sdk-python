@@ -497,28 +497,28 @@ async def test_authorizations_create_no_session_id(client):
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_authorizations_create_from_bundle_id(client):
+async def test_authorizations_create_from_policy_id(client):
     route = respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(201, json={
-        "authorization_id": "auth_bundle",
-        "bundle_id": "research_agent",
+        "authorization_id": "auth_policy",
+        "policy_id": "research_agent",
         "created_at": "2026-04-20T00:00:00Z",
         "expires_at": "2026-12-31T00:00:00Z",
         "receipt": PENDING_RECEIPT,
     }))
     res = await client.authorizations.create(
         user_id="subject:s_123",
-        bundle_id="research_agent",
+        policy_id="research_agent",
         metadata={"source": "import"},
     )
     import json
     body = json.loads(route.calls[0].request.content)
     assert body["user_id"] == "subject:s_123"
-    assert body["bundle_id"] == "research_agent"
+    assert body["policy_id"] == "research_agent"
     assert body["agent_id"] is None
     assert body["scopes"] is None
     assert body["metadata"] == {"source": "import"}
-    assert res.authorization_id == "auth_bundle"
-    assert res.bundle_id == "research_agent"
+    assert res.authorization_id == "auth_policy"
+    assert res.policy_id == "research_agent"
 
 
 @respx.mock
