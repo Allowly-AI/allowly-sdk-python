@@ -189,6 +189,7 @@ class _AuthorizationsResource:
         requires_escalation_for: list[str] | None = None,
         escalation_targets: dict[str, str] | None = None,
         budget_limit_micros: int | None = None,
+        replaces: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AuthorizationCreateResponse:
         expires_iso = expires_at.isoformat() if isinstance(expires_at, datetime) else expires_at
@@ -207,6 +208,7 @@ class _AuthorizationsResource:
             "escalation_targets": escalation_targets or {},
             "budget_limit_micros": budget_limit_micros,
             "expires_at": expires_iso,
+            "replaces": replaces,
             "metadata": metadata or {},
         })
         return AuthorizationCreateResponse(
@@ -227,11 +229,14 @@ class _AuthorizationsResource:
         authorization_id: str,
         *,
         revoked_by: str | None = None,
+        superseded_by: str | None = None,
         notes: str | None = None,
     ) -> AuthorizationRevokeResponse:
         body: dict[str, Any] = {}
         if revoked_by:
             body["revoked_by"] = revoked_by
+        if superseded_by:
+            body["superseded_by"] = superseded_by
         if notes:
             body["notes"] = notes
         raw = await self._client._request(

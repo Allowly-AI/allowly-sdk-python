@@ -138,6 +138,7 @@ class AuthorizationCreateRequest:
     requires_escalation_for: list[str] = field(default_factory=list)
     escalation_targets: dict[str, str] = field(default_factory=dict)
     budget_limit_micros: int | None = None
+    replaces: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

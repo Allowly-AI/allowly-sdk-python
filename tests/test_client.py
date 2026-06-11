@@ -212,7 +212,7 @@ async def test_check_sends_multi_scope_v10_body(client):
         "policy_version": "2026-04-19.1",
         "results": {
             "public.web.search": {"decision": "allow", "reason": "ok", "receipt": PENDING_RECEIPT},
-            "public.page.read": {"decision": "deny", "reason": "scope_not_authorized", "receipt": PENDING_RECEIPT},
+            "public.page.read": {"decision": "deny", "reason": "scope_not_in_authorization", "receipt": PENDING_RECEIPT},
         },
     }))
     res = await client.check(
@@ -553,6 +553,40 @@ async def test_authorizations_revoke(client):
     res = await client.authorizations.revoke("auth_123", revoked_by="user")
     assert res.authorization_id == "auth_123"
     assert res.receipt.status == "pending"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_authorizations_revoke_with_superseded_by(client):
+    route = respx.delete(f"{BASE}/v1/authorizations/auth_123").mock(return_value=httpx.Response(200, json={
+        "authorization_id": "auth_123",
+        "revoked_at": "2026-05-01T09:00:00Z",
+        "receipt": PENDING_RECEIPT,
+    }))
+    await client.authorizations.revoke("auth_123", superseded_by="auth_456")
+    import json
+    body = json.loads(route.calls[0].request.content)
+    assert body["superseded_by"] == "auth_456"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_authorizations_create_with_replaces(client):
+    route = respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(200, json={
+        "authorization_id": "auth_123",
+        "created_at": "2026-05-01T09:00:00Z",
+        "expires_at": "2026-05-31T09:00:00Z",
+        "receipt": PENDING_RECEIPT,
+    }))
+    await client.authorizations.create(
+        user_id="u1",
+        agent_id="a1",
+        scopes=["email.read"],
+        replaces="auth_001",
+    )
+    import json
+    body = json.loads(route.calls[0].request.content)
+    assert body["replaces"] == "auth_001"
 
 
 # ---------------------------------------------------------------------------
