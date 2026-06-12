@@ -17,7 +17,7 @@ from .types import (
     ReceiptEnvelope,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
-    ScopeEntry,
+    ActionEntry,
 )
 
 __all__ = [
@@ -43,7 +43,7 @@ __all__ = [
     "ReceiptEnvelope",
     "ReceiptEnvelopePending",
     "ReceiptEnvelopeSigned",
-    "ScopeEntry",
+    "ActionEntry",
     "Decision",
     "FallbackMode",
 ]

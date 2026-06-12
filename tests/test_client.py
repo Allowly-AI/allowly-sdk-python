@@ -48,12 +48,12 @@ async def test_check_allow(client):
         "results": {
             "email.read": {
                 "decision": "allow",
-                "reason": "authorization_granted_scope_active",
+                "reason": "authorization_granted_action_active",
                 "receipt": PENDING_RECEIPT,
             }
         },
     }))
-    res = await client.check(authorization_id="auth_1", scopes=["email.read"])
+    res = await client.check(authorization_id="auth_1", actions=["email.read"])
     item = res.results["email.read"]
     assert item.decision == "allow"
     assert item.is_fallback is False
@@ -79,7 +79,7 @@ async def test_check_deny(client):
             }
         },
     }))
-    res = await client.check(authorization_id="auth_nope", scopes=["email.read"])
+    res = await client.check(authorization_id="auth_nope", actions=["email.read"])
     assert res.results["email.read"].decision == "deny"
     assert res.results["email.read"].reason == "authorization_not_found"
 
@@ -94,7 +94,7 @@ async def test_check_confirm(client):
         "results": {
             "email.send": {
                 "decision": "confirm",
-                "reason": "scope_requires_user_confirmation",
+                "reason": "action_requires_user_confirmation",
                 "confirm_nonce": "cnf_abc",
                 "confirm_expires_at": "2026-04-20T00:15:00Z",
                 "confirm_prompt_hint": "email.send",
@@ -102,7 +102,7 @@ async def test_check_confirm(client):
             }
         },
     }))
-    res = await client.check(authorization_id="auth_2", scopes=["email.send"])
+    res = await client.check(authorization_id="auth_2", actions=["email.send"])
     item = res.results["email.send"]
     assert item.decision == "confirm"
     assert item.confirm_nonce == "cnf_abc"  # type: ignore[union-attr]
@@ -134,7 +134,7 @@ async def test_check_parses_policy_eval(client):
             }
         },
     }))
-    res = await client.check(authorization_id="auth_policy", scopes=["hiring.reject_application"])
+    res = await client.check(authorization_id="auth_policy", actions=["hiring.reject_application"])
     item = res.results["hiring.reject_application"]
     assert item.decision == "confirm"
     assert item.policy_eval is not None
@@ -169,7 +169,7 @@ async def test_check_escalate(client):
             }
         },
     }))
-    res = await client.check(authorization_id="auth_esc", scopes=["candidate.delete"])
+    res = await client.check(authorization_id="auth_esc", actions=["candidate.delete"])
     item = res.results["candidate.delete"]
     assert item.decision == "escalate"
     assert item.escalation_id == "esc_abc"  # type: ignore[union-attr]
@@ -185,7 +185,7 @@ async def test_check_raises_on_401(client):
         "error": {"code": "unauthorized", "message": "Invalid or revoked API key"}
     }))
     with pytest.raises(AllowlyAPIError) as exc_info:
-        await client.check(authorization_id="auth_1", scopes=["x"])
+        await client.check(authorization_id="auth_1", actions=["x"])
     assert exc_info.value.status == 401
     assert exc_info.value.code == "unauthorized"
 
@@ -200,31 +200,31 @@ async def test_check_sends_auth_header(client):
             "x": {"decision": "deny", "reason": "authorization_not_found", "receipt": PENDING_RECEIPT}
         },
     }))
-    await client.check(authorization_id="auth_1", scopes=["x"])
+    await client.check(authorization_id="auth_1", actions=["x"])
     assert route.calls[0].request.headers["authorization"] == "Bearer test-key"
 
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_check_sends_multi_scope_v10_body(client):
+async def test_check_sends_multi_action_v10_body(client):
     route = respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
         "authorization_id": "auth_1",
         "policy_version": "2026-04-19.1",
         "results": {
             "public.web.search": {"decision": "allow", "reason": "ok", "receipt": PENDING_RECEIPT},
-            "public.page.read": {"decision": "deny", "reason": "scope_not_in_authorization", "receipt": PENDING_RECEIPT},
+            "public.page.read": {"decision": "deny", "reason": "action_not_in_authorization", "receipt": PENDING_RECEIPT},
         },
     }))
     res = await client.check(
         authorization_id="auth_1",
-        scopes=["public.web.search", "public.page.read"],
+        actions=["public.web.search", "public.page.read"],
         resource="subject:s_123",
         estimated_cost_micros=12345,
         context={"stage": "filter3"},
     )
     import json
     body = json.loads(route.calls[0].request.content)
-    assert body["scopes"] == ["public.web.search", "public.page.read"]
+    assert body["actions"] == ["public.web.search", "public.page.read"]
     assert body["resource"] == "subject:s_123"
     assert body["estimated_cost_micros"] == 12345
     assert body["context"] == {"stage": "filter3"}
@@ -241,7 +241,7 @@ async def test_check_parses_budget_result(client):
         "results": {
             "llm.enrich": {
                 "decision": "allow",
-                "reason": "authorization_granted_scope_active",
+                "reason": "authorization_granted_action_active",
                 "receipt": PENDING_RECEIPT,
                 "budget": {
                     "limit_micros": 1_000_000,
@@ -254,7 +254,7 @@ async def test_check_parses_budget_result(client):
     }))
     res = await client.check(
         authorization_id="auth_1",
-        scopes=["llm.enrich"],
+        actions=["llm.enrich"],
         estimated_cost_micros=25_000,
     )
 
@@ -273,11 +273,11 @@ async def test_check_timeout_fail_open_returns_local_fallback():
         api_key="test-key",
         base_url=BASE,
         check_timeout_ms=1,
-        fallback_by_scope={"public.web.search": "fail_open"},
+        fallback_by_action={"public.web.search": "fail_open"},
     )
     respx.post(f"{BASE}/v1/check").mock(side_effect=httpx.ReadTimeout("slow"))
 
-    res = await client.check(authorization_id="auth_1", scopes=["public.web.search"])
+    res = await client.check(authorization_id="auth_1", actions=["public.web.search"])
     item = res.results["public.web.search"]
 
     assert item.decision == "allow"
@@ -292,11 +292,11 @@ async def test_check_timeout_fail_open_returns_local_fallback():
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_check_timeout_unmapped_scope_uses_default_fail_closed():
+async def test_check_timeout_unmapped_action_uses_default_fail_closed():
     client = Allowly(api_key="test-key", base_url=BASE, check_timeout_ms=1)
     respx.post(f"{BASE}/v1/check").mock(side_effect=httpx.ReadTimeout("slow"))
 
-    res = await client.check(authorization_id="auth_1", scopes=["email.send"])
+    res = await client.check(authorization_id="auth_1", actions=["email.send"])
     item = res.results["email.send"]
 
     assert item.decision == "deny"
@@ -312,11 +312,11 @@ async def test_check_connection_error_fail_open_returns_unreachable():
     client = Allowly(
         api_key="test-key",
         base_url=BASE,
-        fallback_by_scope={"public.web.search": "fail_open"},
+        fallback_by_action={"public.web.search": "fail_open"},
     )
     respx.post(f"{BASE}/v1/check").mock(side_effect=httpx.ConnectError("offline"))
 
-    res = await client.check(authorization_id="auth_1", scopes=["public.web.search"])
+    res = await client.check(authorization_id="auth_1", actions=["public.web.search"])
     item = res.results["public.web.search"]
 
     assert item.decision == "allow"
@@ -334,7 +334,7 @@ async def test_check_5xx_fail_closed_returns_unreachable():
         "error": {"code": "unavailable", "message": "try again"}
     }))
 
-    res = await client.check(authorization_id="auth_1", scopes=["email.send"])
+    res = await client.check(authorization_id="auth_1", actions=["email.send"])
     item = res.results["email.send"]
 
     assert item.decision == "deny"
@@ -346,11 +346,11 @@ async def test_check_5xx_fail_closed_returns_unreachable():
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_check_mixed_scope_fallback_modes():
+async def test_check_mixed_action_fallback_modes():
     client = Allowly(
         api_key="test-key",
         base_url=BASE,
-        fallback_by_scope={
+        fallback_by_action={
             "public.web.search": "fail_open",
             "email.send": "fail_closed",
         },
@@ -359,7 +359,7 @@ async def test_check_mixed_scope_fallback_modes():
 
     res = await client.check(
         authorization_id="auth_1",
-        scopes=["public.web.search", "email.send"],
+        actions=["public.web.search", "email.send"],
     )
 
     assert res.results["public.web.search"].decision == "allow"
@@ -374,14 +374,14 @@ async def test_check_429_does_not_fallback():
     client = Allowly(
         api_key="test-key",
         base_url=BASE,
-        fallback_by_scope={"public.web.search": "fail_open"},
+        fallback_by_action={"public.web.search": "fail_open"},
     )
     respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(429, json={
         "error": {"code": "quota_exceeded", "message": "quota exceeded"}
     }))
 
     with pytest.raises(AllowlyAPIError) as exc_info:
-        await client.check(authorization_id="auth_1", scopes=["public.web.search"])
+        await client.check(authorization_id="auth_1", actions=["public.web.search"])
     assert exc_info.value.status == 429
     assert exc_info.value.code == "quota_exceeded"
 
@@ -392,12 +392,12 @@ async def test_fallback_results_are_not_cached():
     client = Allowly(
         api_key="test-key",
         base_url=BASE,
-        fallback_by_scope={"public.web.search": "fail_open"},
+        fallback_by_action={"public.web.search": "fail_open"},
     )
     route = respx.post(f"{BASE}/v1/check").mock(side_effect=httpx.ConnectError("offline"))
 
-    await client.check(authorization_id="auth_1", scopes=["public.web.search"])
-    await client.check(authorization_id="auth_1", scopes=["public.web.search"])
+    await client.check(authorization_id="auth_1", actions=["public.web.search"])
+    await client.check(authorization_id="auth_1", actions=["public.web.search"])
 
     assert route.call_count == 2
 
@@ -417,7 +417,7 @@ async def test_authorizations_create(client):
     }))
     res = await client.authorizations.create(
         user_id="u1", agent_id="a1",
-        scopes=["email.read"],
+        actions=["email.read"],
         expires_at="2026-12-31T00:00:00Z",
     )
     assert res.authorization_id == "auth_new"
@@ -438,7 +438,7 @@ async def test_authorizations_create_with_budget(client):
     res = await client.authorizations.create(
         user_id="u1",
         agent_id="a1",
-        scopes=["llm.enrich"],
+        actions=["llm.enrich"],
         budget_limit_micros=50_000_000,
     )
     import json
@@ -463,7 +463,7 @@ async def test_authorizations_create_with_escalation(client):
     res = await client.authorizations.create(
         user_id="u1",
         agent_id="a1",
-        scopes=["candidate.delete"],
+        actions=["candidate.delete"],
         requires_escalation_for=["candidate.delete"],
         escalation_targets={"candidate.delete": "compliance"},
     )
@@ -487,7 +487,7 @@ async def test_authorizations_create_no_session_id(client):
     }))
     await client.authorizations.create(
         user_id="u1", agent_id="a1",
-        scopes=["email.read"],
+        actions=["email.read"],
         expires_at="2026-12-31T00:00:00Z",
     )
     import json
@@ -515,7 +515,7 @@ async def test_authorizations_create_from_policy_id(client):
     assert body["user_id"] == "subject:s_123"
     assert body["policy_id"] == "research_agent"
     assert body["agent_id"] is None
-    assert body["scopes"] is None
+    assert body["actions"] is None
     assert body["metadata"] == {"source": "import"}
     assert res.authorization_id == "auth_policy"
     assert res.policy_id == "research_agent"
@@ -527,14 +527,14 @@ async def test_non_check_endpoint_5xx_does_not_fallback():
     client = Allowly(
         api_key="test-key",
         base_url=BASE,
-        fallback_by_scope={"email.read": "fail_open"},
+        fallback_by_action={"email.read": "fail_open"},
     )
     respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(503, json={
         "error": {"code": "unavailable", "message": "try again"}
     }))
 
     with pytest.raises(AllowlyAPIError) as exc_info:
-        await client.authorizations.create(user_id="u1", agent_id="a1", scopes=["email.read"])
+        await client.authorizations.create(user_id="u1", agent_id="a1", actions=["email.read"])
     assert exc_info.value.status == 503
 
 
@@ -581,7 +581,7 @@ async def test_authorizations_create_with_replaces(client):
     await client.authorizations.create(
         user_id="u1",
         agent_id="a1",
-        scopes=["email.read"],
+        actions=["email.read"],
         replaces="auth_001",
     )
     import json

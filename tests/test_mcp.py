@@ -31,10 +31,10 @@ from allowly import AllowlyMCPMiddleware
 from allowly.types import (
     CheckResponse,
     ReceiptEnvelopePending,
-    ScopeCheckResultAllow,
-    ScopeCheckResultConfirm,
-    ScopeCheckResultDeny,
-    ScopeCheckResultEscalate,
+    ActionCheckResultAllow,
+    ActionCheckResultConfirm,
+    ActionCheckResultDeny,
+    ActionCheckResultEscalate,
 )
 
 BASE = "https://api.example.com"
@@ -56,31 +56,31 @@ def _trusted_user_id_fn(context) -> str | None:
     return "u1"
 
 
-def _response(scope: str, result) -> CheckResponse:
+def _response(action: str, result) -> CheckResponse:
     return CheckResponse(
         user_id="u1",
         agent_id="gmail-tools",
         authorization_id="auth_1",
         authorization_expires_at="2026-12-31T00:00:00Z",
         policy_version="2026-04-19.1",
-        results={scope: result},
+        results={action: result},
     )
 
 
-def _allow_response(scope: str = "read_email") -> CheckResponse:
-    return _response(scope, ScopeCheckResultAllow(decision="allow", reason="authorization_granted_scope_active", receipt=PENDING))
+def _allow_response(action: str = "read_email") -> CheckResponse:
+    return _response(action, ActionCheckResultAllow(decision="allow", reason="authorization_granted_action_active", receipt=PENDING))
 
 
-def _deny_response(scope: str = "send_email") -> CheckResponse:
-    return _response(scope, ScopeCheckResultDeny(decision="deny", reason="authorization_not_found", receipt=PENDING))
+def _deny_response(action: str = "send_email") -> CheckResponse:
+    return _response(action, ActionCheckResultDeny(decision="deny", reason="authorization_not_found", receipt=PENDING))
 
 
-def _confirm_response(scope: str = "send_email") -> CheckResponse:
+def _confirm_response(action: str = "send_email") -> CheckResponse:
     return _response(
-        scope,
-        ScopeCheckResultConfirm(
+        action,
+        ActionCheckResultConfirm(
             decision="confirm",
-            reason="scope_requires_user_confirmation",
+            reason="action_requires_user_confirmation",
             receipt=PENDING,
             confirm_nonce="cnf_abc",
             confirm_expires_at="2026-04-20T00:15:00Z",
@@ -89,10 +89,10 @@ def _confirm_response(scope: str = "send_email") -> CheckResponse:
     )
 
 
-def _escalate_response(scope: str = "delete_candidate") -> CheckResponse:
+def _escalate_response(action: str = "delete_candidate") -> CheckResponse:
     return _response(
-        scope,
-        ScopeCheckResultEscalate(
+        action,
+        ActionCheckResultEscalate(
             decision="escalate",
             reason="escalation_required",
             receipt=PENDING,
@@ -204,7 +204,7 @@ async def test_wrap_can_opt_into_legacy_user_id_argument():
     with patch.object(middleware.client, "check", check_mock):
         await server.call_tool("read_email", {"user_id": "u1"})
 
-    check_mock.assert_awaited_once_with(authorization_id="auth_1", scopes=["read_email"])
+    check_mock.assert_awaited_once_with(authorization_id="auth_1", actions=["read_email"])
 
 
 @pytest.mark.asyncio
@@ -223,7 +223,7 @@ async def test_wrap_check_called_with_authorization_id():
     with patch.object(middleware.client, "check", check_mock):
         await server.call_tool("read_email", {"user_id": "u1"})
 
-    check_mock.assert_awaited_once_with(authorization_id="auth_1", scopes=["read_email"])
+    check_mock.assert_awaited_once_with(authorization_id="auth_1", actions=["read_email"])
 
 
 # ---------------------------------------------------------------------------

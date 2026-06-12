@@ -116,33 +116,33 @@ class AllowlyMCPMiddleware:
                 isError=True,
             )
 
-        result = await self.client.check(authorization_id=authorization_id, scopes=[name])
-        scope_result = result.results[name]
+        result = await self.client.check(authorization_id=authorization_id, actions=[name])
+        action_result = result.results[name]
 
-        if scope_result.decision == "allow":
+        if action_result.decision == "allow":
             return await call_next(context)
 
-        if scope_result.decision == "confirm":
+        if action_result.decision == "confirm":
             import json
             payload = json.dumps({
                 "decision": "confirm",
-                "reason": scope_result.reason,
-                "confirm_nonce": scope_result.confirm_nonce,
-                "confirm_prompt_hint": scope_result.confirm_prompt_hint,
+                "reason": action_result.reason,
+                "confirm_nonce": action_result.confirm_nonce,
+                "confirm_prompt_hint": action_result.confirm_prompt_hint,
             })
             return CallToolResult(
                 content=[TextContent(type="text", text=payload)],
                 isError=True,
             )
 
-        if scope_result.decision == "escalate":
+        if action_result.decision == "escalate":
             import json
             payload = json.dumps({
                 "decision": "escalate",
-                "reason": scope_result.reason,
-                "escalation_id": scope_result.escalation_id,
-                "escalation_to": scope_result.escalation_to,
-                "escalation_expires_at": scope_result.escalation_expires_at,
+                "reason": action_result.reason,
+                "escalation_id": action_result.escalation_id,
+                "escalation_to": action_result.escalation_to,
+                "escalation_expires_at": action_result.escalation_expires_at,
             })
             return CallToolResult(
                 content=[TextContent(type="text", text=payload)],
@@ -150,7 +150,7 @@ class AllowlyMCPMiddleware:
             )
 
         return CallToolResult(
-            content=[TextContent(type="text", text=scope_result.reason)],
+            content=[TextContent(type="text", text=action_result.reason)],
             isError=True,
         )
 
@@ -193,30 +193,30 @@ class AllowlyMCPMiddleware:
             if authorization_id is None:
                 return {"decision": "deny", "reason": "authorization_not_found"}
 
-            result = await middleware.client.check(authorization_id=authorization_id, scopes=[name])
-            scope_result = result.results[name]
+            result = await middleware.client.check(authorization_id=authorization_id, actions=[name])
+            action_result = result.results[name]
 
-            if scope_result.decision == "allow":
+            if action_result.decision == "allow":
                 return await original_call(name, arguments)
 
-            if scope_result.decision == "confirm":
+            if action_result.decision == "confirm":
                 return {
                     "decision": "confirm",
-                    "reason": scope_result.reason,
-                    "confirm_nonce": scope_result.confirm_nonce,
-                    "confirm_prompt_hint": scope_result.confirm_prompt_hint,
+                    "reason": action_result.reason,
+                    "confirm_nonce": action_result.confirm_nonce,
+                    "confirm_prompt_hint": action_result.confirm_prompt_hint,
                 }
 
-            if scope_result.decision == "escalate":
+            if action_result.decision == "escalate":
                 return {
                     "decision": "escalate",
-                    "reason": scope_result.reason,
-                    "escalation_id": scope_result.escalation_id,
-                    "escalation_to": scope_result.escalation_to,
-                    "escalation_expires_at": scope_result.escalation_expires_at,
+                    "reason": action_result.reason,
+                    "escalation_id": action_result.escalation_id,
+                    "escalation_to": action_result.escalation_to,
+                    "escalation_expires_at": action_result.escalation_expires_at,
                 }
 
-            return {"decision": scope_result.decision, "reason": scope_result.reason}
+            return {"decision": action_result.decision, "reason": action_result.reason}
 
         server.call_tool = _checked_call
         return middleware

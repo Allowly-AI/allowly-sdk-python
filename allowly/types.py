@@ -12,7 +12,7 @@ FallbackMode = Literal["fail_open", "fail_closed"]
 @dataclass
 class CheckRequest:
     authorization_id: str
-    scopes: list[str]
+    actions: list[str]
     resource: str | None = None
     session_id: str | None = None
     estimated_cost_micros: int | None = None
@@ -66,7 +66,7 @@ class PolicyEvalInfo:
 
 
 @dataclass
-class ScopeCheckResultBase:
+class ActionCheckResultBase:
     decision: Decision
     reason: str
     receipt: ReceiptEnvelope | None
@@ -78,17 +78,17 @@ class ScopeCheckResultBase:
 
 
 @dataclass
-class ScopeCheckResultAllow(ScopeCheckResultBase):
+class ActionCheckResultAllow(ActionCheckResultBase):
     decision: Literal["allow"]
 
 
 @dataclass
-class ScopeCheckResultDeny(ScopeCheckResultBase):
+class ActionCheckResultDeny(ActionCheckResultBase):
     decision: Literal["deny"]
 
 
 @dataclass
-class ScopeCheckResultConfirm(ScopeCheckResultBase):
+class ActionCheckResultConfirm(ActionCheckResultBase):
     decision: Literal["confirm"]
     confirm_nonce: str = ""
     confirm_expires_at: str = ""
@@ -96,18 +96,18 @@ class ScopeCheckResultConfirm(ScopeCheckResultBase):
 
 
 @dataclass
-class ScopeCheckResultEscalate(ScopeCheckResultBase):
+class ActionCheckResultEscalate(ActionCheckResultBase):
     decision: Literal["escalate"]
     escalation_id: str = ""
     escalation_to: str | None = None
     escalation_expires_at: str | None = None
 
 
-ScopeCheckResult = Union[
-    ScopeCheckResultAllow,
-    ScopeCheckResultDeny,
-    ScopeCheckResultConfirm,
-    ScopeCheckResultEscalate,
+ActionCheckResult = Union[
+    ActionCheckResultAllow,
+    ActionCheckResultDeny,
+    ActionCheckResultConfirm,
+    ActionCheckResultEscalate,
 ]
 
 
@@ -118,11 +118,11 @@ class CheckResponse:
     agent_id: str | None
     authorization_expires_at: str | None
     policy_version: str
-    results: dict[str, ScopeCheckResult]
+    results: dict[str, ActionCheckResult]
 
 
 @dataclass
-class ScopeEntry:
+class ActionEntry:
     name: str
     constraints: dict[str, Any] = field(default_factory=dict)
 
@@ -131,7 +131,7 @@ class ScopeEntry:
 class AuthorizationCreateRequest:
     user_id: str
     agent_id: str | None = None
-    scopes: list[ScopeEntry] | None = None
+    actions: list[ActionEntry] | None = None
     expires_at: datetime | str | None = None
     policy_id: str | None = None
     requires_confirm_for: list[str] = field(default_factory=list)

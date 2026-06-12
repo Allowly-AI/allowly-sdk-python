@@ -27,10 +27,10 @@ authorization = await allowly.authorizations.create(
     metadata={"source": "import"},
 )
 
-# Before the agent acts, check whether this scope is allowed.
+# Before the agent acts, check whether this action is allowed.
 decision = await allowly.check(
     authorization_id=authorization.authorization_id,
-    scopes=["web.search"],
+    actions=["web.search"],
     resource=f"subject:{subject_id}",
     context={"stage": "research"},
 )

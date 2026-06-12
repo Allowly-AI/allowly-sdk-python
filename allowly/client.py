@@ -20,12 +20,12 @@ from .types import (
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
     ReceiptEnvelope,
-    ScopeEntry,
+    ActionEntry,
     FallbackMode,
-    ScopeCheckResultAllow,
-    ScopeCheckResultConfirm,
-    ScopeCheckResultDeny,
-    ScopeCheckResultEscalate,
+    ActionCheckResultAllow,
+    ActionCheckResultConfirm,
+    ActionCheckResultDeny,
+    ActionCheckResultEscalate,
 )
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"
@@ -37,7 +37,7 @@ class Allowly:
     Usage::
 
         allowly = Allowly(api_key="allowly_l1_s001_...")
-        result = await allowly.check(authorization_id="auth_...", scopes=["email.send"])
+        result = await allowly.check(authorization_id="auth_...", actions=["email.send"])
         if result.results["email.send"].decision == "allow":
             ...
     """
@@ -50,7 +50,7 @@ class Allowly:
         timeout: float = 10.0,
         check_timeout_ms: int = 1000,
         default_fallback: FallbackMode = "fail_closed",
-        fallback_by_scope: dict[str, FallbackMode] | None = None,
+        fallback_by_action: dict[str, FallbackMode] | None = None,
         dangerously_allow_insecure_base_url: bool = False,
     ) -> None:
         self._api_key = api_key
@@ -59,9 +59,9 @@ class Allowly:
             raise ValueError("check_timeout_ms must be positive")
         self._check_timeout = check_timeout_ms / 1000
         self._default_fallback = _validate_fallback_mode(default_fallback)
-        self._fallback_by_scope = {
-            scope: _validate_fallback_mode(mode)
-            for scope, mode in (fallback_by_scope or {}).items()
+        self._fallback_by_action = {
+            action: _validate_fallback_mode(mode)
+            for action, mode in (fallback_by_action or {}).items()
         }
         self._http = httpx.AsyncClient(
             base_url=base_url,
@@ -93,18 +93,18 @@ class Allowly:
         self,
         *,
         authorization_id: str,
-        scopes: list[str],
+        actions: list[str],
         resource: str | None = None,
         session_id: str | None = None,
         estimated_cost_micros: int | None = None,
         context: dict[str, Any] | None = None,
         wait: bool = False,
     ) -> CheckResponse:
-        """Check whether an authorization permits each requested scope."""
+        """Check whether an authorization permits each requested action."""
         path = "/v1/check" + ("?wait=true" if wait else "")
         body = {
             "authorization_id": authorization_id,
-            "scopes": scopes,
+            "actions": actions,
             "resource": resource,
             "session_id": session_id,
             "estimated_cost_micros": estimated_cost_micros,
@@ -115,38 +115,38 @@ class Allowly:
         except httpx.TimeoutException:
             return self._fallback_check_response(
                 authorization_id=authorization_id,
-                scopes=scopes,
+                actions=actions,
                 failure="timeout",
             )
         except httpx.TransportError:
             return self._fallback_check_response(
                 authorization_id=authorization_id,
-                scopes=scopes,
+                actions=actions,
                 failure="unreachable",
             )
         except AllowlyAPIError as exc:
             if exc.status >= 500:
                 return self._fallback_check_response(
                     authorization_id=authorization_id,
-                    scopes=scopes,
+                    actions=actions,
                     failure="unreachable",
                 )
             raise
         return _parse_check_response(raw)
 
-    def _fallback_mode_for_scope(self, scope: str) -> FallbackMode:
-        return self._fallback_by_scope.get(scope, self._default_fallback)
+    def _fallback_mode_for_action(self, action: str) -> FallbackMode:
+        return self._fallback_by_action.get(action, self._default_fallback)
 
     def _fallback_check_response(
         self,
         *,
         authorization_id: str,
-        scopes: list[str],
+        actions: list[str],
         failure: str,
     ) -> CheckResponse:
         results = {}
-        for scope in scopes:
-            mode = self._fallback_mode_for_scope(scope)
+        for action in actions:
+            mode = self._fallback_mode_for_action(action)
             decision = "allow" if mode == "fail_open" else "deny"
             reason = f"fallback_{'open' if mode == 'fail_open' else 'closed'}_{failure}"
             base = {
@@ -160,9 +160,9 @@ class Allowly:
                 "policy_eval": None,
             }
             if decision == "allow":
-                results[scope] = ScopeCheckResultAllow(**base)
+                results[action] = ActionCheckResultAllow(**base)
             else:
-                results[scope] = ScopeCheckResultDeny(**base)
+                results[action] = ActionCheckResultDeny(**base)
         return CheckResponse(
             authorization_id=authorization_id,
             user_id=None,
@@ -182,7 +182,7 @@ class _AuthorizationsResource:
         *,
         user_id: str,
         agent_id: str | None = None,
-        scopes: list[ScopeEntry] | list[str] | None = None,
+        actions: list[ActionEntry] | list[str] | None = None,
         expires_at: datetime | str | None = None,
         policy_id: str | None = None,
         requires_confirm_for: list[str] | None = None,
@@ -193,16 +193,16 @@ class _AuthorizationsResource:
         metadata: dict[str, Any] | None = None,
     ) -> AuthorizationCreateResponse:
         expires_iso = expires_at.isoformat() if isinstance(expires_at, datetime) else expires_at
-        scope_list = [
+        action_list = [
             {"name": s, "constraints": {}} if isinstance(s, str)
             else {"name": s.name, "constraints": s.constraints}
-            for s in (scopes or [])
-        ] if scopes is not None else None
+            for s in (actions or [])
+        ] if actions is not None else None
         raw = await self._client._request("POST", "/v1/authorizations", json={
             "user_id": user_id,
             "agent_id": agent_id,
             "policy_id": policy_id,
-            "scopes": scope_list,
+            "actions": action_list,
             "requires_confirm_for": requires_confirm_for or [],
             "requires_escalation_for": requires_escalation_for or [],
             "escalation_targets": escalation_targets or {},
@@ -394,10 +394,10 @@ def _validate_base_url(base_url: str, allow_insecure: bool) -> str:
 
 
 def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
-    # The API returns a map keyed by requested scope. Preserve those keys so
+    # The API returns a map keyed by requested action. Preserve those keys so
     # callers can safely handle mixed allow/deny/confirm/escalate results in one check.
     results = {}
-    for scope, item in raw["results"].items():
+    for action, item in raw["results"].items():
         base = dict(
             decision=item["decision"],
             reason=item["reason"],
@@ -409,23 +409,23 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
             policy_eval=_parse_policy_eval(item.get("policy_eval")),
         )
         if item["decision"] == "deny":
-            results[scope] = ScopeCheckResultDeny(**base)
+            results[action] = ActionCheckResultDeny(**base)
         elif item["decision"] == "confirm":
-            results[scope] = ScopeCheckResultConfirm(
+            results[action] = ActionCheckResultConfirm(
                 **base,
                 confirm_nonce=item.get("confirm_nonce", ""),
                 confirm_expires_at=item.get("confirm_expires_at", ""),
                 confirm_prompt_hint=item.get("confirm_prompt_hint", ""),
             )
         elif item["decision"] == "escalate":
-            results[scope] = ScopeCheckResultEscalate(
+            results[action] = ActionCheckResultEscalate(
                 **base,
                 escalation_id=item.get("escalation_id", ""),
                 escalation_to=item.get("escalation_to"),
                 escalation_expires_at=item.get("escalation_expires_at"),
             )
         else:
-            results[scope] = ScopeCheckResultAllow(**base)
+            results[action] = ActionCheckResultAllow(**base)
     return CheckResponse(
         user_id=raw.get("user_id", ""),
         agent_id=raw.get("agent_id", ""),
