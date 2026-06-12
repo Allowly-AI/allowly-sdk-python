@@ -44,7 +44,7 @@ async def test_check_allow(client):
         "agent_id": "a1",
         "authorization_id": "auth_1",
         "authorization_expires_at": "2026-12-31T00:00:00Z",
-        "policy_version": "2026-04-19.1",
+        "engine_version": "2026-04-19.1",
         "results": {
             "email.read": {
                 "decision": "allow",
@@ -70,7 +70,7 @@ async def test_check_allow(client):
 async def test_check_deny(client):
     respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
         "authorization_id": "auth_nope",
-        "policy_version": "2026-04-19.1",
+        "engine_version": "2026-04-19.1",
         "results": {
             "email.read": {
                 "decision": "deny",
@@ -90,7 +90,7 @@ async def test_check_confirm(client):
     respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
         "authorization_id": "auth_2",
         "authorization_expires_at": "2026-12-31T00:00:00Z",
-        "policy_version": "2026-04-19.1",
+        "engine_version": "2026-04-19.1",
         "results": {
             "email.send": {
                 "decision": "confirm",
@@ -114,7 +114,7 @@ async def test_check_parses_policy_eval(client):
     respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
         "authorization_id": "auth_policy",
         "authorization_expires_at": "2026-12-31T00:00:00Z",
-        "policy_version": "2026-04-19.1",
+        "engine_version": "2026-04-19.1",
         "results": {
             "hiring.reject_application": {
                 "decision": "confirm",
@@ -151,7 +151,7 @@ async def test_check_escalate(client):
     respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
         "authorization_id": "auth_esc",
         "authorization_expires_at": "2026-12-31T00:00:00Z",
-        "policy_version": "2026-04-19.1",
+        "engine_version": "2026-04-19.1",
         "results": {
             "candidate.delete": {
                 "decision": "escalate",
@@ -195,7 +195,7 @@ async def test_check_raises_on_401(client):
 async def test_check_sends_auth_header(client):
     route = respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
         "authorization_id": "auth_1",
-        "policy_version": "2026-04-19.1",
+        "engine_version": "2026-04-19.1",
         "results": {
             "x": {"decision": "deny", "reason": "authorization_not_found", "receipt": PENDING_RECEIPT}
         },
@@ -209,7 +209,7 @@ async def test_check_sends_auth_header(client):
 async def test_check_sends_multi_action_v10_body(client):
     route = respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
         "authorization_id": "auth_1",
-        "policy_version": "2026-04-19.1",
+        "engine_version": "2026-04-19.1",
         "results": {
             "public.web.search": {"decision": "allow", "reason": "ok", "receipt": PENDING_RECEIPT},
             "public.page.read": {"decision": "deny", "reason": "action_not_in_authorization", "receipt": PENDING_RECEIPT},
@@ -237,7 +237,7 @@ async def test_check_sends_multi_action_v10_body(client):
 async def test_check_parses_budget_result(client):
     respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
         "authorization_id": "auth_1",
-        "policy_version": "2026-04-19.1",
+        "engine_version": "2026-04-19.1",
         "results": {
             "llm.enrich": {
                 "decision": "allow",
@@ -287,7 +287,7 @@ async def test_check_timeout_fail_open_returns_local_fallback():
     assert item.receipt is None
     assert item.budget is None
     assert res.authorization_id == "auth_1"
-    assert res.policy_version == "sdk_fallback"
+    assert res.engine_version == "sdk_fallback"
 
 
 @respx.mock

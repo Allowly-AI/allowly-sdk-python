@@ -168,7 +168,7 @@ class Allowly:
             user_id=None,
             agent_id=None,
             authorization_expires_at=None,
-            policy_version="sdk_fallback",
+            engine_version="sdk_fallback",
             results=results,
         )
 
@@ -431,7 +431,7 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
         agent_id=raw.get("agent_id", ""),
         authorization_id=raw.get("authorization_id", ""),
         authorization_expires_at=raw.get("authorization_expires_at", ""),
-        policy_version=raw.get("policy_version", ""),
+        engine_version=raw.get("engine_version", ""),
         results=results,
     )
 

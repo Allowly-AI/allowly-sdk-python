@@ -117,7 +117,7 @@ class CheckResponse:
     user_id: str | None
     agent_id: str | None
     authorization_expires_at: str | None
-    policy_version: str
+    engine_version: str
     results: dict[str, ActionCheckResult]
 
 

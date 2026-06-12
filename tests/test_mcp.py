@@ -62,7 +62,7 @@ def _response(action: str, result) -> CheckResponse:
         agent_id="gmail-tools",
         authorization_id="auth_1",
         authorization_expires_at="2026-12-31T00:00:00Z",
-        policy_version="2026-04-19.1",
+        engine_version="2026-04-19.1",
         results={action: result},
     )
 
