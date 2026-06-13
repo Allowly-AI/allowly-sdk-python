@@ -17,7 +17,11 @@ dependencies = [
 mcp = [
     "mcp>=1.0",
 ]
+verifier = [
+    "allowly-receipt-format>=1.0.0",
+]
 dev = [
+    "allowly-receipt-format>=1.0.0",
     "cryptography>=42",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

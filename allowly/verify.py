@@ -14,34 +14,27 @@ from __future__ import annotations
 import hashlib
 import httpx
 import json
-import sys
-import os
 import time
 from typing import Any
 
-# Allow importing the reference verifier from the receipt-format repo when running
-# inside the monorepo. In a standalone install, the verifier ships as allowly.verifier.
+# Offline verification is powered by the published reference verifier,
+# allowly-receipt-format (import path allowly_receipt_format). It ships as an
+# optional extra so the core SDK stays dependency-light:
+#     pip install 'allowly[verifier]'
 def _import_verifier():
     try:
-        from allowly._verifier import verify_receipt, load_keys_from_json, VerificationError, PublicKey
+        from allowly_receipt_format import (
+            verify_receipt,
+            load_keys_from_json,
+            VerificationError,
+            PublicKey,
+        )
         return verify_receipt, load_keys_from_json, VerificationError, PublicKey
-    except ImportError:
-        pass
-
-    # Fallback: look for the receipt-format verifier relative to this workspace.
-    _repo_verifier = os.path.join(
-        os.path.dirname(__file__), "..", "..",
-        "allowly-receipt-format", "verifiers", "python",
-    )
-    if os.path.isdir(_repo_verifier):
-        sys.path.insert(0, _repo_verifier)
-        from verifier import verify_receipt, load_keys_from_json, VerificationError, PublicKey  # type: ignore
-        return verify_receipt, load_keys_from_json, VerificationError, PublicKey
-
-    raise ImportError(
-        "Receipt verifier not found. Install allowly with the verifier extra: "
-        "pip install 'allowly[verifier]'"
-    )
+    except ImportError as exc:
+        raise ImportError(
+            "Receipt verification requires the allowly-receipt-format package. "
+            "Install the verifier extra: pip install 'allowly[verifier]'"
+        ) from exc
 
 
 _verify_receipt, _load_keys_from_json, VerificationError, PublicKey = _import_verifier()
