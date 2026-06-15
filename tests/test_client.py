@@ -32,10 +32,6 @@ def test_client_allows_insecure_base_url_with_explicit_opt_in():
     )
 
 
-# ---------------------------------------------------------------------------
-# check()
-# ---------------------------------------------------------------------------
-
 @respx.mock
 @pytest.mark.asyncio
 async def test_check_allow(client):
@@ -402,10 +398,6 @@ async def test_fallback_results_are_not_cached():
     assert route.call_count == 2
 
 
-# ---------------------------------------------------------------------------
-# authorizations.create()
-# ---------------------------------------------------------------------------
-
 @respx.mock
 @pytest.mark.asyncio
 async def test_authorizations_create(client):
@@ -538,10 +530,6 @@ async def test_non_check_endpoint_5xx_does_not_fallback():
     assert exc_info.value.status == 503
 
 
-# ---------------------------------------------------------------------------
-# authorizations.revoke()
-# ---------------------------------------------------------------------------
-
 @respx.mock
 @pytest.mark.asyncio
 async def test_authorizations_revoke(client):
@@ -589,10 +577,6 @@ async def test_authorizations_create_with_replaces(client):
     assert body["replaces"] == "auth_001"
 
 
-# ---------------------------------------------------------------------------
-# confirmations.approve()
-# ---------------------------------------------------------------------------
-
 @respx.mock
 @pytest.mark.asyncio
 async def test_confirmations_approve(client):
@@ -613,10 +597,6 @@ async def test_confirmations_denied(client):
     res = await client.confirmations.approve("nonce123", approved=False)
     assert res.decision == "denied_by_user"
 
-
-# ---------------------------------------------------------------------------
-# escalations.resolve()
-# ---------------------------------------------------------------------------
 
 @respx.mock
 @pytest.mark.asyncio
@@ -652,10 +632,6 @@ async def test_escalations_reject_idempotent_without_new_receipt(client):
     assert res.status == "rejected"
     assert res.receipt is None
 
-
-# ---------------------------------------------------------------------------
-# receipts.get()
-# ---------------------------------------------------------------------------
 
 @respx.mock
 @pytest.mark.asyncio

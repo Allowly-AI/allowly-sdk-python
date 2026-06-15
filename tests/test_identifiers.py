@@ -1,6 +1,5 @@
 import pytest
 
-import allowly
 from allowly.identifiers import from_email, normalize_email
 
 
@@ -18,10 +17,6 @@ def test_from_email_returns_versioned_hmac_identifier():
 
 def test_from_email_accepts_bytes_pepper():
     assert from_email("user@example.com", pepper=b"pepper").startswith("email_hmac:v1:")
-
-
-def test_package_exposes_identifiers_module():
-    assert allowly.identifiers.from_email("user@example.com", pepper="pepper").startswith("email_hmac:v1:")
 
 
 def test_from_email_requires_permanent_pepper():

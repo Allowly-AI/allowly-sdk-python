@@ -37,7 +37,7 @@ def _import_verifier():
         ) from exc
 
 
-_verify_receipt, _load_keys_from_json, VerificationError, PublicKey = _import_verifier()
+verify_receipt, _load_keys_from_json, VerificationError, PublicKey = _import_verifier()
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"
 DEFAULT_KEYS_DOC_CACHE_TTL_SECONDS = 300
@@ -45,12 +45,12 @@ _keys_doc_cache: dict[tuple[str, str | None], tuple[float, dict[str, Any]]] = {}
 
 
 def load_keys_from_json(doc: dict[str, Any]) -> list[PublicKey]:
-    _validate_keys_doc(doc)
-    return _load_keys_from_json(doc)
-
-
-def verify_receipt(*args: Any, **kwargs: Any) -> Any:
-    return _verify_receipt(*args, **kwargs)
+    try:
+        return _load_keys_from_json(doc)
+    except VerificationError:
+        raise
+    except Exception as exc:
+        raise VerificationError(str(exc)) from exc
 
 
 def fetch_keys_doc(
@@ -108,45 +108,6 @@ def fetch_keys_doc(
 
 def clear_keys_doc_cache() -> None:
     _keys_doc_cache.clear()
-
-
-def _validate_keys_doc(doc: dict[str, Any]) -> None:
-    if not isinstance(doc, dict):
-        raise VerificationError("key document must be an object")
-    workspace_id = doc.get("workspace_id")
-    if not isinstance(workspace_id, str) or not workspace_id:
-        raise VerificationError("key document workspace_id must be a non-empty string")
-    keys = doc.get("keys")
-    if not isinstance(keys, list):
-        raise VerificationError("key document keys must be an array")
-
-    for i, key in enumerate(keys):
-        if not isinstance(key, dict):
-            raise VerificationError(f"keys[{i}] must be an object")
-        for field in ("key_id", "alg", "public_key", "active_from"):
-            value = key.get(field)
-            if not isinstance(value, str) or not value:
-                raise VerificationError(f"keys[{i}].{field} must be a non-empty string")
-        if key["alg"] != "Ed25519":
-            raise VerificationError(f'keys[{i}].alg must be "Ed25519"')
-        active_until = key.get("active_until")
-        if active_until is not None and not isinstance(active_until, str):
-            raise VerificationError(f"keys[{i}].active_until must be string or null")
-        try:
-            raw = _b64url_decode(key["public_key"])
-        except Exception as exc:
-            raise VerificationError(f"keys[{i}].public_key is not valid base64url") from exc
-        if len(raw) != 32:
-            raise VerificationError(
-                f"keys[{i}].public_key must decode to 32 bytes, got {len(raw)}"
-            )
-
-
-def _b64url_decode(value: str) -> bytes:
-    import base64
-
-    padded = value + "=" * ((4 - len(value) % 4) % 4)
-    return base64.urlsafe_b64decode(padded.encode("ascii"))
 
 
 __all__ = [

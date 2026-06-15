@@ -27,7 +27,7 @@ if "mcp" not in sys.modules:
 
 import pytest
 
-from allowly import AllowlyMCPMiddleware
+from allowly.mcp import AllowlyMCPMiddleware
 from allowly.types import (
     CheckResponse,
     ReceiptEnvelopePending,
@@ -102,10 +102,6 @@ def _escalate_response(action: str = "delete_candidate") -> CheckResponse:
         ),
     )
 
-
-# ---------------------------------------------------------------------------
-# Low-level Server wrapping
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_wrap_allows_tool_call():
@@ -225,10 +221,6 @@ async def test_wrap_check_called_with_authorization_id():
 
     check_mock.assert_awaited_once_with(authorization_id="auth_1", actions=["read_email"])
 
-
-# ---------------------------------------------------------------------------
-# FastMCP on_call_tool hook
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_fastmcp_allows_tool_call():

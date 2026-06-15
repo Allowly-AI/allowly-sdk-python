@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from importlib import import_module
-
 from .client import Allowly
 from .error import AllowlyAPIError, FieldError
 from .types import (
@@ -22,17 +20,8 @@ from .types import (
 
 __all__ = [
     "Allowly",
-    "AllowlyMCPMiddleware",
-    "MCPAuthorizationContext",
     "AllowlyAPIError",
     "FieldError",
-    "VerificationError",
-    "identifiers",
-    "PublicKey",
-    "fetch_keys_doc",
-    "clear_keys_doc_cache",
-    "load_keys_from_json",
-    "verify_receipt",
     "CheckResponse",
     "BudgetInfo",
     "EscalationInfo",
@@ -47,30 +36,3 @@ __all__ = [
     "Decision",
     "FallbackMode",
 ]
-
-
-def __getattr__(name: str):
-    if name == "identifiers":
-        return import_module(".identifiers", __name__)
-
-    if name in {"AllowlyMCPMiddleware", "MCPAuthorizationContext"}:
-        from .mcp import AllowlyMCPMiddleware, MCPAuthorizationContext
-
-        return {
-            "AllowlyMCPMiddleware": AllowlyMCPMiddleware,
-            "MCPAuthorizationContext": MCPAuthorizationContext,
-        }[name]
-
-    if name in {
-        "VerificationError",
-        "PublicKey",
-        "fetch_keys_doc",
-        "clear_keys_doc_cache",
-        "load_keys_from_json",
-        "verify_receipt",
-    }:
-        from . import verify as verify_module
-
-        return getattr(verify_module, name)
-
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

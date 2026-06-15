@@ -1,22 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, Literal, Union
 
 
 Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
-
-
-@dataclass
-class CheckRequest:
-    authorization_id: str
-    actions: list[str]
-    resource: str | None = None
-    session_id: str | None = None
-    estimated_cost_micros: int | None = None
-    context: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -128,21 +117,6 @@ class ActionEntry:
 
 
 @dataclass
-class AuthorizationCreateRequest:
-    user_id: str
-    agent_id: str | None = None
-    actions: list[ActionEntry] | None = None
-    expires_at: datetime | str | None = None
-    policy_id: str | None = None
-    requires_confirm_for: list[str] = field(default_factory=list)
-    requires_escalation_for: list[str] = field(default_factory=list)
-    escalation_targets: dict[str, str] = field(default_factory=dict)
-    budget_limit_micros: int | None = None
-    replaces: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
 class AuthorizationCreateResponse:
     authorization_id: str
     created_at: str
@@ -161,12 +135,6 @@ class AuthorizationRevokeResponse:
     authorization_id: str
     revoked_at: str
     receipt: ReceiptEnvelopePending
-
-
-@dataclass
-class ConfirmationApproveRequest:
-    approved: bool
-    ttl_seconds: int = 60
 
 
 @dataclass

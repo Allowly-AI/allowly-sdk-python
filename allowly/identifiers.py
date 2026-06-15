@@ -24,23 +24,19 @@ def from_email(email: str, *, pepper: str | bytes, version: str = EMAIL_HMAC_VER
     if version != EMAIL_HMAC_VERSION:
         raise ValueError("unsupported email identifier version")
 
-    key = _pepper_bytes(pepper)
+    if isinstance(pepper, str):
+        key = pepper.encode("utf-8")
+    elif isinstance(pepper, bytes):
+        key = pepper
+    else:
+        raise TypeError("pepper must be str or bytes")
+    if not key:
+        raise ValueError("pepper must not be empty")
+
     message = normalize_email(email).encode("utf-8")
     digest = hmac.new(key, message, hashlib.sha256).digest()
     encoded = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
     return f"{EMAIL_HMAC_PREFIX}:{version}:{encoded}"
-
-
-def _pepper_bytes(pepper: str | bytes) -> bytes:
-    if isinstance(pepper, str):
-        encoded = pepper.encode("utf-8")
-    elif isinstance(pepper, bytes):
-        encoded = pepper
-    else:
-        raise TypeError("pepper must be str or bytes")
-    if not encoded:
-        raise ValueError("pepper must not be empty")
-    return encoded
 
 
 __all__ = [

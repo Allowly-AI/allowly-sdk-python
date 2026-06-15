@@ -45,8 +45,8 @@ returned escalation results with
 `await allowly.escalations.approve(escalation_id, resolved_by="manager:123")`
 or `reject(...)`, then re-check before running the action.
 
-If you need lookup by email later, store a keyed hash such as
-`allowly.identifiers.from_email(email, pepper=APP_PII_PEPPER)` in your app.
+If you need lookup by email later, import `from_email` from
+`allowly.identifiers` and store `from_email(email, pepper=APP_PII_PEPPER)`.
 The helper trims and lowercases only, prefixes the result with `email_hmac:v1`,
 and never sends the raw email or pepper to Allowly. Keep the pepper stable and
 backed up; changing it changes derived user IDs. Keep raw names, emails,
