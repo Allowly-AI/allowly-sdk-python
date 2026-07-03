@@ -409,7 +409,7 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
             policy_eval=_parse_policy_eval(item.get("policy_eval")),
         )
         if item["decision"] == "deny":
-            results[action] = ActionCheckResultDeny(**base)
+            results[action] = ActionCheckResultDeny(**base, superseded_by=item.get("superseded_by"))
         elif item["decision"] == "confirm":
             results[action] = ActionCheckResultConfirm(
                 **base,

@@ -74,6 +74,7 @@ class ActionCheckResultAllow(ActionCheckResultBase):
 @dataclass
 class ActionCheckResultDeny(ActionCheckResultBase):
     decision: Literal["deny"]
+    superseded_by: str | None = None
 
 
 @dataclass

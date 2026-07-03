@@ -70,14 +70,16 @@ async def test_check_deny(client):
         "results": {
             "email.read": {
                 "decision": "deny",
-                "reason": "authorization_not_found",
+                "reason": "authorization_superseded",
+                "superseded_by": "auth_new",
                 "receipt": PENDING_RECEIPT,
             }
         },
     }))
     res = await client.check(authorization_id="auth_nope", actions=["email.read"])
     assert res.results["email.read"].decision == "deny"
-    assert res.results["email.read"].reason == "authorization_not_found"
+    assert res.results["email.read"].reason == "authorization_superseded"
+    assert res.results["email.read"].superseded_by == "auth_new"
 
 
 @respx.mock
