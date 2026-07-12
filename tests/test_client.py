@@ -114,33 +114,33 @@ async def test_check_parses_policy_eval(client):
         "authorization_expires_at": "2026-12-31T00:00:00Z",
         "engine_version": "2026-04-19.1",
         "results": {
-            "hiring.reject_application": {
+            "hiring.publish_feedback": {
                 "decision": "confirm",
                 "reason": "condition_requires_user_confirmation",
                 "confirm_nonce": "cnf_policy",
                 "confirm_expires_at": "2026-04-20T00:15:00Z",
-                "confirm_prompt_hint": "hiring.reject_application",
+                "confirm_prompt_hint": "hiring.publish_feedback",
                 "policy_eval": {
                     "matched_condition": {
-                        "field": "rule_fired",
+                        "field": "checks_failed",
                         "op": "in",
-                        "value": ["employment_gap", "availability"],
+                        "value": ["pii_detected", "tone_flag"],
                     },
-                    "field_value": "employment_gap",
+                    "field_value": "pii_detected",
                 },
                 "receipt": PENDING_RECEIPT,
             }
         },
     }))
-    res = await client.check(authorization_id="auth_policy", actions=["hiring.reject_application"])
-    item = res.results["hiring.reject_application"]
+    res = await client.check(authorization_id="auth_policy", actions=["hiring.publish_feedback"])
+    item = res.results["hiring.publish_feedback"]
     assert item.decision == "confirm"
     assert item.policy_eval is not None
     assert item.policy_eval.matched_condition is not None
-    assert item.policy_eval.matched_condition.field == "rule_fired"
+    assert item.policy_eval.matched_condition.field == "checks_failed"
     assert item.policy_eval.matched_condition.op == "in"
-    assert item.policy_eval.matched_condition.value == ["employment_gap", "availability"]
-    assert item.policy_eval.field_value == "employment_gap"
+    assert item.policy_eval.matched_condition.value == ["pii_detected", "tone_flag"]
+    assert item.policy_eval.field_value == "pii_detected"
 
 
 @respx.mock
