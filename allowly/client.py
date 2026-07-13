@@ -77,7 +77,12 @@ class Allowly:
         resp = await self._http.request(method, path, **kwargs)
         if resp.status_code == 204:
             return None
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError:
+            if resp.is_success:
+                raise
+            data = {}
         if not resp.is_success:
             err = data.get("error", {})
             fields = [FieldError(field=f["field"], message=f["message"]) for f in err.get("fields", [])]
@@ -99,6 +104,7 @@ class Allowly:
         estimated_cost_micros: int | None = None,
         context: dict[str, Any] | None = None,
         wait: bool = False,
+        idempotency_key: str | None = None,
     ) -> CheckResponse:
         """Check whether an authorization permits each requested action."""
         path = "/v1/check" + ("?wait=true" if wait else "")
@@ -111,7 +117,8 @@ class Allowly:
             "context": context or {},
         }
         try:
-            raw = await self._request("POST", path, json=body, timeout=self._check_timeout)
+            headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
+            raw = await self._request("POST", path, json=body, timeout=self._check_timeout, headers=headers)
         except httpx.TimeoutException:
             return self._fallback_check_response(
                 authorization_id=authorization_id,

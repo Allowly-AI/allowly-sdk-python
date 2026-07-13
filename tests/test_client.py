@@ -204,6 +204,20 @@ async def test_check_sends_auth_header(client):
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_check_sends_idempotency_key(client):
+    route = respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
+        "authorization_id": "auth_1",
+        "engine_version": "2026-04-19.1",
+        "results": {
+            "x": {"decision": "deny", "reason": "authorization_not_found", "receipt": PENDING_RECEIPT}
+        },
+    }))
+    await client.check(authorization_id="auth_1", actions=["x"], idempotency_key="idem_1")
+    assert route.calls[0].request.headers["idempotency-key"] == "idem_1"
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_check_sends_multi_action_v10_body(client):
     route = respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
         "authorization_id": "auth_1",
@@ -340,6 +354,17 @@ async def test_check_5xx_fail_closed_returns_unreachable():
     assert item.is_fallback is True
     assert item.fallback_mode == "fail_closed"
     assert item.receipt is None
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_non_json_5xx_returns_unreachable():
+    client = Allowly(api_key="test-key", base_url=BASE)
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(502, text="<html>bad gateway</html>"))
+
+    res = await client.check(authorization_id="auth_1", actions=["email.send"])
+
+    assert res.results["email.send"].reason == "fallback_closed_unreachable"
 
 
 @respx.mock
