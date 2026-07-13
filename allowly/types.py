@@ -34,6 +34,18 @@ class BudgetInfo:
 
 
 @dataclass
+class BudgetSettlementResponse:
+    check_receipt_id: str
+    authorization_id: str
+    estimated_cost_micros: int
+    actual_cost_micros: int
+    delta_micros: int
+    spent_before_micros: int
+    spent_after_micros: int
+    receipt: ReceiptEnvelope
+
+
+@dataclass
 class EscalationInfo:
     escalation_id: str
     status: str

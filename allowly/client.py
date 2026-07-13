@@ -13,6 +13,7 @@ from .types import (
     AuthorizationCreateResponse,
     AuthorizationRevokeResponse,
     BudgetInfo,
+    BudgetSettlementResponse,
     EscalationInfo,
     EscalationResolveResponse,
     PolicyConditionEvidence,
@@ -178,6 +179,25 @@ class Allowly:
             engine_version="sdk_fallback",
             results=results,
         )
+
+    async def settle_budget(
+        self,
+        *,
+        check_receipt_id: str,
+        actual_cost_micros: int,
+        idempotency_key: str | None = None,
+    ) -> BudgetSettlementResponse:
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
+        raw = await self._request(
+            "POST",
+            "/v1/budget-settlements",
+            json={
+                "check_receipt_id": check_receipt_id,
+                "actual_cost_micros": actual_cost_micros,
+            },
+            headers=headers,
+        )
+        return _parse_budget_settlement_response(raw)
 
 
 class _AuthorizationsResource:
@@ -451,6 +471,19 @@ def _parse_budget_info(raw: Any) -> BudgetInfo | None:
         spent_micros=raw["spent_micros"],
         estimated_cost_micros=raw["estimated_cost_micros"],
         spent_after_micros=raw.get("spent_after_micros"),
+    )
+
+
+def _parse_budget_settlement_response(raw: dict[str, Any]) -> BudgetSettlementResponse:
+    return BudgetSettlementResponse(
+        check_receipt_id=raw["check_receipt_id"],
+        authorization_id=raw["authorization_id"],
+        estimated_cost_micros=raw["estimated_cost_micros"],
+        actual_cost_micros=raw["actual_cost_micros"],
+        delta_micros=raw["delta_micros"],
+        spent_before_micros=raw["spent_before_micros"],
+        spent_after_micros=raw["spent_after_micros"],
+        receipt=_parse_receipt_envelope(raw["receipt"]),
     )
 
 

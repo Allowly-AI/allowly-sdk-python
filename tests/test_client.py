@@ -427,6 +427,35 @@ async def test_fallback_results_are_not_cached():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_settle_budget_sends_actual_cost_and_idempotency_key(client):
+    route = respx.post(f"{BASE}/v1/budget-settlements").mock(return_value=httpx.Response(200, json={
+        "check_receipt_id": "rcp_check",
+        "authorization_id": "auth_1",
+        "estimated_cost_micros": 30,
+        "actual_cost_micros": 12,
+        "delta_micros": -18,
+        "spent_before_micros": 50,
+        "spent_after_micros": 32,
+        "receipt": PENDING_RECEIPT,
+    }))
+
+    res = await client.settle_budget(
+        check_receipt_id="rcp_check",
+        actual_cost_micros=12,
+        idempotency_key="settle-1",
+    )
+
+    import json
+    body = json.loads(route.calls[0].request.content)
+    assert body == {"check_receipt_id": "rcp_check", "actual_cost_micros": 12}
+    assert route.calls[0].request.headers["idempotency-key"] == "settle-1"
+    assert res.authorization_id == "auth_1"
+    assert res.delta_micros == -18
+    assert res.receipt.status == "pending"
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_authorizations_create(client):
     respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(201, json={
         "authorization_id": "auth_new",
