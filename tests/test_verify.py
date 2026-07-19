@@ -10,6 +10,7 @@ from allowly.verify import (
     clear_keys_doc_cache,
     fetch_keys_doc,
     load_keys_from_json,
+    verify_receipt,
 )
 
 
@@ -32,9 +33,9 @@ def _clear_cache():
     clear_keys_doc_cache()
 
 
-def _client_for(body: str, status_code: int = 200) -> httpx.Client:
+def _client_for(body: str | bytes, status_code: int = 200) -> httpx.Client:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(status_code, text=body)
+        return httpx.Response(status_code, content=body)
 
     transport = httpx.MockTransport(handler)
     return httpx.Client(transport=transport)
@@ -62,9 +63,9 @@ def test_fetch_keys_doc_caches_for_five_minutes():
 
 
 def test_fetch_keys_doc_enforces_hash_pin():
-    body = httpx.Response(200, json=VALID_DOC).text
+    body = httpx.Response(200, json=VALID_DOC).content
     client = _client_for(body)
-    expected_sha256 = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    expected_sha256 = hashlib.sha256(body).hexdigest()
 
     assert fetch_keys_doc(
         "ws_1",
@@ -72,6 +73,32 @@ def test_fetch_keys_doc_enforces_hash_pin():
         expected_sha256=expected_sha256,
         client=client,
     ) == VALID_DOC
+
+
+def test_verify_receipt_requires_and_forwards_workspace_binding(monkeypatch):
+    with pytest.raises(TypeError, match="expected_workspace_id"):
+        verify_receipt({}, [])  # type: ignore[call-arg]
+
+    seen = {}
+
+    def verifier(receipt, public_keys, **kwargs):
+        seen.update(kwargs)
+
+    monkeypatch.setattr("allowly.verify._verify_receipt", verifier)
+    verify_receipt({}, [], expected_workspace_id="ws_1")
+    assert seen["expected_workspace_id"] == "ws_1"
+
+
+def test_fetch_keys_doc_encodes_workspace_id():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.raw_path
+        return httpx.Response(200, json={**VALID_DOC, "workspace_id": "ws/1"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    fetch_keys_doc("ws/1", base_url="https://api.example.com", client=client)
+    assert seen["path"] == b"/v1/workspaces/ws%2F1/keys"
 
 
 def test_fetch_keys_doc_rejects_workspace_id_mismatch():

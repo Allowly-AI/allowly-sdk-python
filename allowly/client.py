@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from .error import AllowlyAPIError, FieldError
+from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .types import (
     CheckResponse,
     ConfirmationApproveResponse,
@@ -74,6 +74,15 @@ class Allowly:
         self.escalations = _EscalationsResource(self)
         self.receipts = _ReceiptsResource(self)
 
+    async def aclose(self) -> None:
+        await self._http.aclose()
+
+    async def __aenter__(self) -> Allowly:
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        await self.aclose()
+
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         resp = await self._http.request(method, path, **kwargs)
         if resp.status_code == 204:
@@ -85,7 +94,9 @@ class Allowly:
                 raise
             data = {}
         if not resp.is_success:
-            err = data.get("error", {})
+            err = data.get("error", {}) if isinstance(data, dict) else {}
+            if not isinstance(err, dict):
+                err = {}
             fields = [FieldError(field=f["field"], message=f["message"]) for f in err.get("fields", [])]
             raise AllowlyAPIError(
                 status=resp.status_code,
@@ -119,7 +130,8 @@ class Allowly:
         }
         try:
             headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
-            raw = await self._request("POST", path, json=body, timeout=self._check_timeout, headers=headers)
+            timeout = max(self._check_timeout, 6.0) if wait else self._check_timeout
+            raw = await self._request("POST", path, json=body, timeout=timeout, headers=headers)
         except httpx.TimeoutException:
             return self._fallback_check_response(
                 authorization_id=authorization_id,
@@ -214,10 +226,12 @@ class _AuthorizationsResource:
         policy_id: str | None = None,
         requires_confirm_for: list[str] | None = None,
         requires_escalation_for: list[str] | None = None,
+        requires_deny_for: list[str] | None = None,
         escalation_targets: dict[str, str] | None = None,
         budget_limit_micros: int | None = None,
         replaces: str | None = None,
         metadata: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
     ) -> AuthorizationCreateResponse:
         expires_iso = expires_at.isoformat() if isinstance(expires_at, datetime) else expires_at
         action_list = [
@@ -225,6 +239,7 @@ class _AuthorizationsResource:
             else {"name": s.name, "constraints": s.constraints}
             for s in (actions or [])
         ] if actions is not None else None
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
         raw = await self._client._request("POST", "/v1/authorizations", json={
             "user_id": user_id,
             "agent_id": agent_id,
@@ -232,23 +247,31 @@ class _AuthorizationsResource:
             "actions": action_list,
             "requires_confirm_for": requires_confirm_for or [],
             "requires_escalation_for": requires_escalation_for or [],
+            "requires_deny_for": requires_deny_for or [],
             "escalation_targets": escalation_targets or {},
             "budget_limit_micros": budget_limit_micros,
             "expires_at": expires_iso,
             "replaces": replaces,
             "metadata": metadata or {},
-        })
+        }, headers=headers)
+        revocation_receipt = raw.get("revocation_receipt")
         return AuthorizationCreateResponse(
             authorization_id=raw["authorization_id"],
             created_at=raw["created_at"],
             expires_at=raw["expires_at"],
             receipt=_parse_pending_envelope(raw["receipt"]),
             policy_id=raw.get("policy_id"),
-            requires_confirm_for=raw.get("requires_confirm_for", []),
             requires_escalation_for=raw.get("requires_escalation_for", []),
+            requires_deny_for=raw.get("requires_deny_for", []),
             escalation_targets=raw.get("escalation_targets", {}),
             budget_limit_micros=raw.get("budget_limit_micros"),
             budget_spent_micros=raw.get("budget_spent_micros"),
+            replaced_authorization_id=raw.get("replaced_authorization_id"),
+            revocation_receipt=(
+                _parse_pending_envelope(revocation_receipt)
+                if revocation_receipt is not None
+                else None
+            ),
         )
 
     async def revoke(
@@ -258,6 +281,7 @@ class _AuthorizationsResource:
         revoked_by: str | None = None,
         superseded_by: str | None = None,
         notes: str | None = None,
+        idempotency_key: str | None = None,
     ) -> AuthorizationRevokeResponse:
         body: dict[str, Any] = {}
         if revoked_by:
@@ -266,13 +290,15 @@ class _AuthorizationsResource:
             body["superseded_by"] = superseded_by
         if notes:
             body["notes"] = notes
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
         raw = await self._client._request(
-            "DELETE", f"/v1/authorizations/{authorization_id}", json=body or None
+            "DELETE", f"/v1/authorizations/{authorization_id}", json=body or None, headers=headers
         )
         return AuthorizationRevokeResponse(
             authorization_id=raw["authorization_id"],
             revoked_at=raw["revoked_at"],
             receipt=_parse_pending_envelope(raw["receipt"]),
+            revoked_confirmations=raw.get("revoked_confirmations", []),
         )
 
 
@@ -286,13 +312,18 @@ class _ConfirmationsResource:
         *,
         approved: bool,
         ttl_seconds: int = 60,
+        idempotency_key: str | None = None,
     ) -> ConfirmationApproveResponse:
+        headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
         raw = await self._client._request("POST", f"/v1/confirmations/{nonce}", json={
             "approved": approved,
             "ttl_seconds": ttl_seconds,
-        })
+        }, headers=headers)
+        decision = _require_str(raw, "decision")
+        if decision not in {"approved", "denied_by_user"}:
+            raise AllowlyProtocolError(f"unknown confirmation decision: {decision!r}")
         return ConfirmationApproveResponse(
-            decision=raw["decision"],
+            decision=decision,
             authorization_id=raw.get("authorization_id"),
             expires_at=raw.get("expires_at"),
         )
@@ -315,10 +346,13 @@ class _EscalationsResource:
             "resolved_by": resolved_by,
             "note": note,
         })
+        status = _require_str(raw, "status")
+        if status not in {"approved", "rejected"}:
+            raise AllowlyProtocolError(f"unknown escalation status: {status!r}")
         receipt = raw.get("receipt")
         return EscalationResolveResponse(
             escalation_id=raw["escalation_id"],
-            status=raw["status"],
+            status=status,
             resolved_by=raw.get("resolved_by"),
             resolved_at=raw.get("resolved_at"),
             receipt=_parse_pending_envelope(receipt) if receipt is not None else None,
@@ -374,34 +408,46 @@ class _ReceiptsResource:
         Raises TimeoutError if signing doesn't complete within `timeout` seconds.
         """
         import asyncio
-        elapsed = 0.0
-        while elapsed < timeout:
-            envelope = await self.get(receipt_id)
+        if poll_interval <= 0:
+            raise ValueError("poll_interval must be positive")
+        if timeout <= 0:
+            raise ValueError("timeout must be positive")
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while (remaining := deadline - loop.time()) > 0:
+            try:
+                envelope = await asyncio.wait_for(self.get(receipt_id), timeout=remaining)
+            except asyncio.TimeoutError:
+                break
             if isinstance(envelope, ReceiptEnvelopeSigned):
                 return envelope.receipt
-            await asyncio.sleep(poll_interval)
-            elapsed += poll_interval
+            await asyncio.sleep(min(poll_interval, max(0, deadline - loop.time())))
         raise TimeoutError(f"Receipt {receipt_id} not signed after {timeout}s")
 
 
-def _parse_pending_envelope(raw: dict[str, Any]) -> ReceiptEnvelopePending:
+def _parse_pending_envelope(raw: Any) -> ReceiptEnvelopePending:
+    raw = _require_dict(raw, "pending receipt envelope")
+    if raw.get("status") != "pending":
+        raise AllowlyProtocolError("receipt status must be 'pending'")
     return ReceiptEnvelopePending(
         status="pending",
-        receipt_id=raw["receipt_id"],
-        ready_at_estimate=raw["ready_at_estimate"],
-        url=raw["url"],
+        receipt_id=_optional_str(raw, "receipt_id"),
+        ready_at_estimate=_optional_str(raw, "ready_at_estimate"),
+        url=_optional_str(raw, "url"),
     )
 
 
-def _parse_receipt_envelope(raw: dict[str, Any]) -> ReceiptEnvelope:
+def _parse_receipt_envelope(raw: Any) -> ReceiptEnvelope:
+    raw = _require_dict(raw, "receipt envelope")
+    if raw.get("status") == "pending":
+        return _parse_pending_envelope(raw)
     if raw.get("status") == "signed":
-        return ReceiptEnvelopeSigned(status="signed", receipt=raw["receipt"])
-    return ReceiptEnvelopePending(
-        status="pending",
-        receipt_id=raw["receipt_id"],
-        ready_at_estimate=raw.get("ready_at_estimate", ""),
-        url=raw.get("url", ""),
-    )
+        return ReceiptEnvelopeSigned(
+            status="signed",
+            receipt=_require_dict(raw.get("receipt"), "signed receipt"),
+        )
+    raise AllowlyProtocolError("receipt status must be 'pending' or 'signed'")
 
 
 def _validate_fallback_mode(mode: str) -> FallbackMode:
@@ -423,11 +469,19 @@ def _validate_base_url(base_url: str, allow_insecure: bool) -> str:
 def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
     # The API returns a map keyed by requested action. Preserve those keys so
     # callers can safely handle mixed allow/deny/confirm/escalate results in one check.
+    raw = _require_dict(raw, "check response")
+    result_items = _require_dict(raw.get("results"), "check results")
     results = {}
-    for action, item in raw["results"].items():
+    for action, raw_item in result_items.items():
+        if not isinstance(action, str):
+            raise AllowlyProtocolError("check result action must be a string")
+        item = _require_dict(raw_item, f"check result {action!r}")
+        decision = _require_str(item, "decision")
+        if decision not in {"allow", "deny", "confirm", "escalate"}:
+            raise AllowlyProtocolError(f"unknown check decision: {decision!r}")
         base = dict(
-            decision=item["decision"],
-            reason=item["reason"],
+            decision=decision,
+            reason=_require_str(item, "reason"),
             receipt=_parse_receipt_envelope(item["receipt"]),
             is_fallback=bool(item.get("is_fallback", False)),
             fallback_mode=item.get("fallback_mode"),
@@ -435,32 +489,52 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
             escalation=_parse_escalation_info(item.get("escalation")),
             policy_eval=_parse_policy_eval(item.get("policy_eval")),
         )
-        if item["decision"] == "deny":
+        if decision == "allow":
+            results[action] = ActionCheckResultAllow(**base)
+        elif decision == "deny":
             results[action] = ActionCheckResultDeny(**base, superseded_by=item.get("superseded_by"))
-        elif item["decision"] == "confirm":
+        elif decision == "confirm":
             results[action] = ActionCheckResultConfirm(
                 **base,
-                confirm_nonce=item.get("confirm_nonce", ""),
-                confirm_expires_at=item.get("confirm_expires_at", ""),
-                confirm_prompt_hint=item.get("confirm_prompt_hint", ""),
-            )
-        elif item["decision"] == "escalate":
-            results[action] = ActionCheckResultEscalate(
-                **base,
-                escalation_id=item.get("escalation_id", ""),
-                escalation_to=item.get("escalation_to"),
-                escalation_expires_at=item.get("escalation_expires_at"),
+                confirm_nonce=_require_str(item, "confirm_nonce"),
+                confirm_expires_at=_require_str(item, "confirm_expires_at"),
+                confirm_prompt_hint=_require_str(item, "confirm_prompt_hint"),
             )
         else:
-            results[action] = ActionCheckResultAllow(**base)
+            results[action] = ActionCheckResultEscalate(
+                **base,
+                escalation_id=_require_str(item, "escalation_id"),
+                escalation_to=_optional_str(item, "escalation_to"),
+                escalation_expires_at=_optional_str(item, "escalation_expires_at"),
+            )
     return CheckResponse(
-        user_id=raw.get("user_id", ""),
-        agent_id=raw.get("agent_id", ""),
-        authorization_id=raw.get("authorization_id", ""),
-        authorization_expires_at=raw.get("authorization_expires_at", ""),
-        engine_version=raw.get("engine_version", ""),
+        user_id=_optional_str(raw, "user_id"),
+        agent_id=_optional_str(raw, "agent_id"),
+        authorization_id=_require_str(raw, "authorization_id"),
+        authorization_expires_at=_optional_str(raw, "authorization_expires_at"),
+        engine_version=_require_str(raw, "engine_version"),
         results=results,
     )
+
+
+def _require_dict(value: Any, name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise AllowlyProtocolError(f"{name} must be an object")
+    return value
+
+
+def _require_str(raw: dict[str, Any], key: str) -> str:
+    value = raw.get(key)
+    if not isinstance(value, str):
+        raise AllowlyProtocolError(f"{key} must be a string")
+    return value
+
+
+def _optional_str(raw: dict[str, Any], key: str) -> str | None:
+    value = raw.get(key)
+    if value is not None and not isinstance(value, str):
+        raise AllowlyProtocolError(f"{key} must be a string or null")
+    return value
 
 
 def _parse_budget_info(raw: Any) -> BudgetInfo | None:

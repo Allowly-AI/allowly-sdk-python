@@ -7,7 +7,7 @@ fetch the workspace public keys once, cache them, verify locally forever.
 
     keys_doc = fetch_keys_doc(workspace_id)
     keys = load_keys_from_json(keys_doc)
-    verify_receipt(signed_receipt, keys)  # raises VerificationError if invalid
+    verify_receipt(signed_receipt, keys, expected_workspace_id=workspace_id)
 """
 from __future__ import annotations
 
@@ -15,7 +15,9 @@ import hashlib
 import httpx
 import json
 import time
+from datetime import datetime
 from typing import Any
+from urllib.parse import quote, urlparse
 
 # Offline verification is powered by the published reference verifier,
 # allowly-receipt-format (import path allowly_receipt_format). It ships as an
@@ -37,11 +39,26 @@ def _import_verifier():
         ) from exc
 
 
-verify_receipt, _load_keys_from_json, VerificationError, PublicKey = _import_verifier()
+_verify_receipt, _load_keys_from_json, VerificationError, PublicKey = _import_verifier()
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"
 DEFAULT_KEYS_DOC_CACHE_TTL_SECONDS = 300
-_keys_doc_cache: dict[tuple[str, str | None], tuple[float, dict[str, Any]]] = {}
+_keys_doc_cache: dict[tuple[str, str | None, int], tuple[float, dict[str, Any]]] = {}
+
+
+def verify_receipt(
+    receipt: dict[str, Any],
+    public_keys: list[PublicKey],
+    *,
+    expected_workspace_id: str,
+    now: datetime | None = None,
+) -> None:
+    _verify_receipt(
+        receipt,
+        public_keys,
+        now=now,
+        expected_workspace_id=expected_workspace_id,
+    )
 
 
 def load_keys_from_json(doc: dict[str, Any]) -> list[PublicKey]:
@@ -62,8 +79,9 @@ def fetch_keys_doc(
     client: httpx.Client | None = None,
 ) -> dict[str, Any]:
     base_url = base_url.rstrip("/")
-    url = f"{base_url}/v1/workspaces/{workspace_id}/keys"
-    if not url.startswith("https://"):
+    url = f"{base_url}/v1/workspaces/{quote(workspace_id, safe='')}/keys"
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
         raise VerificationError(f"keys document URL must use HTTPS: {url}")
 
     cache_key = (url, expected_sha256, cache_ttl_seconds)
@@ -79,7 +97,7 @@ def fetch_keys_doc(
     try:
         resp = client.get(url)
         resp.raise_for_status()
-        body = resp.text
+        body = resp.content
     except httpx.HTTPError as exc:
         raise VerificationError(f"failed to fetch keys document: {exc}") from exc
     finally:
@@ -87,13 +105,13 @@ def fetch_keys_doc(
             client.close()
 
     if expected_sha256 is not None:
-        digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(body).hexdigest()
         if digest.lower() != expected_sha256.lower():
             raise VerificationError("keys document SHA-256 hash did not match expected pin")
 
     try:
-        doc = json.loads(body)
-    except json.JSONDecodeError as exc:
+        doc = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise VerificationError("keys document was not valid JSON") from exc
     if isinstance(doc, dict) and doc.get("workspace_id") != workspace_id:
         raise VerificationError(

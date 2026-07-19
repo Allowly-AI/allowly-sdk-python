@@ -24,3 +24,7 @@ class AllowlyAPIError(Exception):
 
     def __repr__(self) -> str:
         return f"AllowlyAPIError(status={self.status}, code={self.code!r}, message={str(self)!r})"
+
+
+class AllowlyProtocolError(ValueError):
+    """The API returned a response that does not match its wire contract."""

@@ -11,9 +11,9 @@ FallbackMode = Literal["fail_open", "fail_closed"]
 @dataclass
 class ReceiptEnvelopePending:
     status: Literal["pending"]
-    receipt_id: str
-    ready_at_estimate: str
-    url: str
+    receipt_id: str | None
+    ready_at_estimate: str | None
+    url: str | None
 
 
 @dataclass
@@ -136,11 +136,13 @@ class AuthorizationCreateResponse:
     expires_at: str
     receipt: ReceiptEnvelopePending
     policy_id: str | None = None
-    requires_confirm_for: list[str] = field(default_factory=list)
     requires_escalation_for: list[str] = field(default_factory=list)
+    requires_deny_for: list[str] = field(default_factory=list)
     escalation_targets: dict[str, str] = field(default_factory=dict)
     budget_limit_micros: int | None = None
     budget_spent_micros: int | None = None
+    replaced_authorization_id: str | None = None
+    revocation_receipt: ReceiptEnvelopePending | None = None
 
 
 @dataclass
@@ -148,6 +150,7 @@ class AuthorizationRevokeResponse:
     authorization_id: str
     revoked_at: str
     receipt: ReceiptEnvelopePending
+    revoked_confirmations: list[str] = field(default_factory=list)
 
 
 @dataclass

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .client import Allowly
-from .error import AllowlyAPIError, FieldError
+from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .types import (
     CheckResponse,
     ConfirmationApproveResponse,
@@ -22,6 +22,7 @@ from .types import (
 __all__ = [
     "Allowly",
     "AllowlyAPIError",
+    "AllowlyProtocolError",
     "FieldError",
     "CheckResponse",
     "BudgetInfo",

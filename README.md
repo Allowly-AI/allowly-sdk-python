@@ -11,29 +11,28 @@ returned authorization ID in your own app database, and use that ID for later ch
 ```python
 from allowly import Allowly
 
-allowly = Allowly(
+async with Allowly(
     api_key=os.environ["ALLOWLY_API_KEY"],
     base_url=os.getenv("ALLOWLY_API_URL", "https://api.allowly.ai"),
-)
+) as allowly:
+    # Your app creates a stable internal subject ID.
+    subject_id = "subject_abc123"
 
-# Your app creates a stable internal subject ID.
-subject_id = "subject_abc123"
+    # Store this in your app table, for example:
+    # allowly_authorizations(subject_id, policy_id, allowly_authorization_id, status)
+    authorization = await allowly.authorizations.create(
+        user_id=f"subject:{subject_id}",
+        policy_id="research_agent",
+        metadata={"source": "import"},
+    )
 
-# Store this in your app table, for example:
-# allowly_authorizations(subject_id, policy_id, allowly_authorization_id, status)
-authorization = await allowly.authorizations.create(
-    user_id=f"subject:{subject_id}",
-    policy_id="research_agent",
-    metadata={"source": "import"},
-)
-
-# Before the agent acts, check whether this action is allowed.
-decision = await allowly.check(
-    authorization_id=authorization.authorization_id,
-    actions=["web.search"],
-    resource=f"subject:{subject_id}",
-    context={"stage": "research"},
-)
+    # Before the agent acts, check whether this action is allowed.
+    decision = await allowly.check(
+        authorization_id=authorization.authorization_id,
+        actions=["web.search"],
+        resource=f"subject:{subject_id}",
+        context={"stage": "research"},
+    )
 
 if decision.results["web.search"].decision != "allow":
     raise RuntimeError("Action is not authorized")

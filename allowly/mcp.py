@@ -73,6 +73,9 @@ class AllowlyMCPMiddleware:
         self.user_id_fn = user_id_fn
         self.allow_user_id_argument = allow_user_id_argument
 
+    async def aclose(self) -> None:
+        await self.client.aclose()
+
     async def _resolve_authorization_id(self, context: MCPAuthorizationContext) -> Optional[str]:
         user_id = await self._resolve_user_id(context)
         if not user_id:

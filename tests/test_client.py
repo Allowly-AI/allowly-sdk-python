@@ -2,7 +2,7 @@ import pytest
 import httpx
 import respx
 
-from allowly import Allowly, AllowlyAPIError
+from allowly import Allowly, AllowlyAPIError, AllowlyProtocolError
 
 BASE = "https://api.example.com"
 
@@ -280,6 +280,50 @@ async def test_check_parses_budget_result(client):
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_check_rejects_unknown_decision_even_with_fail_open():
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"payments.send": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
+        "authorization_id": "auth_1",
+        "engine_version": "test",
+        "results": {
+            "payments.send": {
+                "decision": "future_value",
+                "reason": "bad response",
+                "receipt": PENDING_RECEIPT,
+            }
+        },
+    }))
+
+    with pytest.raises(AllowlyProtocolError, match="unknown check decision"):
+        await client.check(authorization_id="auth_1", actions=["payments.send"])
+
+
+@pytest.mark.asyncio
+async def test_waiting_check_uses_server_wait_window(monkeypatch):
+    client = Allowly(api_key="test-key", base_url=BASE)
+    seen = {}
+
+    async def request(method, path, **kwargs):
+        seen["timeout"] = kwargs["timeout"]
+        return {
+            "authorization_id": "auth_1",
+            "engine_version": "test",
+            "results": {
+                "x": {"decision": "allow", "reason": "ok", "receipt": PENDING_RECEIPT}
+            },
+        }
+
+    monkeypatch.setattr(client, "_request", request)
+    await client.check(authorization_id="auth_1", actions=["x"], wait=True)
+    assert seen["timeout"] == 6.0
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_check_timeout_fail_open_returns_local_fallback():
     client = Allowly(
         api_key="test-key",
@@ -505,22 +549,32 @@ async def test_authorizations_create_with_escalation(client):
         "created_at": "2026-04-20T00:00:00Z",
         "expires_at": "2026-12-31T00:00:00Z",
         "requires_escalation_for": ["candidate.delete"],
+        "requires_deny_for": ["email.send"],
         "escalation_targets": {"candidate.delete": "compliance"},
+        "replaced_authorization_id": "auth_old",
+        "revocation_receipt": PENDING_RECEIPT,
         "receipt": PENDING_RECEIPT,
     }))
     res = await client.authorizations.create(
         user_id="u1",
         agent_id="a1",
-        actions=["candidate.delete"],
+        actions=["candidate.delete", "email.send"],
         requires_escalation_for=["candidate.delete"],
+        requires_deny_for=["email.send"],
         escalation_targets={"candidate.delete": "compliance"},
+        idempotency_key="create-1",
     )
     import json
     body = json.loads(route.calls[0].request.content)
     assert body["requires_escalation_for"] == ["candidate.delete"]
+    assert body["requires_deny_for"] == ["email.send"]
     assert body["escalation_targets"] == {"candidate.delete": "compliance"}
+    assert route.calls[0].request.headers["idempotency-key"] == "create-1"
     assert res.requires_escalation_for == ["candidate.delete"]
+    assert res.requires_deny_for == ["email.send"]
     assert res.escalation_targets == {"candidate.delete": "compliance"}
+    assert res.replaced_authorization_id == "auth_old"
+    assert res.revocation_receipt is not None
 
 
 @respx.mock
@@ -589,14 +643,19 @@ async def test_non_check_endpoint_5xx_does_not_fallback():
 @respx.mock
 @pytest.mark.asyncio
 async def test_authorizations_revoke(client):
-    respx.delete(f"{BASE}/v1/authorizations/auth_123").mock(return_value=httpx.Response(200, json={
+    route = respx.delete(f"{BASE}/v1/authorizations/auth_123").mock(return_value=httpx.Response(200, json={
         "authorization_id": "auth_123",
         "revoked_at": "2026-05-01T09:00:00Z",
         "receipt": PENDING_RECEIPT,
+        "revoked_confirmations": ["auth_child"],
     }))
-    res = await client.authorizations.revoke("auth_123", revoked_by="user")
+    res = await client.authorizations.revoke(
+        "auth_123", revoked_by="user", idempotency_key="revoke-1"
+    )
     assert res.authorization_id == "auth_123"
     assert res.receipt.status == "pending"
+    assert res.revoked_confirmations == ["auth_child"]
+    assert route.calls[0].request.headers["idempotency-key"] == "revoke-1"
 
 
 @respx.mock
@@ -636,12 +695,15 @@ async def test_authorizations_create_with_replaces(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_confirmations_approve(client):
-    respx.post(f"{BASE}/v1/confirmations/nonce123").mock(return_value=httpx.Response(200, json={
+    route = respx.post(f"{BASE}/v1/confirmations/nonce123").mock(return_value=httpx.Response(200, json={
         "decision": "approved", "authorization_id": "auth_xyz", "expires_at": "2026-04-20T00:01:00Z",
     }))
-    res = await client.confirmations.approve("nonce123", approved=True)
+    res = await client.confirmations.approve(
+        "nonce123", approved=True, idempotency_key="confirm-1"
+    )
     assert res.decision == "approved"
     assert res.authorization_id == "auth_xyz"
+    assert route.calls[0].request.headers["idempotency-key"] == "confirm-1"
 
 
 @respx.mock
@@ -717,3 +779,40 @@ async def test_receipts_get_signed(client):
     r = await client.receipts.get("rcp_abc")
     assert r.status == "signed"
     assert r.receipt == signed  # type: ignore[union-attr]
+
+
+@pytest.mark.asyncio
+async def test_receipt_polling_rejects_non_positive_limits(client):
+    with pytest.raises(ValueError, match="poll_interval"):
+        await client.receipts.fetch_signed("rcp_abc", poll_interval=0)
+    with pytest.raises(ValueError, match="timeout"):
+        await client.receipts.fetch_signed("rcp_abc", timeout=0)
+
+
+@pytest.mark.asyncio
+async def test_receipt_polling_timeout_includes_request_time(client, monkeypatch):
+    import asyncio
+
+    async def slow_get(receipt_id):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(client.receipts, "get", slow_get)
+    with pytest.raises(TimeoutError, match="not signed after"):
+        await client.receipts.fetch_signed("rcp_abc", poll_interval=0.001, timeout=0.01)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_receipts_reject_unknown_status(client):
+    respx.get(f"{BASE}/v1/receipts/rcp_abc").mock(
+        return_value=httpx.Response(200, json={"status": "lost"})
+    )
+    with pytest.raises(AllowlyProtocolError, match="receipt status"):
+        await client.receipts.get("rcp_abc")
+
+
+@pytest.mark.asyncio
+async def test_client_async_context_closes_http_client():
+    async with Allowly(api_key="test-key", base_url=BASE) as client:
+        assert not client._http.is_closed
+    assert client._http.is_closed
