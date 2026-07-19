@@ -2,6 +2,8 @@
 
 Async Python client for the Allowly runtime API.
 
+MCP middleware ships inside this SDK: `pip install 'allowly[fastmcp]'`, then `from allowly.mcp import AllowlyMCPMiddleware`. In TypeScript, it lives in the separate `@allowly/mcp` package.
+
 ## Subject authorization pattern
 
 Do not send raw user/customer PII to Allowly receipts unless you intentionally
