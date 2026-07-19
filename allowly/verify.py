@@ -11,6 +11,7 @@ fetch the workspace public keys once, cache them, verify locally forever.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import httpx
 import json
@@ -88,7 +89,6 @@ def fetch_keys_doc(
     cached = _keys_doc_cache.get(cache_key)
     now = time.time()
     if cached and cached[0] > now:
-        import copy
         return copy.deepcopy(cached[1])
 
     owns_client = client is None
@@ -120,7 +120,6 @@ def fetch_keys_doc(
 
     load_keys_from_json(doc)
     _keys_doc_cache[cache_key] = (now + cache_ttl_seconds, doc)
-    import copy
     return copy.deepcopy(doc)
 
 

@@ -280,6 +280,24 @@ async def test_check_parses_budget_result(client):
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_check_rejects_malformed_budget(client):
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json={
+        "authorization_id": "auth_1",
+        "engine_version": "test",
+        "results": {"llm.enrich": {
+            "decision": "allow",
+            "reason": "ok",
+            "receipt": PENDING_RECEIPT,
+            "budget": {"spent_micros": 1, "estimated_cost_micros": 1},
+        }},
+    }))
+
+    with pytest.raises(AllowlyProtocolError, match="limit_micros"):
+        await client.check(authorization_id="auth_1", actions=["llm.enrich"])
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_check_rejects_unknown_decision_even_with_fail_open():
     client = Allowly(
         api_key="test-key",
@@ -409,6 +427,47 @@ async def test_check_non_json_5xx_returns_unreachable():
     res = await client.check(authorization_id="auth_1", actions=["email.send"])
 
     assert res.results["email.send"].reason == "fallback_closed_unreachable"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_malformed_error_body_still_fails_closed():
+    """A proxy 5xx whose error.fields is not a list must not crash the fallback."""
+    client = Allowly(api_key="test-key", base_url=BASE)
+    respx.post(f"{BASE}/v1/check").mock(
+        return_value=httpx.Response(503, json={"error": {"fields": "boom"}})
+    )
+
+    res = await client.check(authorization_id="auth_1", actions=["email.send"])
+
+    assert res.results["email.send"].reason == "fallback_closed_unreachable"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_string_error_body_preserves_message(client):
+    """LB shape {"error": "..."} must survive into AllowlyAPIError.message."""
+    respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(400, json={"error": "upstream connect timeout"})
+    )
+    with pytest.raises(AllowlyAPIError) as exc_info:
+        await client.authorizations.create(user_id="u1", actions=["email.read"])
+    assert exc_info.value.status == 400
+    assert "upstream connect timeout" in str(exc_info.value)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_path_params_are_percent_encoded(client):
+    """An id with reserved chars must not redirect the authenticated request."""
+    route = respx.delete(
+        f"{BASE}/v1/authorizations/..%2Fpolicies%2Fresearch_agent"
+    ).mock(return_value=httpx.Response(200, json={
+        "authorization_id": "x", "revoked_at": "t", "receipt": PENDING_RECEIPT,
+    }))
+    await client.authorizations.revoke("../policies/research_agent")
+    assert route.called
+    assert "/v1/policies/" not in str(route.calls[0].request.url)
 
 
 @respx.mock

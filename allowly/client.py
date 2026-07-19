@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -94,10 +95,17 @@ class Allowly:
                 raise
             data = {}
         if not resp.is_success:
-            err = data.get("error", {}) if isinstance(data, dict) else {}
-            if not isinstance(err, dict):
+            err = data.get("error") if isinstance(data, dict) else None
+            if isinstance(err, str):
+                err = {"message": err}
+            elif not isinstance(err, dict):
                 err = {}
-            fields = [FieldError(field=f["field"], message=f["message"]) for f in err.get("fields", [])]
+            raw_fields = err.get("fields")
+            fields = [
+                FieldError(field=str(f.get("field", "")), message=str(f.get("message", "")))
+                for f in (raw_fields if isinstance(raw_fields, list) else [])
+                if isinstance(f, dict)
+            ]
             raise AllowlyAPIError(
                 status=resp.status_code,
                 code=err.get("code", "error"),
@@ -292,7 +300,7 @@ class _AuthorizationsResource:
             body["notes"] = notes
         headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
         raw = await self._client._request(
-            "DELETE", f"/v1/authorizations/{authorization_id}", json=body or None, headers=headers
+            "DELETE", f"/v1/authorizations/{quote(authorization_id, safe='')}", json=body or None, headers=headers
         )
         return AuthorizationRevokeResponse(
             authorization_id=raw["authorization_id"],
@@ -315,7 +323,7 @@ class _ConfirmationsResource:
         idempotency_key: str | None = None,
     ) -> ConfirmationApproveResponse:
         headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
-        raw = await self._client._request("POST", f"/v1/confirmations/{nonce}", json={
+        raw = await self._client._request("POST", f"/v1/confirmations/{quote(nonce, safe='')}", json={
             "approved": approved,
             "ttl_seconds": ttl_seconds,
         }, headers=headers)
@@ -341,7 +349,7 @@ class _EscalationsResource:
         resolved_by: str,
         note: str | None = None,
     ) -> EscalationResolveResponse:
-        raw = await self._client._request("POST", f"/v1/escalations/{escalation_id}/resolve", json={
+        raw = await self._client._request("POST", f"/v1/escalations/{quote(escalation_id, safe='')}/resolve", json={
             "resolution": resolution,
             "resolved_by": resolved_by,
             "note": note,
@@ -393,7 +401,7 @@ class _ReceiptsResource:
 
     async def get(self, receipt_id: str) -> ReceiptEnvelope:
         """Fetch a receipt. Returns a pending or signed envelope."""
-        raw = await self._client._request("GET", f"/v1/receipts/{receipt_id}")
+        raw = await self._client._request("GET", f"/v1/receipts/{quote(receipt_id, safe='')}")
         return _parse_receipt_envelope(raw)
 
     async def fetch_signed(
@@ -407,7 +415,6 @@ class _ReceiptsResource:
 
         Raises TimeoutError if signing doesn't complete within `timeout` seconds.
         """
-        import asyncio
         if poll_interval <= 0:
             raise ValueError("poll_interval must be positive")
         if timeout <= 0:
@@ -482,7 +489,7 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
         base = dict(
             decision=decision,
             reason=_require_str(item, "reason"),
-            receipt=_parse_receipt_envelope(item["receipt"]),
+            receipt=_parse_receipt_envelope(item.get("receipt")),
             is_fallback=bool(item.get("is_fallback", False)),
             fallback_mode=item.get("fallback_mode"),
             budget=_parse_budget_info(item.get("budget")),
@@ -530,6 +537,13 @@ def _require_str(raw: dict[str, Any], key: str) -> str:
     return value
 
 
+def _require_int(raw: dict[str, Any], key: str) -> int:
+    value = raw.get(key)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise AllowlyProtocolError(f"{key} must be an integer")
+    return value
+
+
 def _optional_str(raw: dict[str, Any], key: str) -> str | None:
     value = raw.get(key)
     if value is not None and not isinstance(value, str):
@@ -540,50 +554,60 @@ def _optional_str(raw: dict[str, Any], key: str) -> str | None:
 def _parse_budget_info(raw: Any) -> BudgetInfo | None:
     if raw is None:
         return None
+    raw = _require_dict(raw, "budget")
     return BudgetInfo(
-        limit_micros=raw["limit_micros"],
-        spent_micros=raw["spent_micros"],
-        estimated_cost_micros=raw["estimated_cost_micros"],
-        spent_after_micros=raw.get("spent_after_micros"),
+        limit_micros=_require_int(raw, "limit_micros"),
+        spent_micros=_require_int(raw, "spent_micros"),
+        estimated_cost_micros=_require_int(raw, "estimated_cost_micros"),
+        spent_after_micros=(
+            _require_int(raw, "spent_after_micros")
+            if raw.get("spent_after_micros") is not None
+            else None
+        ),
     )
 
 
-def _parse_budget_settlement_response(raw: dict[str, Any]) -> BudgetSettlementResponse:
+def _parse_budget_settlement_response(raw: Any) -> BudgetSettlementResponse:
+    raw = _require_dict(raw, "budget settlement response")
     return BudgetSettlementResponse(
-        check_receipt_id=raw["check_receipt_id"],
-        authorization_id=raw["authorization_id"],
-        estimated_cost_micros=raw["estimated_cost_micros"],
-        actual_cost_micros=raw["actual_cost_micros"],
-        delta_micros=raw["delta_micros"],
-        spent_before_micros=raw["spent_before_micros"],
-        spent_after_micros=raw["spent_after_micros"],
-        receipt=_parse_receipt_envelope(raw["receipt"]),
+        check_receipt_id=_require_str(raw, "check_receipt_id"),
+        authorization_id=_require_str(raw, "authorization_id"),
+        estimated_cost_micros=_require_int(raw, "estimated_cost_micros"),
+        actual_cost_micros=_require_int(raw, "actual_cost_micros"),
+        delta_micros=_require_int(raw, "delta_micros"),
+        spent_before_micros=_require_int(raw, "spent_before_micros"),
+        spent_after_micros=_require_int(raw, "spent_after_micros"),
+        receipt=_parse_receipt_envelope(raw.get("receipt")),
     )
 
 
 def _parse_escalation_info(raw: Any) -> EscalationInfo | None:
     if raw is None:
         return None
+    raw = _require_dict(raw, "escalation")
     return EscalationInfo(
-        escalation_id=raw["escalation_id"],
-        status=raw["status"],
-        escalation_to=raw.get("escalation_to"),
-        expires_at=raw.get("expires_at"),
+        escalation_id=_require_str(raw, "escalation_id"),
+        status=_require_str(raw, "status"),
+        escalation_to=_optional_str(raw, "escalation_to"),
+        expires_at=_optional_str(raw, "expires_at"),
     )
 
 
 def _parse_policy_eval(raw: Any) -> PolicyEvalInfo | None:
     if raw is None:
         return None
+    raw = _require_dict(raw, "policy evaluation")
     matched = raw.get("matched_condition")
+    if matched is not None:
+        matched = _require_dict(matched, "matched policy condition")
     return PolicyEvalInfo(
         matched_condition=(
             PolicyConditionEvidence(
-                field=matched["field"],
-                op=matched["op"],
-                value=matched["value"],
+                field=_require_str(matched, "field"),
+                op=_require_str(matched, "op"),
+                value=matched.get("value"),
             )
-            if isinstance(matched, dict)
+            if matched is not None
             else None
         ),
         field_value=raw.get("field_value"),

@@ -3,6 +3,12 @@ from __future__ import annotations
 from .client import Allowly
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .types import (
+    ActionCheckResult,
+    ActionCheckResultAllow,
+    ActionCheckResultConfirm,
+    ActionCheckResultDeny,
+    ActionCheckResultEscalate,
+    ActionEntry,
     CheckResponse,
     ConfirmationApproveResponse,
     AuthorizationCreateResponse,
@@ -13,10 +19,11 @@ from .types import (
     EscalationInfo,
     EscalationResolveResponse,
     FallbackMode,
+    PolicyConditionEvidence,
+    PolicyEvalInfo,
     ReceiptEnvelope,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
-    ActionEntry,
 )
 
 __all__ = [
@@ -24,6 +31,12 @@ __all__ = [
     "AllowlyAPIError",
     "AllowlyProtocolError",
     "FieldError",
+    "ActionCheckResult",
+    "ActionCheckResultAllow",
+    "ActionCheckResultConfirm",
+    "ActionCheckResultDeny",
+    "ActionCheckResultEscalate",
+    "ActionEntry",
     "CheckResponse",
     "BudgetInfo",
     "BudgetSettlementResponse",
@@ -32,10 +45,11 @@ __all__ = [
     "AuthorizationCreateResponse",
     "AuthorizationRevokeResponse",
     "ConfirmationApproveResponse",
+    "PolicyConditionEvidence",
+    "PolicyEvalInfo",
     "ReceiptEnvelope",
     "ReceiptEnvelopePending",
     "ReceiptEnvelopeSigned",
-    "ActionEntry",
     "Decision",
     "FallbackMode",
 ]
