@@ -27,7 +27,7 @@ VALID_DOC = {
     ],
 }
 
-V11_DOC = {
+V2_DOC = {
     "workspace_id": "ws_test",
     "keys": [
         {
@@ -40,8 +40,8 @@ V11_DOC = {
     ],
 }
 
-V11_RECEIPT = {
-    "version": "1.1",
+V2_RECEIPT = {
+    "version": "2.0.0",
     "receipt_id": "rcp_01HXZMINIMAL0000000000000",
     "workspace_id": "ws_test",
     "issued_at": "2026-04-21T14:32:17.482Z",
@@ -56,7 +56,7 @@ V11_RECEIPT = {
     "engine_version": "2026-04-17.1",
     "alg": "Ed25519",
     "key_id": "test-key/v1",
-    "signature": "3cjztCuJ8p3bSRLCGHOajS4j34X_JfXHLzTZHBmmiUYFy1dGp4WXysaTOswAsI3op-HFvSpj7P9WFn4UwfcxCA",
+    "signature": "XmJMEi2uqIOqrurKiiJYM7w3Box-nVoQizi_PpDwGhJvVGwSE-r0XJ0bnKLKhqXdHOvWlnR6Yev2Xi5ixM3KDg",
 }
 
 
@@ -121,10 +121,10 @@ def test_verify_receipt_requires_and_forwards_workspace_binding(monkeypatch):
     assert seen["expected_workspace_id"] == "ws_1"
 
 
-def test_verify_v11_receipt_with_signed_algorithm_and_key_id():
-    keys = load_keys_from_json(V11_DOC)
+def test_verify_v2_receipt_with_signed_algorithm_and_key_id():
+    keys = load_keys_from_json(V2_DOC)
 
-    verify_receipt(V11_RECEIPT, keys, expected_workspace_id="ws_test")
+    verify_receipt(V2_RECEIPT, keys, expected_workspace_id="ws_test")
 
 
 def test_fetch_keys_doc_encodes_workspace_id():
