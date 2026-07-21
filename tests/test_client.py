@@ -828,8 +828,8 @@ async def test_receipts_get_pending(client):
 @pytest.mark.asyncio
 async def test_receipts_get_signed(client):
     signed = {
-        "version": "1.0", "receipt_id": "rcp_abc", "decision": "allow",
-        "signature": {"alg": "Ed25519", "key_id": "k", "value": "sig"},
+        "version": "1.1", "receipt_id": "rcp_abc", "decision": "allow",
+        "alg": "Ed25519", "key_id": "k", "signature": "sig",
     }
     respx.get(f"{BASE}/v1/receipts/rcp_abc").mock(return_value=httpx.Response(200, json={
         "status": "signed",

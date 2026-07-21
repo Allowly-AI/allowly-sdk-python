@@ -57,3 +57,11 @@ intentionally part of your audit record.
 Do not add raw HTTP fallbacks in application code for APIs the SDK is missing.
 Patch this SDK first, then use the typed client from the app. That keeps the
 integration examples honest and makes SDK gaps visible early.
+
+## Offline receipt verification
+
+Install `allowly[verifier]` to verify signed receipts locally. The extra uses
+`allowly-receipt-format>=2.0.0`, which verifies current v1.1 receipts and keeps
+verification-only support for historical v1.0 receipts. In v1.1, `alg` and
+`key_id` are signed top-level fields; do not convert the receipt to the old
+nested `signature` object before verification.

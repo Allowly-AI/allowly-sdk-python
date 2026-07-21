@@ -27,6 +27,38 @@ VALID_DOC = {
     ],
 }
 
+V11_DOC = {
+    "workspace_id": "ws_test",
+    "keys": [
+        {
+            "key_id": "test-key/v1",
+            "alg": "Ed25519",
+            "public_key": "O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik",
+            "active_from": "2026-01-01T00:00:00Z",
+            "active_until": None,
+        }
+    ],
+}
+
+V11_RECEIPT = {
+    "version": "1.1",
+    "receipt_id": "rcp_01HXZMINIMAL0000000000000",
+    "workspace_id": "ws_test",
+    "issued_at": "2026-04-21T14:32:17.482Z",
+    "decision": "allow",
+    "reason": "authorization_granted_action_active",
+    "user_id": "emp_8821",
+    "agent_id": "referral_outreach",
+    "action": "outreach.send",
+    "resource": "edge:emp_8821:conn_9f2a",
+    "context": {},
+    "authorization_id": "auth_01HXZ2A0K1L2M3N4P5Q6R7S8T9",
+    "engine_version": "2026-04-17.1",
+    "alg": "Ed25519",
+    "key_id": "test-key/v1",
+    "signature": "3cjztCuJ8p3bSRLCGHOajS4j34X_JfXHLzTZHBmmiUYFy1dGp4WXysaTOswAsI3op-HFvSpj7P9WFn4UwfcxCA",
+}
+
 
 @pytest.fixture(autouse=True)
 def _clear_cache():
@@ -87,6 +119,12 @@ def test_verify_receipt_requires_and_forwards_workspace_binding(monkeypatch):
     monkeypatch.setattr("allowly.verify._verify_receipt", verifier)
     verify_receipt({}, [], expected_workspace_id="ws_1")
     assert seen["expected_workspace_id"] == "ws_1"
+
+
+def test_verify_v11_receipt_with_signed_algorithm_and_key_id():
+    keys = load_keys_from_json(V11_DOC)
+
+    verify_receipt(V11_RECEIPT, keys, expected_workspace_id="ws_test")
 
 
 def test_fetch_keys_doc_encodes_workspace_id():
