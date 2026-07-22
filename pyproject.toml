@@ -18,10 +18,10 @@ fastmcp = [
     "fastmcp>=2.9,<3",
 ]
 verifier = [
-    "allowly-receipt-format>=2.0.0,<3.0.0",
+    "allowly-receipt-format>=2.1.0,<3.0.0",
 ]
 dev = [
-    "allowly-receipt-format>=2.0.0,<3.0.0",
+    "allowly-receipt-format>=2.1.0,<3.0.0",
     "cryptography>=42",
     "fastmcp>=2.9,<3",
     "pytest>=8.0",

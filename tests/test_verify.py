@@ -21,7 +21,7 @@ VALID_DOC = {
             "key_id": "projects/p/locations/l/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
             "alg": "Ed25519",
             "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-            "active_from": "2026-01-01T00:00:00Z",
+            "active_from": "2026-01-01T00:00:00.000Z",
             "active_until": None,
         }
     ],
@@ -34,7 +34,7 @@ V2_DOC = {
             "key_id": "test-key/v1",
             "alg": "Ed25519",
             "public_key": "O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik",
-            "active_from": "2026-01-01T00:00:00Z",
+            "active_from": "2026-01-01T00:00:00.000Z",
             "active_until": None,
         }
     ],

@@ -28,8 +28,8 @@ verifier = [
 
 [package.metadata]
 requires-dist = [
-    { name = "allowly-receipt-format", marker = "extra == 'dev'", specifier = ">=2.0.0,<3.0.0" },
-    { name = "allowly-receipt-format", marker = "extra == 'verifier'", specifier = ">=2.0.0,<3.0.0" },
+    { name = "allowly-receipt-format", marker = "extra == 'dev'", specifier = ">=2.1.0,<3.0.0" },
+    { name = "allowly-receipt-format", marker = "extra == 'verifier'", specifier = ">=2.1.0,<3.0.0" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=42" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=2.9,<3" },
     { name = "fastmcp", marker = "extra == 'fastmcp'", specifier = ">=2.9,<3" },
@@ -42,14 +42,14 @@ provides-extras = ["fastmcp", "verifier", "dev"]
 
 [[package]]
 name = "allowly-receipt-format"
-version = "2.0.0"
+version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6f/73/c7cf5f18e32db273fdd3d7f0293960c4db03612df9693aa8267ed29ed498/allowly_receipt_format-2.0.0.tar.gz", hash = "sha256:06bce39ad9c207fb3c4e4db1e1ead9cf0232ff0fa23e129a3baa6bb1d6d45321", size = 12377, upload-time = "2026-07-21T04:03:43.539Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/11/45/b1e0bf8c2e2dabac9104bc0d9d6de0fe0032afb1cd31ec56811928b840bc/allowly_receipt_format-2.1.0.tar.gz", hash = "sha256:a7952a039d373b10bee8de2778fcfe7cbca283cf171f4d97f6f36d3e878ed7a6", size = 13239, upload-time = "2026-07-22T19:50:23.303Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/00/020664ea46655e665a44e5eef217eecca9cca3f8e26cc9c0cc3e026d7c04/allowly_receipt_format-2.0.0-py3-none-any.whl", hash = "sha256:f238697d353aadb3de73812c24699fdd7e5efb7aeb304b5fdc844416f9abe92c", size = 12096, upload-time = "2026-07-21T04:03:42.298Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/13/9f988d839a9940bba9591601355e17200c84ff8c1879d3aae8ba5768afa5/allowly_receipt_format-2.1.0-py3-none-any.whl", hash = "sha256:5af337d989f9025bb990f7082af4549c8d331c843dc1e08896e4d4cbb6e1e100", size = 12668, upload-time = "2026-07-22T19:50:22.05Z" },
 ]
 
 [[package]]
