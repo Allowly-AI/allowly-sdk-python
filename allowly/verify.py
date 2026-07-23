@@ -21,7 +21,7 @@ from typing import Any
 from urllib.parse import quote, urlparse
 
 # Offline verification is powered by the published reference verifier,
-# allowly-receipt-format 2.x (import path allowly_receipt_format). It ships as an
+# allowly-receipt-format 3.x (import path allowly_receipt_format). It ships as an
 # optional extra so the core SDK stays dependency-light:
 #     pip install 'allowly[verifier]'
 def _import_verifier():
@@ -35,7 +35,7 @@ def _import_verifier():
         return verify_receipt, load_keys_from_json, VerificationError, PublicKey
     except ImportError as exc:
         raise ImportError(
-            "Receipt verification requires allowly-receipt-format>=2.1.0. "
+            "Receipt verification requires allowly-receipt-format>=3.0.0. "
             "Install the verifier extra: pip install 'allowly[verifier]'"
         ) from exc
 
