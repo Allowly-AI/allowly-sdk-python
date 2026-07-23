@@ -41,7 +41,7 @@ V2_DOC = {
 }
 
 V2_RECEIPT = {
-    "schema_version": "2.1.0",
+    "schema_version": "3",
     "receipt_id": "rcp_01HXZMINIMAL0000000000000",
     "workspace_id": "ws_test",
     "issued_at": "2026-04-21T14:32:17.482Z",
@@ -56,7 +56,7 @@ V2_RECEIPT = {
     "engine_version": "2026-04-17.1",
     "alg": "Ed25519",
     "key_id": "test-key/v1",
-    "signature": "Vv9V7SswA8_mXmSqwHWj30fbuQ9eQz-zMmYgM2YveEU_JtjtKsOrLnjHfVNNfa5ynbGyJK-SaZieT1FICVOUCg",
+    "signature": "O98ntdo49t38E6a2M-19qjaC-2TzTw8tYqOn-fsUAYzfyf0dWTx9uje9NQlkvCl-fP68o_ATkBSW3mpyguoODQ",
 }
 
 
