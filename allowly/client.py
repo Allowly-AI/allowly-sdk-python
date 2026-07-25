@@ -228,10 +228,10 @@ class _AuthorizationsResource:
         self,
         *,
         user_id: str,
+        policy_id: str | None = None,
+        expires_at: datetime | str | None = None,
         agent_id: str | None = None,
         actions: list[ActionEntry] | list[str] | None = None,
-        expires_at: datetime | str | None = None,
-        policy_id: str | None = None,
         requires_confirm_for: list[str] | None = None,
         requires_escalation_for: list[str] | None = None,
         requires_deny_for: list[str] | None = None,
@@ -241,6 +241,13 @@ class _AuthorizationsResource:
         metadata: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
     ) -> AuthorizationCreateResponse:
+        """Create an authorization for a user.
+
+        Canonical flow: pass ``policy_id`` referencing a reusable agent policy.
+        Inline flow (``agent_id`` + ``actions``, no ``policy_id``) is for
+        prototyping and ad-hoc per-user grants. Exactly one of the two shapes
+        must be used.
+        """
         expires_iso = expires_at.isoformat() if isinstance(expires_at, datetime) else expires_at
         action_list = [
             {"name": s, "constraints": {}} if isinstance(s, str)
