@@ -54,6 +54,7 @@ class Allowly:
         default_fallback: FallbackMode = "fail_closed",
         fallback_by_action: dict[str, FallbackMode] | None = None,
         dangerously_allow_insecure_base_url: bool = False,
+        edge_token: str | None = None,
     ) -> None:
         self._api_key = api_key
         base_url = _validate_base_url(base_url, dangerously_allow_insecure_base_url)
@@ -65,9 +66,16 @@ class Allowly:
             action: _validate_fallback_mode(mode)
             for action, mode in (fallback_by_action or {}).items()
         }
+        # edge_token fills the X-Allowly-Edge-Token header that Cloudflare adds
+        # for public traffic. Local/direct deployments (e.g. the documented
+        # local Caddy endpoint) must supply it themselves — typically from
+        # ALLOWLY_EDGE_TOKEN. Never sent unless explicitly provided.
+        headers = {"Authorization": f"Bearer {api_key}"}
+        if edge_token is not None:
+            headers["X-Allowly-Edge-Token"] = edge_token
         self._http = httpx.AsyncClient(
             base_url=base_url,
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers=headers,
             timeout=timeout,
         )
         self.authorizations = _AuthorizationsResource(self)
@@ -85,9 +93,15 @@ class Allowly:
         await self.aclose()
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+        data, _ = await self._request_with_headers(method, path, **kwargs)
+        return data
+
+    async def _request_with_headers(
+        self, method: str, path: str, **kwargs: Any
+    ) -> tuple[Any, httpx.Headers]:
         resp = await self._http.request(method, path, **kwargs)
         if resp.status_code == 204:
-            return None
+            return None, resp.headers
         try:
             data = resp.json()
         except ValueError:
@@ -111,8 +125,9 @@ class Allowly:
                 code=err.get("code", "error"),
                 message=err.get("message", "Unknown error"),
                 fields=fields,
+                retry_after_seconds=_parse_retry_after(resp.headers.get("Retry-After")),
             )
-        return data
+        return data, resp.headers
 
     async def check(
         self,
@@ -139,7 +154,9 @@ class Allowly:
         try:
             headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
             timeout = max(self._check_timeout, 6.0) if wait else self._check_timeout
-            raw = await self._request("POST", path, json=body, timeout=timeout, headers=headers)
+            raw, response_headers = await self._request_with_headers(
+                "POST", path, json=body, timeout=timeout, headers=headers
+            )
         except httpx.TimeoutException:
             return self._fallback_check_response(
                 authorization_id=authorization_id,
@@ -160,7 +177,9 @@ class Allowly:
                     failure="unreachable",
                 )
             raise
-        return _parse_check_response(raw)
+        response = _parse_check_response(raw)
+        response.billing_warning = response_headers.get("X-Allowly-Billing-Warning")
+        return response
 
     def _fallback_mode_for_action(self, action: str) -> FallbackMode:
         return self._fallback_by_action.get(action, self._default_fallback)
@@ -255,7 +274,7 @@ class _AuthorizationsResource:
             for s in (actions or [])
         ] if actions is not None else None
         headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
-        raw = await self._client._request("POST", "/v1/authorizations", json={
+        raw, response_headers = await self._client._request_with_headers("POST", "/v1/authorizations", json={
             "user_id": user_id,
             "agent_id": agent_id,
             "policy_id": policy_id,
@@ -276,6 +295,7 @@ class _AuthorizationsResource:
             expires_at=raw["expires_at"],
             receipt=_parse_pending_envelope(raw["receipt"]),
             policy_id=raw.get("policy_id"),
+            requires_confirm_for=raw.get("requires_confirm_for", []),
             requires_escalation_for=raw.get("requires_escalation_for", []),
             requires_deny_for=raw.get("requires_deny_for", []),
             escalation_targets=raw.get("escalation_targets", {}),
@@ -287,6 +307,7 @@ class _AuthorizationsResource:
                 if revocation_receipt is not None
                 else None
             ),
+            billing_warning=response_headers.get("X-Allowly-Billing-Warning"),
         )
 
     async def revoke(
@@ -416,11 +437,14 @@ class _ReceiptsResource:
         receipt_id: str,
         *,
         poll_interval: float = 1.0,
-        timeout: float = 30.0,
+        timeout: float = 120.0,
     ) -> dict[str, Any]:
         """Poll until the receipt is signed, then return the full signed receipt dict.
 
-        Raises TimeoutError if signing doesn't complete within `timeout` seconds.
+        The default timeout covers the signer's once-per-minute batch tick plus
+        scheduling/cold-start allowance; valid service behavior can take just
+        over a minute. Raises TimeoutError if signing doesn't complete within
+        `timeout` seconds.
         """
         if poll_interval <= 0:
             raise ValueError("poll_interval must be positive")
@@ -478,6 +502,18 @@ def _validate_base_url(base_url: str, allow_insecure: bool) -> str:
     if parsed.scheme != "https" and not allow_insecure:
         raise ValueError("base_url must use HTTPS")
     return normalized
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    # Allowly only emits integer-seconds Retry-After; tolerate floats, ignore
+    # HTTP-date and garbage rather than raising inside error handling.
+    if value is None:
+        return None
+    try:
+        seconds = float(value.strip())
+    except ValueError:
+        return None
+    return seconds if seconds >= 0 else None
 
 
 def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:

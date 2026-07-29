@@ -116,7 +116,7 @@ async def test_check_parses_policy_eval(client):
         "results": {
             "hiring.publish_feedback": {
                 "decision": "confirm",
-                "reason": "condition_requires_user_confirmation",
+                "reason": "confirm_condition_matched",
                 "confirm_nonce": "cnf_policy",
                 "confirm_expires_at": "2026-04-20T00:15:00Z",
                 "confirm_prompt_hint": "hiring.publish_feedback",
@@ -333,9 +333,9 @@ async def test_waiting_check_uses_server_wait_window(monkeypatch):
             "results": {
                 "x": {"decision": "allow", "reason": "ok", "receipt": PENDING_RECEIPT}
             },
-        }
+        }, httpx.Headers()
 
-    monkeypatch.setattr(client, "_request", request)
+    monkeypatch.setattr(client, "_request_with_headers", request)
     await client.check(authorization_id="auth_1", actions=["x"], wait=True)
     assert seen["timeout"] == 6.0
 
@@ -564,15 +564,18 @@ async def test_authorizations_create(client):
         "authorization_id": "auth_new",
         "created_at": "2026-04-20T00:00:00Z",
         "expires_at": "2026-12-31T00:00:00Z",
+        "requires_confirm_for": ["email.send"],
         "receipt": PENDING_RECEIPT,
     }))
     res = await client.authorizations.create(
         user_id="u1", agent_id="a1",
-        actions=["email.read"],
+        actions=["email.read", "email.send"],
+        requires_confirm_for=["email.send"],
         expires_at="2026-12-31T00:00:00Z",
     )
     assert res.authorization_id == "auth_new"
     assert res.receipt.status == "pending"
+    assert res.requires_confirm_for == ["email.send"]
 
 
 @respx.mock
@@ -875,3 +878,128 @@ async def test_client_async_context_closes_http_client():
     async with Allowly(api_key="test-key", base_url=BASE) as client:
         assert not client._http.is_closed
     assert client._http.is_closed
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_api_error_exposes_retry_after(client):
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(
+        429,
+        json={"error": {"code": "quota_exceeded", "message": "Quota exceeded"}},
+        headers={"Retry-After": "17"},
+    ))
+    with pytest.raises(AllowlyAPIError) as err:
+        await client.check(authorization_id="auth_1", actions=["email.send"])
+    assert err.value.code == "quota_exceeded"
+    assert err.value.retry_after_seconds == 17.0
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_exposes_billing_warning_header(client):
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(
+        200,
+        json={
+            "authorization_id": "auth_1",
+            "authorization_expires_at": "2026-12-31T00:00:00Z",
+            "engine_version": "2026-04-19.1",
+            "results": {
+                "email.send": {
+                    "decision": "allow",
+                    "reason": "authorization_granted_action_active",
+                    "receipt": PENDING_RECEIPT,
+                }
+            },
+        },
+        headers={"X-Allowly-Billing-Warning": "quota_90_percent"},
+    ))
+    res = await client.check(authorization_id="auth_1", actions=["email.send"])
+    assert res.billing_warning == "quota_90_percent"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_authorizations_create_exposes_billing_warning_header(client):
+    respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(
+        201,
+        json={
+            "authorization_id": "auth_new",
+            "created_at": "2026-04-20T00:00:00Z",
+            "expires_at": "2026-12-31T00:00:00Z",
+            "receipt": PENDING_RECEIPT,
+        },
+        headers={"X-Allowly-Billing-Warning": "payment_past_due"},
+    ))
+    res = await client.authorizations.create(
+        user_id="u1", agent_id="a1", actions=["email.read"],
+        expires_at="2026-12-31T00:00:00Z",
+    )
+    assert res.billing_warning == "payment_past_due"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_edge_token_sent_only_when_configured():
+    respx.post("http://localhost:8443/v1/check").mock(return_value=httpx.Response(200, json={
+        "authorization_id": "auth_1",
+        "engine_version": "2026-04-19.1",
+        "results": {
+            "x": {"decision": "deny", "reason": "authorization_not_found", "receipt": PENDING_RECEIPT}
+        },
+    }))
+    local = Allowly(
+        api_key="test-key",
+        base_url="http://localhost:8443",
+        dangerously_allow_insecure_base_url=True,
+        edge_token="edge",
+    )
+    await local.check(authorization_id="auth_1", actions=["x"])
+    request = respx.calls[0].request
+    assert request.headers["authorization"] == "Bearer test-key"
+    assert request.headers["x-allowly-edge-token"] == "edge"
+    await local.aclose()
+
+
+def test_default_client_has_no_edge_token_header():
+    client = Allowly(api_key="test-key", base_url=BASE)
+    assert "x-allowly-edge-token" not in client._http.headers
+
+
+@pytest.mark.asyncio
+async def test_fetch_signed_default_timeout_covers_one_signer_tick(client, monkeypatch):
+    """A receipt signed at 61s must resolve under the default timeout, while an
+    explicit shorter timeout still fails."""
+    import asyncio
+
+    from allowly.types import ReceiptEnvelopePending, ReceiptEnvelopeSigned
+
+    fake_now = 0.0
+    loop = asyncio.get_running_loop()
+    monkeypatch.setattr(loop, "time", lambda: fake_now)
+
+    real_sleep = asyncio.sleep
+
+    async def fake_sleep(seconds):
+        nonlocal fake_now
+        fake_now += seconds
+        await real_sleep(0)
+
+    monkeypatch.setattr("allowly.client.asyncio.sleep", fake_sleep)
+
+    signed = {"schema_version": "3", "receipt_id": "rcp_abc"}
+
+    async def fake_get(receipt_id):
+        if fake_now >= 61.0:
+            return ReceiptEnvelopeSigned(status="signed", receipt=signed)
+        return ReceiptEnvelopePending(
+            status="pending", receipt_id=receipt_id, ready_at_estimate=None, url=None
+        )
+
+    monkeypatch.setattr(client.receipts, "get", fake_get)
+
+    result = await client.receipts.fetch_signed("rcp_abc")
+    assert result == signed
+
+    fake_now = 0.0
+    with pytest.raises(TimeoutError):
+        await client.receipts.fetch_signed("rcp_abc", timeout=30.0)

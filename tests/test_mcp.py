@@ -1,4 +1,5 @@
 """Real FastMCP dispatch test for Allowly middleware."""
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -48,3 +49,39 @@ async def test_fastmcp_enforces_allow_and_deny():
         assert check.await_count == 2
     finally:
         await middleware.aclose()
+
+
+@pytest.mark.asyncio
+async def test_fastmcp_confirm_payload_carries_expiry():
+    mcp = FastMCP("test")
+
+    @mcp.tool()
+    def read_email() -> str:
+        return "email content"
+
+    middleware = AllowlyMCPMiddleware(
+        api_key="test-key",
+        authorization_id_fn=lambda user_id: "auth_1",
+        user_id_fn=lambda context: "u1",
+    )
+    mcp.add_middleware(middleware)
+    action = SimpleNamespace(
+        decision="confirm",
+        reason="action_requires_user_confirmation",
+        confirm_nonce="cnf_1",
+        confirm_expires_at="2026-07-29T12:00:00.000Z",
+        confirm_prompt_hint="read_email",
+    )
+    check = AsyncMock(return_value=SimpleNamespace(results={"read_email": action}))
+
+    try:
+        with patch.object(middleware.client, "check", check):
+            async with Client(mcp) as client:
+                with pytest.raises(ToolError) as err:
+                    await client.call_tool("read_email", {})
+    finally:
+        await middleware.aclose()
+
+    payload = json.loads(str(err.value))
+    assert payload["confirm_nonce"] == "cnf_1"
+    assert payload["confirm_expires_at"] == "2026-07-29T12:00:00.000Z"

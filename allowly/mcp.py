@@ -120,6 +120,7 @@ def _decision_payload(action: Any) -> dict[str, Any]:
             "decision": "confirm",
             "reason": action.reason,
             "confirm_nonce": action.confirm_nonce,
+            "confirm_expires_at": action.confirm_expires_at,
             "confirm_prompt_hint": action.confirm_prompt_hint,
         }
     if action.decision == "escalate":

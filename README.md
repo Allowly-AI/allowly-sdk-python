@@ -11,34 +11,56 @@ want it in your audit trail. Create one authorization per subject, store the
 returned authorization ID in your own app database, and use that ID for later checks.
 
 ```python
+import asyncio
+import os
+
 from allowly import Allowly
 
-async with Allowly(
-    api_key=os.environ["ALLOWLY_API_KEY"],
-    base_url=os.getenv("ALLOWLY_API_URL", "https://api.allowly.ai"),
-) as allowly:
-    # Your app creates a stable internal subject ID.
-    subject_id = "subject_abc123"
 
-    # Store this in your app table, for example:
-    # allowly_authorizations(subject_id, policy_id, allowly_authorization_id, status)
-    authorization = await allowly.authorizations.create(
-        user_id=f"subject:{subject_id}",
-        policy_id="research_agent",
-        metadata={"source": "import"},
-    )
+async def main() -> None:
+    async with Allowly(
+        api_key=os.environ["ALLOWLY_API_KEY"],
+        base_url=os.getenv("ALLOWLY_API_URL", "https://api.allowly.ai"),
+    ) as allowly:
+        # Your app creates a stable internal subject ID.
+        subject_id = "subject_abc123"
 
-    # Before the agent acts, check whether this action is allowed.
-    decision = await allowly.check(
-        authorization_id=authorization.authorization_id,
-        actions=["web.search"],
-        resource=f"subject:{subject_id}",
-        context={"stage": "research"},
-    )
+        # Store this in your app table, for example:
+        # allowly_authorizations(subject_id, policy_id, allowly_authorization_id, status)
+        authorization = await allowly.authorizations.create(
+            user_id=f"subject:{subject_id}",
+            policy_id="research_agent",
+            metadata={"source": "import"},
+        )
 
-if decision.results["web.search"].decision != "allow":
-    raise RuntimeError("Action is not authorized")
+        # Before the agent acts, check whether this action is allowed.
+        decision = await allowly.check(
+            authorization_id=authorization.authorization_id,
+            actions=["web.search"],
+            resource=f"subject:{subject_id}",
+            context={"stage": "research"},
+        )
+
+    if decision.results["web.search"].decision != "allow":
+        raise RuntimeError("Action is not authorized")
+
+
+asyncio.run(main())
 ```
+
+Local development against the documented Caddy endpoint requires the edge
+token that Cloudflare injects for public traffic. Pass it explicitly:
+
+```python
+Allowly(
+    api_key=os.environ["ALLOWLY_API_KEY"],
+    base_url="http://localhost:8443",
+    dangerously_allow_insecure_base_url=True,
+    edge_token=os.environ["ALLOWLY_EDGE_TOKEN"],
+)
+```
+
+The token is only sent when provided; never set it for the public API.
 
 For actions that need third-party approval, define the escalation rule on the
 agent policy, create the authorization from that `policy_id`, and then resolve

@@ -121,6 +121,9 @@ class CheckResponse:
     authorization_expires_at: str | None
     engine_version: str
     results: dict[str, ActionCheckResult]
+    #: X-Allowly-Billing-Warning response header, when the workspace is close
+    #: to a quota/payment boundary. Surface it to operators.
+    billing_warning: str | None = None
 
 
 @dataclass
@@ -136,6 +139,7 @@ class AuthorizationCreateResponse:
     expires_at: str
     receipt: ReceiptEnvelopePending
     policy_id: str | None = None
+    requires_confirm_for: list[str] = field(default_factory=list)
     requires_escalation_for: list[str] = field(default_factory=list)
     requires_deny_for: list[str] = field(default_factory=list)
     escalation_targets: dict[str, str] = field(default_factory=dict)
@@ -143,6 +147,8 @@ class AuthorizationCreateResponse:
     budget_spent_micros: int | None = None
     replaced_authorization_id: str | None = None
     revocation_receipt: ReceiptEnvelopePending | None = None
+    #: X-Allowly-Billing-Warning response header, when present.
+    billing_warning: str | None = None
 
 
 @dataclass
