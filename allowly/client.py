@@ -188,13 +188,7 @@ class Allowly:
                 actions=actions,
                 failure="timeout",
             )
-        except httpx.DecodingError:
-            return self._fallback_check_response(
-                authorization_id=authorization_id,
-                actions=actions,
-                failure="unreachable",
-            )
-        except httpx.TransportError:
+        except (httpx.DecodingError, httpx.TransportError):
             return self._fallback_check_response(
                 authorization_id=authorization_id,
                 actions=actions,
