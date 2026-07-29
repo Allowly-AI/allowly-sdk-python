@@ -1,3 +1,6 @@
+import asyncio
+import json
+
 import pytest
 import httpx
 import respx
@@ -12,6 +15,25 @@ PENDING_RECEIPT = {
     "ready_at_estimate": "2026-04-21T14:32:18.482Z",
     "url": f"{BASE}/v1/receipts/rcp_abc",
 }
+
+
+def _check_payload(
+    *,
+    authorization_id: str = "auth_1",
+    actions: tuple[str, ...] = ("x",),
+) -> dict:
+    return {
+        "authorization_id": authorization_id,
+        "engine_version": "test",
+        "results": {
+            action: {
+                "decision": "allow",
+                "reason": "authorization_granted_action_active",
+                "receipt": PENDING_RECEIPT,
+            }
+            for action in actions
+        },
+    }
 
 
 @pytest.fixture
@@ -180,12 +202,15 @@ async def test_check_escalate(client):
 @pytest.mark.asyncio
 async def test_check_raises_on_401(client):
     respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(401, json={
-        "error": {"code": "unauthorized", "message": "Invalid or revoked API key"}
+        "error": {
+            "code": "invalid_or_revoked_api_key",
+            "message": "Invalid or revoked API key",
+        }
     }))
     with pytest.raises(AllowlyAPIError) as exc_info:
         await client.check(authorization_id="auth_1", actions=["x"])
     assert exc_info.value.status == 401
-    assert exc_info.value.code == "unauthorized"
+    assert exc_info.value.code == "invalid_or_revoked_api_key"
 
 
 @respx.mock
@@ -320,10 +345,120 @@ async def test_check_rejects_unknown_decision_even_with_fail_open():
         await client.check(authorization_id="auth_1", actions=["payments.send"])
 
 
+@pytest.mark.parametrize("status", [201, 202, 204, 206])
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_rejects_non_200_success_status_even_with_fail_open(status):
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"x": "fail_open"},
+    )
+    response = (
+        httpx.Response(status)
+        if status == 204
+        else httpx.Response(status, json=_check_payload())
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=response)
+
+    with pytest.raises(AllowlyProtocolError, match=f"expected HTTP 200, got {status}"):
+        await client.check(authorization_id="auth_1", actions=["x"])
+
+
+@pytest.mark.parametrize(
+    ("content", "content_type", "message"),
+    [
+        (b"<html>not json</html>", "text/html", "must be valid JSON"),
+        (b"[]", "application/json", "check response must be an object"),
+    ],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_rejects_non_object_200_even_with_fail_open(
+    content, content_type, message
+):
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"x": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(
+        200,
+        content=content,
+        headers={"Content-Type": content_type},
+    ))
+
+    with pytest.raises(AllowlyProtocolError, match=message):
+        await client.check(authorization_id="auth_1", actions=["x"])
+
+
+@pytest.mark.parametrize(
+    "response_actions",
+    [("x",), ("x", "y", "z"), ("x", "z")],
+    ids=["missing", "extra", "swapped"],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_rejects_mismatched_result_action_set_even_with_fail_open(
+    response_actions,
+):
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"x": "fail_open", "y": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(
+        return_value=httpx.Response(
+            200,
+            json=_check_payload(actions=response_actions),
+        )
+    )
+
+    with pytest.raises(AllowlyProtocolError, match="result actions do not match"):
+        await client.check(authorization_id="auth_1", actions=["x", "y"])
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_rejects_mismatched_authorization_id_even_with_fail_open():
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"x": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(
+        return_value=httpx.Response(
+            200,
+            json=_check_payload(authorization_id="auth_other"),
+        )
+    )
+
+    with pytest.raises(AllowlyProtocolError, match="authorization_id does not match"):
+        await client.check(authorization_id="auth_1", actions=["x"])
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_compares_distinct_requested_action_set():
+    respx.post(f"{BASE}/v1/check").mock(
+        return_value=httpx.Response(200, json=_check_payload())
+    )
+
+    client = Allowly(api_key="test-key", base_url=BASE)
+    result = await client.check(authorization_id="auth_1", actions=["x", "x"])
+
+    assert set(result.results) == {"x"}
+
+
 @pytest.mark.asyncio
 async def test_waiting_check_uses_server_wait_window(monkeypatch):
     client = Allowly(api_key="test-key", base_url=BASE)
     seen = {}
+    real_wait_for = asyncio.wait_for
+
+    async def wait_for(awaitable, *, timeout):
+        seen["total_timeout"] = timeout
+        return await real_wait_for(awaitable, timeout=1.0)
 
     async def request(method, path, **kwargs):
         seen["timeout"] = kwargs["timeout"]
@@ -336,8 +471,71 @@ async def test_waiting_check_uses_server_wait_window(monkeypatch):
         }, httpx.Headers()
 
     monkeypatch.setattr(client, "_request_with_headers", request)
+    monkeypatch.setattr("allowly.client.asyncio.wait_for", wait_for)
     await client.check(authorization_id="auth_1", actions=["x"], wait=True)
     assert seen["timeout"] == 6.0
+    assert seen["total_timeout"] == 6.0
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_total_deadline_stops_trickling_response():
+    class TrickleStream(httpx.AsyncByteStream):
+        def __init__(self, payload: bytes) -> None:
+            self.payload = payload
+            self.completed = False
+
+        async def __aiter__(self):
+            for byte in self.payload:
+                await asyncio.sleep(0.005)
+                yield bytes([byte])
+            self.completed = True
+
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        check_timeout_ms=30,
+        fallback_by_action={"x": "fail_open"},
+    )
+    stream = TrickleStream(json.dumps(_check_payload()).encode())
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(
+        200,
+        headers={"Content-Type": "application/json"},
+        stream=stream,
+    ))
+
+    started = asyncio.get_running_loop().time()
+    result = await client.check(authorization_id="auth_1", actions=["x"])
+    elapsed = asyncio.get_running_loop().time() - started
+
+    assert result.results["x"].decision == "allow"
+    assert result.results["x"].reason == "fallback_open_timeout"
+    assert stream.completed is False
+    assert elapsed < 0.2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_invalid_gzip_uses_unreachable_fallback():
+    class InvalidGzipStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b"not a gzip stream"
+
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"x": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(
+        503,
+        stream=InvalidGzipStream(),
+        headers={"Content-Encoding": "gzip"},
+    ))
+
+    result = await client.check(authorization_id="auth_1", actions=["x"])
+
+    assert result.results["x"].decision == "allow"
+    assert result.results["x"].reason == "fallback_open_unreachable"
 
 
 @respx.mock
@@ -510,6 +708,69 @@ async def test_check_429_does_not_fallback():
         await client.check(authorization_id="auth_1", actions=["public.web.search"])
     assert exc_info.value.status == 429
     assert exc_info.value.code == "quota_exceeded"
+
+
+@pytest.mark.parametrize("structured", [True, False], ids=["json", "html"])
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_408_uses_timeout_fallback(structured):
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"public.web.search": "fail_open"},
+    )
+    response = (
+        httpx.Response(
+            408,
+            json={"error": {"code": "request_timeout", "message": "timed out"}},
+        )
+        if structured
+        else httpx.Response(408, text="<html>request timeout</html>")
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=response)
+
+    result = await client.check(
+        authorization_id="auth_1",
+        actions=["public.web.search"],
+    )
+
+    assert result.results["public.web.search"].decision == "allow"
+    assert result.results["public.web.search"].reason == "fallback_open_timeout"
+
+
+@pytest.mark.parametrize(
+    ("status", "headers"),
+    [
+        (429, {"Retry-After": "3"}),
+        (403, {}),
+        (302, {"Location": "https://login.example.com/"}),
+    ],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_ambiguous_edge_statuses_never_fail_open(status, headers):
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"public.web.search": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(
+        return_value=httpx.Response(
+            status,
+            text="<html>edge response</html>",
+            headers=headers,
+        )
+    )
+
+    with pytest.raises(AllowlyAPIError) as exc_info:
+        await client.check(
+            authorization_id="auth_1",
+            actions=["public.web.search"],
+        )
+
+    assert exc_info.value.status == status
+    if status == 429:
+        assert exc_info.value.retry_after_seconds == 3.0
 
 
 @respx.mock

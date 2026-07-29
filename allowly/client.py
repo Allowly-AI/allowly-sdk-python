@@ -97,15 +97,32 @@ class Allowly:
         return data
 
     async def _request_with_headers(
-        self, method: str, path: str, **kwargs: Any
+        self,
+        method: str,
+        path: str,
+        *,
+        expected_success_status: int | None = None,
+        **kwargs: Any,
     ) -> tuple[Any, httpx.Headers]:
         resp = await self._http.request(method, path, **kwargs)
+        if (
+            expected_success_status is not None
+            and resp.is_success
+            and resp.status_code != expected_success_status
+        ):
+            raise AllowlyProtocolError(
+                f"expected HTTP {expected_success_status}, got {resp.status_code}"
+            )
         if resp.status_code == 204:
             return None, resp.headers
         try:
             data = resp.json()
-        except ValueError:
+        except ValueError as exc:
             if resp.is_success:
+                if expected_success_status is not None:
+                    raise AllowlyProtocolError(
+                        "successful response body must be valid JSON"
+                    ) from exc
                 raise
             data = {}
         if not resp.is_success:
@@ -154,14 +171,28 @@ class Allowly:
         try:
             headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
             timeout = max(self._check_timeout, 6.0) if wait else self._check_timeout
-            raw, response_headers = await self._request_with_headers(
-                "POST", path, json=body, timeout=timeout, headers=headers
+            raw, response_headers = await asyncio.wait_for(
+                self._request_with_headers(
+                    "POST",
+                    path,
+                    json=body,
+                    timeout=timeout,
+                    headers=headers,
+                    expected_success_status=200,
+                ),
+                timeout=timeout,
             )
-        except httpx.TimeoutException:
+        except (asyncio.TimeoutError, httpx.TimeoutException):
             return self._fallback_check_response(
                 authorization_id=authorization_id,
                 actions=actions,
                 failure="timeout",
+            )
+        except httpx.DecodingError:
+            return self._fallback_check_response(
+                authorization_id=authorization_id,
+                actions=actions,
+                failure="unreachable",
             )
         except httpx.TransportError:
             return self._fallback_check_response(
@@ -170,6 +201,12 @@ class Allowly:
                 failure="unreachable",
             )
         except AllowlyAPIError as exc:
+            if exc.status == 408:
+                return self._fallback_check_response(
+                    authorization_id=authorization_id,
+                    actions=actions,
+                    failure="timeout",
+                )
             if exc.status >= 500:
                 return self._fallback_check_response(
                     authorization_id=authorization_id,
@@ -177,7 +214,11 @@ class Allowly:
                     failure="unreachable",
                 )
             raise
-        response = _parse_check_response(raw)
+        response = _parse_check_response(
+            raw,
+            expected_authorization_id=authorization_id,
+            expected_actions=actions,
+        )
         response.billing_warning = response_headers.get("X-Allowly-Billing-Warning")
         return response
 
@@ -516,11 +557,27 @@ def _parse_retry_after(value: str | None) -> float | None:
     return seconds if seconds >= 0 else None
 
 
-def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
+def _parse_check_response(
+    raw: dict[str, Any],
+    *,
+    expected_authorization_id: str,
+    expected_actions: list[str],
+) -> CheckResponse:
     # The API returns a map keyed by requested action. Preserve those keys so
     # callers can safely handle mixed allow/deny/confirm/escalate results in one check.
     raw = _require_dict(raw, "check response")
+    authorization_id = _require_str(raw, "authorization_id")
+    if authorization_id != expected_authorization_id:
+        raise AllowlyProtocolError(
+            "check response authorization_id does not match the request"
+        )
     result_items = _require_dict(raw.get("results"), "check results")
+    expected_action_set = set(expected_actions)
+    actual_action_set = set(result_items)
+    if actual_action_set != expected_action_set:
+        raise AllowlyProtocolError(
+            "check response result actions do not match the request"
+        )
     results = {}
     for action, raw_item in result_items.items():
         if not isinstance(action, str):
@@ -560,7 +617,7 @@ def _parse_check_response(raw: dict[str, Any]) -> CheckResponse:
     return CheckResponse(
         user_id=_optional_str(raw, "user_id"),
         agent_id=_optional_str(raw, "agent_id"),
-        authorization_id=_require_str(raw, "authorization_id"),
+        authorization_id=authorization_id,
         authorization_expires_at=_optional_str(raw, "authorization_expires_at"),
         engine_version=_require_str(raw, "engine_version"),
         results=results,
