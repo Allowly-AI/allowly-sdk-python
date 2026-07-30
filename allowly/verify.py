@@ -78,11 +78,17 @@ def fetch_keys_doc(
     cache_ttl_seconds: int = DEFAULT_KEYS_DOC_CACHE_TTL_SECONDS,
     expected_sha256: str | None = None,
     client: httpx.Client | None = None,
+    dangerously_allow_insecure_base_url: bool = False,
+    edge_token: str | None = None,
 ) -> dict[str, Any]:
     base_url = base_url.rstrip("/")
     url = f"{base_url}/v1/workspaces/{quote(workspace_id, safe='')}/keys"
     parsed = urlparse(url)
-    if parsed.scheme != "https" or not parsed.netloc:
+    if not parsed.netloc:
+        raise VerificationError(f"keys document URL must be valid: {url}")
+    if parsed.scheme not in {"http", "https"}:
+        raise VerificationError(f"keys document URL must use HTTP or HTTPS: {url}")
+    if parsed.scheme != "https" and not dangerously_allow_insecure_base_url:
         raise VerificationError(f"keys document URL must use HTTPS: {url}")
 
     cache_key = (url, expected_sha256, cache_ttl_seconds)
@@ -95,14 +101,25 @@ def fetch_keys_doc(
     if client is None:
         client = httpx.Client(timeout=10.0)
     try:
-        resp = client.get(url)
-        resp.raise_for_status()
-        body = resp.content
+        request_options: dict[str, Any] = {"follow_redirects": False}
+        if edge_token is not None:
+            request_options["headers"] = {"X-Allowly-Edge-Token": edge_token}
+        resp = client.get(url, **request_options)
     except httpx.HTTPError as exc:
         raise VerificationError(f"failed to fetch keys document: {exc}") from exc
     finally:
         if owns_client:
             client.close()
+
+    if resp.status_code != 200:
+        raise VerificationError(
+            f"failed to fetch keys document: expected HTTP 200, got {resp.status_code}"
+        )
+    if resp.url != httpx.URL(url):
+        raise VerificationError(
+            f"keys document final URL changed: got {resp.url}, want {url}"
+        )
+    body = resp.content
 
     if expected_sha256 is not None:
         digest = hashlib.sha256(body).hexdigest()

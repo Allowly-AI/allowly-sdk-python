@@ -1,8 +1,18 @@
+import asyncio
+import inspect
+import json
+
 import pytest
 import httpx
 import respx
 
-from allowly import Allowly, AllowlyAPIError, AllowlyProtocolError
+from allowly import (
+    ActionCheckResultConfirm,
+    ActionCheckResultEscalate,
+    Allowly,
+    AllowlyAPIError,
+    AllowlyProtocolError,
+)
 
 BASE = "https://api.example.com"
 
@@ -12,6 +22,53 @@ PENDING_RECEIPT = {
     "ready_at_estimate": "2026-04-21T14:32:18.482Z",
     "url": f"{BASE}/v1/receipts/rcp_abc",
 }
+
+
+def _check_payload(
+    *,
+    authorization_id: str = "auth_1",
+    actions: tuple[str, ...] = ("x",),
+) -> dict:
+    return {
+        "authorization_id": authorization_id,
+        "engine_version": "test",
+        "results": {
+            action: {
+                "decision": "allow",
+                "reason": "authorization_granted_action_active",
+                "receipt": PENDING_RECEIPT,
+            }
+            for action in actions
+        },
+    }
+
+
+def _authorization_payload(**overrides) -> dict:
+    payload = {
+        "authorization_id": "auth_new",
+        "created_at": "2026-04-20T00:00:00Z",
+        "expires_at": "2026-12-31T00:00:00Z",
+        "requires_confirm_for": [],
+        "requires_escalation_for": [],
+        "requires_deny_for": [],
+        "escalation_targets": {},
+        "receipt": PENDING_RECEIPT,
+    }
+    payload.update(overrides)
+    return payload
+
+
+SIGNED_RECEIPT = {
+    "schema_version": "3",
+    "receipt_id": "rcp_abc",
+    "decision": "allow",
+    "alg": "Ed25519",
+    "key_id": "key_1",
+    "signature": "signature",
+}
+
+
+SIGNED_ENVELOPE = {"status": "signed", "receipt": SIGNED_RECEIPT}
 
 
 @pytest.fixture
@@ -30,6 +87,19 @@ def test_client_allows_insecure_base_url_with_explicit_opt_in():
         base_url="http://localhost:8000",
         dangerously_allow_insecure_base_url=True,
     )
+
+
+def test_client_rejects_non_http_base_url_even_with_insecure_opt_in():
+    with pytest.raises(ValueError, match="HTTP or HTTPS"):
+        Allowly(
+            api_key="test-key",
+            base_url="ftp://api.example.com",
+            dangerously_allow_insecure_base_url=True,
+        )
+
+
+def test_client_has_no_global_default_fallback_option():
+    assert "default_fallback" not in inspect.signature(Allowly).parameters
 
 
 @respx.mock
@@ -59,6 +129,22 @@ async def test_check_allow(client):
     assert item.receipt is not None
     assert item.receipt.receipt_id == "rcp_abc"
     assert item.receipt.status == "pending"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_network_check_ignores_wire_fallback_spoofing(client):
+    payload = _check_payload()
+    payload["results"]["x"]["is_fallback"] = True
+    payload["results"]["x"]["fallback_mode"] = "fail_open"
+    respx.post(f"{BASE}/v1/check").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+
+    result = await client.check(authorization_id="auth_1", actions=["x"])
+
+    assert result.results["x"].is_fallback is False
+    assert result.results["x"].fallback_mode is None
 
 
 @respx.mock
@@ -176,16 +262,59 @@ async def test_check_escalate(client):
     assert item.escalation.status == "pending"
 
 
+@pytest.mark.parametrize(
+    ("result_cls", "decision", "reason", "required_fields"),
+    [
+        (
+            ActionCheckResultConfirm,
+            "confirm",
+            "action_requires_user_confirmation",
+            {
+                "confirm_nonce": "nonce_1",
+                "confirm_expires_at": "2026-12-31T00:00:00Z",
+                "confirm_prompt_hint": "email.send",
+            },
+        ),
+        (
+            ActionCheckResultEscalate,
+            "escalate",
+            "escalation_required",
+            {"escalation_id": "esc_1"},
+        ),
+    ],
+)
+def test_interactive_results_are_keyword_only_and_require_decision_fields(
+    result_cls, decision, reason, required_fields
+):
+    with pytest.raises(TypeError):
+        result_cls(
+            decision,
+            reason=reason,
+            receipt=None,
+            **required_fields,
+        )
+
+    with pytest.raises(TypeError):
+        result_cls(
+            decision=decision,
+            reason=reason,
+            receipt=None,
+        )
+
+
 @respx.mock
 @pytest.mark.asyncio
 async def test_check_raises_on_401(client):
     respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(401, json={
-        "error": {"code": "unauthorized", "message": "Invalid or revoked API key"}
+        "error": {
+            "code": "invalid_or_revoked_api_key",
+            "message": "Invalid or revoked API key",
+        }
     }))
     with pytest.raises(AllowlyAPIError) as exc_info:
         await client.check(authorization_id="auth_1", actions=["x"])
     assert exc_info.value.status == 401
-    assert exc_info.value.code == "unauthorized"
+    assert exc_info.value.code == "invalid_or_revoked_api_key"
 
 
 @respx.mock
@@ -234,7 +363,6 @@ async def test_check_sends_multi_action_v10_body(client):
         estimated_cost_micros=12345,
         context={"stage": "filter3"},
     )
-    import json
     body = json.loads(route.calls[0].request.content)
     assert body["actions"] == ["public.web.search", "public.page.read"]
     assert body["resource"] == "subject:s_123"
@@ -320,10 +448,120 @@ async def test_check_rejects_unknown_decision_even_with_fail_open():
         await client.check(authorization_id="auth_1", actions=["payments.send"])
 
 
+@pytest.mark.parametrize("status", [201, 202, 204, 206])
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_rejects_non_200_success_status_even_with_fail_open(status):
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"x": "fail_open"},
+    )
+    response = (
+        httpx.Response(status)
+        if status == 204
+        else httpx.Response(status, json=_check_payload())
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=response)
+
+    with pytest.raises(AllowlyProtocolError, match=f"expected HTTP 200, got {status}"):
+        await client.check(authorization_id="auth_1", actions=["x"])
+
+
+@pytest.mark.parametrize(
+    ("content", "content_type", "message"),
+    [
+        (b"<html>not json</html>", "text/html", "must be valid JSON"),
+        (b"[]", "application/json", "check response must be an object"),
+    ],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_rejects_non_object_200_even_with_fail_open(
+    content, content_type, message
+):
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"x": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(
+        200,
+        content=content,
+        headers={"Content-Type": content_type},
+    ))
+
+    with pytest.raises(AllowlyProtocolError, match=message):
+        await client.check(authorization_id="auth_1", actions=["x"])
+
+
+@pytest.mark.parametrize(
+    "response_actions",
+    [("x",), ("x", "y", "z"), ("x", "z")],
+    ids=["missing", "extra", "swapped"],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_rejects_mismatched_result_action_set_even_with_fail_open(
+    response_actions,
+):
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"x": "fail_open", "y": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(
+        return_value=httpx.Response(
+            200,
+            json=_check_payload(actions=response_actions),
+        )
+    )
+
+    with pytest.raises(AllowlyProtocolError, match="result actions do not match"):
+        await client.check(authorization_id="auth_1", actions=["x", "y"])
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_rejects_mismatched_authorization_id_even_with_fail_open():
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"x": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(
+        return_value=httpx.Response(
+            200,
+            json=_check_payload(authorization_id="auth_other"),
+        )
+    )
+
+    with pytest.raises(AllowlyProtocolError, match="authorization_id does not match"):
+        await client.check(authorization_id="auth_1", actions=["x"])
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_compares_distinct_requested_action_set():
+    respx.post(f"{BASE}/v1/check").mock(
+        return_value=httpx.Response(200, json=_check_payload())
+    )
+
+    client = Allowly(api_key="test-key", base_url=BASE)
+    result = await client.check(authorization_id="auth_1", actions=["x", "x"])
+
+    assert set(result.results) == {"x"}
+
+
 @pytest.mark.asyncio
 async def test_waiting_check_uses_server_wait_window(monkeypatch):
     client = Allowly(api_key="test-key", base_url=BASE)
     seen = {}
+    real_wait_for = asyncio.wait_for
+
+    async def wait_for(awaitable, *, timeout):
+        seen["total_timeout"] = timeout
+        return await real_wait_for(awaitable, timeout=1.0)
 
     async def request(method, path, **kwargs):
         seen["timeout"] = kwargs["timeout"]
@@ -336,8 +574,61 @@ async def test_waiting_check_uses_server_wait_window(monkeypatch):
         }, httpx.Headers()
 
     monkeypatch.setattr(client, "_request_with_headers", request)
+    monkeypatch.setattr("allowly.client.asyncio.wait_for", wait_for)
     await client.check(authorization_id="auth_1", actions=["x"], wait=True)
     assert seen["timeout"] == 6.0
+    assert seen["total_timeout"] == 6.0
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_total_deadline_stops_trickling_response():
+    class TrickleStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            for byte in b" " * 100:
+                await asyncio.sleep(0.005)
+                yield bytes([byte])
+
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        check_timeout_ms=30,
+        fallback_by_action={"x": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(
+        200,
+        headers={"Content-Type": "application/json"},
+        stream=TrickleStream(),
+    ))
+
+    result = await client.check(authorization_id="auth_1", actions=["x"])
+
+    assert result.results["x"].decision == "allow"
+    assert result.results["x"].reason == "fallback_open_timeout"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_invalid_gzip_uses_unreachable_fallback():
+    class InvalidGzipStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b"not a gzip stream"
+
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"x": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(
+        503,
+        stream=InvalidGzipStream(),
+        headers={"Content-Encoding": "gzip"},
+    ))
+
+    result = await client.check(authorization_id="auth_1", actions=["x"])
+
+    assert result.results["x"].decision == "allow"
+    assert result.results["x"].reason == "fallback_open_unreachable"
 
 
 @respx.mock
@@ -451,7 +742,12 @@ async def test_string_error_body_preserves_message(client):
         return_value=httpx.Response(400, json={"error": "upstream connect timeout"})
     )
     with pytest.raises(AllowlyAPIError) as exc_info:
-        await client.authorizations.create(user_id="u1", actions=["email.read"])
+        await client.authorizations.create(
+            user_id="u1",
+            agent_id="a1",
+            actions=["email.read"],
+            expires_at="2026-12-31T00:00:00Z",
+        )
     assert exc_info.value.status == 400
     assert "upstream connect timeout" in str(exc_info.value)
 
@@ -464,6 +760,7 @@ async def test_path_params_are_percent_encoded(client):
         f"{BASE}/v1/authorizations/..%2Fpolicies%2Fresearch_agent"
     ).mock(return_value=httpx.Response(200, json={
         "authorization_id": "x", "revoked_at": "t", "receipt": PENDING_RECEIPT,
+        "revoked_confirmations": [],
     }))
     await client.authorizations.revoke("../policies/research_agent")
     assert route.called
@@ -478,7 +775,6 @@ async def test_check_mixed_action_fallback_modes():
         base_url=BASE,
         fallback_by_action={
             "public.web.search": "fail_open",
-            "email.send": "fail_closed",
         },
     )
     respx.post(f"{BASE}/v1/check").mock(side_effect=httpx.ConnectError("offline"))
@@ -492,6 +788,30 @@ async def test_check_mixed_action_fallback_modes():
     assert res.results["public.web.search"].reason == "fallback_open_unreachable"
     assert res.results["email.send"].decision == "deny"
     assert res.results["email.send"].reason == "fallback_closed_unreachable"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_transport_failure_is_one_attempt_only():
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"public.web.search": "fail_open"},
+    )
+    route = respx.post(f"{BASE}/v1/check").mock(
+        side_effect=[
+            httpx.ConnectError("offline"),
+            httpx.Response(200, json=_check_payload(actions=("public.web.search",))),
+        ]
+    )
+
+    result = await client.check(
+        authorization_id="auth_1",
+        actions=["public.web.search"],
+    )
+
+    assert result.results["public.web.search"].is_fallback is True
+    assert route.call_count == 1
 
 
 @respx.mock
@@ -510,6 +830,69 @@ async def test_check_429_does_not_fallback():
         await client.check(authorization_id="auth_1", actions=["public.web.search"])
     assert exc_info.value.status == 429
     assert exc_info.value.code == "quota_exceeded"
+
+
+@pytest.mark.parametrize("structured", [True, False], ids=["json", "html"])
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_408_uses_timeout_fallback(structured):
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"public.web.search": "fail_open"},
+    )
+    response = (
+        httpx.Response(
+            408,
+            json={"error": {"code": "request_timeout", "message": "timed out"}},
+        )
+        if structured
+        else httpx.Response(408, text="<html>request timeout</html>")
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=response)
+
+    result = await client.check(
+        authorization_id="auth_1",
+        actions=["public.web.search"],
+    )
+
+    assert result.results["public.web.search"].decision == "allow"
+    assert result.results["public.web.search"].reason == "fallback_open_timeout"
+
+
+@pytest.mark.parametrize(
+    ("status", "headers"),
+    [
+        (429, {"Retry-After": "3"}),
+        (403, {}),
+        (302, {"Location": "https://login.example.com/"}),
+    ],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_ambiguous_edge_statuses_never_fail_open(status, headers):
+    client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"public.web.search": "fail_open"},
+    )
+    respx.post(f"{BASE}/v1/check").mock(
+        return_value=httpx.Response(
+            status,
+            text="<html>edge response</html>",
+            headers=headers,
+        )
+    )
+
+    with pytest.raises(AllowlyAPIError) as exc_info:
+        await client.check(
+            authorization_id="auth_1",
+            actions=["public.web.search"],
+        )
+
+    assert exc_info.value.status == status
+    if status == 429:
+        assert exc_info.value.retry_after_seconds == 3.0
 
 
 @respx.mock
@@ -548,7 +931,6 @@ async def test_settle_budget_sends_actual_cost_and_idempotency_key(client):
         idempotency_key="settle-1",
     )
 
-    import json
     body = json.loads(route.calls[0].request.content)
     assert body == {"check_receipt_id": "rcp_check", "actual_cost_micros": 12}
     assert route.calls[0].request.headers["idempotency-key"] == "settle-1"
@@ -559,14 +941,32 @@ async def test_settle_budget_sends_actual_cost_and_idempotency_key(client):
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_authorization_create_requires_http_201(client):
+    respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(200, json=_authorization_payload())
+    )
+
+    with pytest.raises(
+        AllowlyProtocolError,
+        match="expected HTTP 201, got 200",
+    ):
+        await client.authorizations.create(
+            user_id="u1",
+            agent_id="a1",
+            actions=["email.read"],
+            expires_at="2026-12-31T00:00:00Z",
+        )
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_authorizations_create(client):
-    respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(201, json={
-        "authorization_id": "auth_new",
-        "created_at": "2026-04-20T00:00:00Z",
-        "expires_at": "2026-12-31T00:00:00Z",
-        "requires_confirm_for": ["email.send"],
-        "receipt": PENDING_RECEIPT,
-    }))
+    respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(
+            201,
+            json=_authorization_payload(requires_confirm_for=["email.send"]),
+        )
+    )
     res = await client.authorizations.create(
         user_id="u1", agent_id="a1",
         actions=["email.read", "email.send"],
@@ -581,21 +981,23 @@ async def test_authorizations_create(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_authorizations_create_with_budget(client):
-    route = respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(201, json={
-        "authorization_id": "auth_budget",
-        "created_at": "2026-04-20T00:00:00Z",
-        "expires_at": "2026-12-31T00:00:00Z",
-        "budget_limit_micros": 50_000_000,
-        "budget_spent_micros": 0,
-        "receipt": PENDING_RECEIPT,
-    }))
+    route = respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(
+            201,
+            json=_authorization_payload(
+                authorization_id="auth_budget",
+                budget_limit_micros=50_000_000,
+                budget_spent_micros=0,
+            ),
+        )
+    )
     res = await client.authorizations.create(
         user_id="u1",
         agent_id="a1",
         actions=["llm.enrich"],
         budget_limit_micros=50_000_000,
+        expires_at="2026-12-31T00:00:00Z",
     )
-    import json
     body = json.loads(route.calls[0].request.content)
     assert body["budget_limit_micros"] == 50_000_000
     assert res.authorization_id == "auth_budget"
@@ -606,17 +1008,19 @@ async def test_authorizations_create_with_budget(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_authorizations_create_with_escalation(client):
-    route = respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(201, json={
-        "authorization_id": "auth_esc",
-        "created_at": "2026-04-20T00:00:00Z",
-        "expires_at": "2026-12-31T00:00:00Z",
-        "requires_escalation_for": ["candidate.delete"],
-        "requires_deny_for": ["email.send"],
-        "escalation_targets": {"candidate.delete": "compliance"},
-        "replaced_authorization_id": "auth_old",
-        "revocation_receipt": PENDING_RECEIPT,
-        "receipt": PENDING_RECEIPT,
-    }))
+    route = respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(
+            201,
+            json=_authorization_payload(
+                authorization_id="auth_esc",
+                requires_escalation_for=["candidate.delete"],
+                requires_deny_for=["email.send"],
+                escalation_targets={"candidate.delete": "compliance"},
+                replaced_authorization_id="auth_old",
+                revocation_receipt=PENDING_RECEIPT,
+            ),
+        )
+    )
     res = await client.authorizations.create(
         user_id="u1",
         agent_id="a1",
@@ -624,9 +1028,9 @@ async def test_authorizations_create_with_escalation(client):
         requires_escalation_for=["candidate.delete"],
         requires_deny_for=["email.send"],
         escalation_targets={"candidate.delete": "compliance"},
+        expires_at="2026-12-31T00:00:00Z",
         idempotency_key="create-1",
     )
-    import json
     body = json.loads(route.calls[0].request.content)
     assert body["requires_escalation_for"] == ["candidate.delete"]
     assert body["requires_deny_for"] == ["email.send"]
@@ -643,18 +1047,14 @@ async def test_authorizations_create_with_escalation(client):
 @pytest.mark.asyncio
 async def test_authorizations_create_no_session_id(client):
     """session_id must not be sent — it was removed in v6."""
-    route = respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(201, json={
-        "authorization_id": "auth_new",
-        "created_at": "2026-04-20T00:00:00Z",
-        "expires_at": "2026-12-31T00:00:00Z",
-        "receipt": PENDING_RECEIPT,
-    }))
+    route = respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(201, json=_authorization_payload())
+    )
     await client.authorizations.create(
         user_id="u1", agent_id="a1",
         actions=["email.read"],
         expires_at="2026-12-31T00:00:00Z",
     )
-    import json
     body = json.loads(route.calls[0].request.content)
     assert "session_id" not in body
 
@@ -662,27 +1062,182 @@ async def test_authorizations_create_no_session_id(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_authorizations_create_from_policy_id(client):
-    route = respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(201, json={
-        "authorization_id": "auth_policy",
-        "policy_id": "research_agent",
-        "created_at": "2026-04-20T00:00:00Z",
-        "expires_at": "2026-12-31T00:00:00Z",
-        "receipt": PENDING_RECEIPT,
-    }))
+    route = respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(
+            201,
+            json=_authorization_payload(
+                authorization_id="auth_policy",
+                policy_id="research_agent",
+            ),
+        )
+    )
     res = await client.authorizations.create(
         user_id="subject:s_123",
         policy_id="research_agent",
         metadata={"source": "import"},
     )
-    import json
     body = json.loads(route.calls[0].request.content)
-    assert body["user_id"] == "subject:s_123"
-    assert body["policy_id"] == "research_agent"
-    assert body["agent_id"] is None
-    assert body["actions"] is None
-    assert body["metadata"] == {"source": "import"}
+    assert body == {
+        "user_id": "subject:s_123",
+        "policy_id": "research_agent",
+        "metadata": {"source": "import"},
+    }
     assert res.authorization_id == "auth_policy"
     assert res.policy_id == "research_agent"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_authorizations_create_inline_body_contains_only_inline_shape(client):
+    route = respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(201, json=_authorization_payload())
+    )
+
+    await client.authorizations.create(
+        user_id="u1",
+        agent_id="a1",
+        actions=["email.read"],
+        expires_at="2026-12-31T00:00:00Z",
+    )
+
+    assert json.loads(route.calls[0].request.content) == {
+        "user_id": "u1",
+        "agent_id": "a1",
+        "actions": [{"name": "email.read", "constraints": {}}],
+        "requires_confirm_for": [],
+        "requires_escalation_for": [],
+        "requires_deny_for": [],
+        "escalation_targets": {},
+        "expires_at": "2026-12-31T00:00:00Z",
+        "metadata": {},
+    }
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({}, "either policy_id or inline"),
+        (
+            {"policy_id": "policy_1", "agent_id": "a1", "actions": ["x"]},
+            "policy_id cannot be combined",
+        ),
+        (
+            {"agent_id": "a1", "actions": ["x"]},
+            "expires_at is required",
+        ),
+        (
+            {"agent_id": "a1", "expires_at": "2026-12-31T00:00:00Z"},
+            "either policy_id or inline",
+        ),
+        (
+            {"actions": ["x"], "expires_at": "2026-12-31T00:00:00Z"},
+            "either policy_id or inline",
+        ),
+    ],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_authorizations_create_rejects_invalid_creation_shape(
+    client, kwargs, message
+):
+    respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(201, json=_authorization_payload())
+    )
+
+    with pytest.raises(ValueError, match=message):
+        await client.authorizations.create(user_id="u1", **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("requires_confirm_for", []),
+        ("requires_escalation_for", []),
+        ("requires_deny_for", []),
+        ("escalation_targets", {}),
+    ],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_policy_create_rejects_inline_decision_overrides(
+    client, field, value
+):
+    respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(201, json=_authorization_payload())
+    )
+
+    with pytest.raises(ValueError, match=field):
+        await client.authorizations.create(
+            user_id="u1",
+            policy_id="policy_1",
+            **{field: value},
+        )
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        "requires_confirm_for",
+        "requires_escalation_for",
+        "requires_deny_for",
+        "escalation_targets",
+    ],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_authorization_create_response_requires_decision_snapshot_fields(
+    client, missing_field
+):
+    response = _authorization_payload(policy_id="policy_1")
+    response.pop(missing_field)
+    respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(201, json=response)
+    )
+
+    with pytest.raises(AllowlyProtocolError, match=missing_field):
+        await client.authorizations.create(user_id="u1", policy_id="policy_1")
+
+
+@pytest.mark.parametrize("missing_field", ["receipt_id", "url"])
+@respx.mock
+@pytest.mark.asyncio
+async def test_authorization_create_requires_pending_receipt_fields(
+    client, missing_field
+):
+    response = _authorization_payload()
+    response["receipt"] = {**PENDING_RECEIPT}
+    response["receipt"].pop(missing_field)
+    respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(201, json=response)
+    )
+
+    with pytest.raises(AllowlyProtocolError, match=missing_field):
+        await client.authorizations.create(user_id="u1", policy_id="policy_1")
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid_value"),
+    [
+        ("requires_confirm_for", "email.send"),
+        ("requires_escalation_for", [1]),
+        ("requires_deny_for", [True]),
+        ("escalation_targets", []),
+        ("escalation_targets", {"candidate.delete": 1}),
+    ],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_authorization_create_response_validates_decision_snapshot_fields(
+    client, field, invalid_value
+):
+    response = _authorization_payload(policy_id="policy_1")
+    response[field] = invalid_value
+    respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(201, json=response)
+    )
+
+    with pytest.raises(AllowlyProtocolError, match=field):
+        await client.authorizations.create(user_id="u1", policy_id="policy_1")
 
 
 @respx.mock
@@ -698,7 +1253,12 @@ async def test_non_check_endpoint_5xx_does_not_fallback():
     }))
 
     with pytest.raises(AllowlyAPIError) as exc_info:
-        await client.authorizations.create(user_id="u1", agent_id="a1", actions=["email.read"])
+        await client.authorizations.create(
+            user_id="u1",
+            agent_id="a1",
+            actions=["email.read"],
+            expires_at="2026-12-31T00:00:00Z",
+        )
     assert exc_info.value.status == 503
 
 
@@ -722,14 +1282,29 @@ async def test_authorizations_revoke(client):
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_authorizations_revoke_requires_revoked_confirmations(client):
+    respx.delete(f"{BASE}/v1/authorizations/auth_123").mock(
+        return_value=httpx.Response(200, json={
+            "authorization_id": "auth_123",
+            "revoked_at": "2026-05-01T09:00:00Z",
+            "receipt": PENDING_RECEIPT,
+        })
+    )
+
+    with pytest.raises(AllowlyProtocolError, match="revoked_confirmations"):
+        await client.authorizations.revoke("auth_123")
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_authorizations_revoke_with_superseded_by(client):
     route = respx.delete(f"{BASE}/v1/authorizations/auth_123").mock(return_value=httpx.Response(200, json={
         "authorization_id": "auth_123",
         "revoked_at": "2026-05-01T09:00:00Z",
         "receipt": PENDING_RECEIPT,
+        "revoked_confirmations": [],
     }))
     await client.authorizations.revoke("auth_123", superseded_by="auth_456")
-    import json
     body = json.loads(route.calls[0].request.content)
     assert body["superseded_by"] == "auth_456"
 
@@ -737,19 +1312,23 @@ async def test_authorizations_revoke_with_superseded_by(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_authorizations_create_with_replaces(client):
-    route = respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(200, json={
-        "authorization_id": "auth_123",
-        "created_at": "2026-05-01T09:00:00Z",
-        "expires_at": "2026-05-31T09:00:00Z",
-        "receipt": PENDING_RECEIPT,
-    }))
+    route = respx.post(f"{BASE}/v1/authorizations").mock(
+        return_value=httpx.Response(
+            201,
+            json=_authorization_payload(
+                authorization_id="auth_123",
+                created_at="2026-05-01T09:00:00Z",
+                expires_at="2026-05-31T09:00:00Z",
+            ),
+        )
+    )
     await client.authorizations.create(
         user_id="u1",
         agent_id="a1",
         actions=["email.read"],
+        expires_at="2026-05-31T09:00:00Z",
         replaces="auth_001",
     )
-    import json
     body = json.loads(route.calls[0].request.content)
     assert body["replaces"] == "auth_001"
 
@@ -773,9 +1352,34 @@ async def test_confirmations_approve(client):
 async def test_confirmations_denied(client):
     respx.post(f"{BASE}/v1/confirmations/nonce123").mock(return_value=httpx.Response(200, json={
         "decision": "denied_by_user",
+        "authorization_id": None,
+        "expires_at": None,
     }))
     res = await client.confirmations.approve("nonce123", approved=False)
     assert res.decision == "denied_by_user"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"decision": "approved", "authorization_id": "auth_xyz"},
+        {"decision": "denied_by_user", "authorization_id": None},
+        {
+            "decision": "denied_by_user",
+            "authorization_id": "auth_xyz",
+            "expires_at": None,
+        },
+    ],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_confirmations_require_decision_specific_fields(client, payload):
+    respx.post(f"{BASE}/v1/confirmations/nonce123").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+
+    with pytest.raises(AllowlyProtocolError):
+        await client.confirmations.approve("nonce123", approved=True)
 
 
 @respx.mock
@@ -789,7 +1393,6 @@ async def test_escalations_approve(client):
         "receipt": PENDING_RECEIPT,
     }))
     res = await client.escalations.approve("esc_abc", resolved_by="compliance:1", note="ok")
-    import json
     body = json.loads(route.calls[0].request.content)
     assert body == {"resolution": "approved", "resolved_by": "compliance:1", "note": "ok"}
     assert res.escalation_id == "esc_abc"
@@ -863,6 +1466,99 @@ async def test_receipt_polling_timeout_includes_request_time(client, monkeypatch
         await client.receipts.fetch_signed("rcp_abc", poll_interval=0.001, timeout=0.01)
 
 
+@pytest.mark.parametrize(
+    ("transient", "expected_delay"),
+    [
+        (httpx.ConnectError("offline"), 0.25),
+        (
+            httpx.Response(
+                408,
+                json={"error": {"code": "request_timeout", "message": "retry"}},
+            ),
+            0.25,
+        ),
+        (
+            httpx.Response(
+                429,
+                json={"error": {"code": "rate_limited", "message": "retry"}},
+                headers={"Retry-After": "2.5"},
+            ),
+            2.5,
+        ),
+        (
+            httpx.Response(
+                503,
+                json={"error": {"code": "unavailable", "message": "retry"}},
+            ),
+            0.25,
+        ),
+    ],
+    ids=["transport", "408", "429-retry-after", "5xx"],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_fetch_signed_retries_transient_failures_within_deadline(
+    client, monkeypatch, transient, expected_delay
+):
+    route = respx.get(f"{BASE}/v1/receipts/rcp_abc").mock(
+        side_effect=[
+            transient,
+            httpx.Response(200, json=SIGNED_ENVELOPE),
+        ]
+    )
+    delays = []
+    real_sleep = asyncio.sleep
+
+    async def record_sleep(seconds):
+        delays.append(seconds)
+        await real_sleep(0)
+
+    monkeypatch.setattr("allowly.client.asyncio.sleep", record_sleep)
+
+    receipt = await client.receipts.fetch_signed(
+        "rcp_abc",
+        poll_interval=0.25,
+        timeout=10.0,
+    )
+
+    assert receipt == SIGNED_RECEIPT
+    assert delays == [expected_delay]
+    assert route.call_count == 2
+
+
+@pytest.mark.parametrize(
+    ("response", "error_type"),
+    [
+        (
+            httpx.Response(
+                404,
+                json={"error": {"code": "receipt_not_found", "message": "missing"}},
+            ),
+            AllowlyAPIError,
+        ),
+        (httpx.Response(200, json={"status": "lost"}), AllowlyProtocolError),
+    ],
+    ids=["other-4xx", "protocol"],
+)
+@respx.mock
+@pytest.mark.asyncio
+async def test_fetch_signed_does_not_retry_non_transient_failures(
+    client, response, error_type
+):
+    route = respx.get(f"{BASE}/v1/receipts/rcp_abc").mock(
+        side_effect=[response, httpx.Response(200, json=SIGNED_ENVELOPE)]
+    )
+
+    with pytest.raises(error_type):
+        await client.receipts.fetch_signed(
+            "rcp_abc",
+            poll_interval=0.001,
+            timeout=10.0,
+        )
+
+    assert route.call_count == 1
+
+
 @respx.mock
 @pytest.mark.asyncio
 async def test_receipts_reject_unknown_status(client):
@@ -922,12 +1618,7 @@ async def test_check_exposes_billing_warning_header(client):
 async def test_authorizations_create_exposes_billing_warning_header(client):
     respx.post(f"{BASE}/v1/authorizations").mock(return_value=httpx.Response(
         201,
-        json={
-            "authorization_id": "auth_new",
-            "created_at": "2026-04-20T00:00:00Z",
-            "expires_at": "2026-12-31T00:00:00Z",
-            "receipt": PENDING_RECEIPT,
-        },
+        json=_authorization_payload(),
         headers={"X-Allowly-Billing-Warning": "payment_past_due"},
     ))
     res = await client.authorizations.create(

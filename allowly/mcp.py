@@ -57,7 +57,6 @@ class AllowlyMCPMiddleware(Middleware):
         *,
         base_url: Optional[str] = None,
         user_id_fn: UserIdFn | None = None,
-        allow_user_id_argument: bool = False,
     ) -> None:
         kwargs: dict[str, Any] = {}
         if base_url:
@@ -65,7 +64,6 @@ class AllowlyMCPMiddleware(Middleware):
         self.client = Allowly(api_key, **kwargs)
         self.authorization_id_fn = authorization_id_fn
         self.user_id_fn = user_id_fn
-        self.allow_user_id_argument = allow_user_id_argument
 
     async def aclose(self) -> None:
         await self.client.aclose()
@@ -85,9 +83,6 @@ class AllowlyMCPMiddleware(Middleware):
             if hasattr(result, "__await__"):
                 return await result  # type: ignore[return-value]
             return result  # type: ignore[return-value]
-        if self.allow_user_id_argument:
-            user_id = context.arguments.get("user_id")
-            return user_id if isinstance(user_id, str) and user_id else None
         return None
 
     async def on_call_tool(

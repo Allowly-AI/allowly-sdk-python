@@ -62,6 +62,13 @@ Allowly(
 
 The token is only sent when provided; never set it for the public API.
 
+Inline authorization creation requires `agent_id`, `actions`, and `expires_at`.
+Policy-based creation uses `policy_id` instead and rejects inline action or
+decision-override fields.
+
+Unavailable checks fail closed unless an action is explicitly mapped to
+`"fail_open"` with `fallback_by_action`. Unmapped actions always fail closed.
+
 For actions that need third-party approval, define the escalation rule on the
 agent policy, create the authorization from that `policy_id`, and then resolve
 returned escalation results with
@@ -85,3 +92,7 @@ integration examples honest and makes SDK gaps visible early.
 Install `allowly[verifier]` to verify signed receipts locally. The extra uses
 `allowly-receipt-format>=3.0.0,<4.0.0`, which verifies receipt wire format 3 (the package major equals the wire format). `alg` and
 `key_id` are signed top-level fields, and `signature` is the base64url string.
+
+Key-document fetching requires HTTPS by default. For the documented local
+Caddy endpoint only, pass `dangerously_allow_insecure_base_url=True` and its
+`edge_token` to `fetch_keys_doc`, matching the client options above.
