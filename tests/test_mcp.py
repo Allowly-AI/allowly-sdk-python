@@ -1,4 +1,5 @@
 """Real FastMCP dispatch test for Allowly middleware."""
+import inspect
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -13,6 +14,41 @@ from allowly.mcp import AllowlyMCPMiddleware
 def _response(decision: str):
     action = SimpleNamespace(decision=decision, reason=f"test_{decision}")
     return SimpleNamespace(results={"read_email": action})
+
+
+def test_middleware_has_no_argument_identity_escape_hatch():
+    assert "allow_user_id_argument" not in inspect.signature(
+        AllowlyMCPMiddleware
+    ).parameters
+
+
+@pytest.mark.asyncio
+async def test_fastmcp_ignores_caller_controlled_user_id_without_user_id_fn():
+    authorization_lookups = []
+    mcp = FastMCP("test")
+
+    @mcp.tool()
+    def read_email(user_id: str) -> str:
+        return f"email for {user_id}"
+
+    def authorization_id_for(user_id):
+        authorization_lookups.append(user_id)
+        return "auth_1"
+
+    middleware = AllowlyMCPMiddleware(
+        api_key="test-key",
+        authorization_id_fn=authorization_id_for,
+    )
+    mcp.add_middleware(middleware)
+
+    try:
+        async with Client(mcp) as client:
+            with pytest.raises(ToolError, match="authorization_not_found"):
+                await client.call_tool("read_email", {"user_id": "attacker"})
+    finally:
+        await middleware.aclose()
+
+    assert authorization_lookups == []
 
 
 @pytest.mark.asyncio

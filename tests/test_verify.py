@@ -78,6 +78,95 @@ def test_fetch_keys_doc_rejects_non_https():
         fetch_keys_doc("ws_1", base_url="http://localhost:8000")
 
 
+def test_fetch_keys_doc_rejects_non_http_scheme_even_with_insecure_opt_in():
+    with pytest.raises(VerificationError, match="HTTP or HTTPS"):
+        fetch_keys_doc(
+            "ws_1",
+            base_url="ftp://api.example.com",
+            dangerously_allow_insecure_base_url=True,
+        )
+
+
+def test_fetch_keys_doc_allows_explicit_local_http_and_sends_edge_token():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["edge_token"] = request.headers.get("X-Allowly-Edge-Token")
+        return httpx.Response(200, json=VALID_DOC)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    assert fetch_keys_doc(
+        "ws_1",
+        base_url="http://localhost:8443",
+        dangerously_allow_insecure_base_url=True,
+        edge_token="local-edge-token",
+        client=client,
+    ) == VALID_DOC
+    assert seen == {
+        "url": "http://localhost:8443/v1/workspaces/ws_1/keys",
+        "edge_token": "local-edge-token",
+    }
+
+
+@pytest.mark.parametrize("status_code", [201, 202, 204, 206])
+def test_fetch_keys_doc_requires_exact_http_200(status_code):
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(status_code, json=VALID_DOC)
+        )
+    )
+
+    with pytest.raises(VerificationError, match="expected HTTP 200"):
+        fetch_keys_doc("ws_1", base_url="https://api.example.com", client=client)
+
+
+def test_fetch_keys_doc_disables_redirects_on_injected_follow_redirect_client():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        if request.url.host == "api.example.com":
+            return httpx.Response(
+                302,
+                headers={
+                    "Location": "https://attacker.example/v1/workspaces/ws_1/keys"
+                },
+            )
+        return httpx.Response(200, json=VALID_DOC)
+
+    client = httpx.Client(
+        transport=httpx.MockTransport(handler),
+        follow_redirects=True,
+    )
+
+    with pytest.raises(VerificationError, match="expected HTTP 200"):
+        fetch_keys_doc("ws_1", base_url="https://api.example.com", client=client)
+
+    assert calls == ["https://api.example.com/v1/workspaces/ws_1/keys"]
+
+
+def test_fetch_keys_doc_rejects_changed_final_url():
+    class ChangedUrlClient:
+        def get(self, url: str, **kwargs) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json=VALID_DOC,
+                request=httpx.Request(
+                    "GET",
+                    "https://attacker.example/v1/workspaces/ws_1/keys",
+                ),
+            )
+
+    with pytest.raises(VerificationError, match="final URL"):
+        fetch_keys_doc(
+            "ws_1",
+            base_url="https://api.example.com",
+            client=ChangedUrlClient(),  # type: ignore[arg-type]
+        )
+
+
 def test_fetch_keys_doc_caches_for_five_minutes():
     calls = {"count": 0}
 
@@ -196,7 +285,8 @@ def test_fetch_keys_doc_default_client_path(monkeypatch):
         def __init__(self, *, timeout: float):
             assert timeout == 10.0
 
-        def get(self, url: str) -> httpx.Response:
+        def get(self, url: str, **kwargs) -> httpx.Response:
+            assert kwargs == {"follow_redirects": False}
             calls["count"] += 1
             return httpx.Response(200, json=VALID_DOC, request=httpx.Request("GET", url))
 
@@ -213,7 +303,8 @@ def test_fetch_keys_doc_wraps_httpx_errors(monkeypatch):
         def __init__(self, *, timeout: float):
             pass
 
-        def get(self, url: str) -> httpx.Response:
+        def get(self, url: str, **kwargs) -> httpx.Response:
+            assert kwargs == {"follow_redirects": False}
             raise httpx.ConnectError("boom")
 
         def close(self) -> None:
