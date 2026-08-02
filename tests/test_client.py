@@ -59,7 +59,7 @@ def _authorization_payload(**overrides) -> dict:
 
 
 SIGNED_RECEIPT = {
-    "schema_version": "3",
+    "schema_version": "4",
     "receipt_id": "rcp_abc",
     "decision": "allow",
     "alg": "Ed25519",
@@ -1434,7 +1434,7 @@ async def test_receipts_get_pending(client):
 @pytest.mark.asyncio
 async def test_receipts_get_signed(client):
     signed = {
-        "schema_version": "3", "receipt_id": "rcp_abc", "decision": "allow",
+        "schema_version": "4", "receipt_id": "rcp_abc", "decision": "allow",
         "alg": "Ed25519", "key_id": "k", "signature": "sig",
     }
     respx.get(f"{BASE}/v1/receipts/rcp_abc").mock(return_value=httpx.Response(200, json={
@@ -1677,7 +1677,7 @@ async def test_fetch_signed_default_timeout_covers_one_signer_tick(client, monke
 
     monkeypatch.setattr("allowly.client.asyncio.sleep", fake_sleep)
 
-    signed = {"schema_version": "3", "receipt_id": "rcp_abc"}
+    signed = {"schema_version": "4", "receipt_id": "rcp_abc"}
 
     async def fake_get(receipt_id):
         if fake_now >= 61.0:
