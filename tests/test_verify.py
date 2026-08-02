@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 
 import httpx
 import pytest
+from allowly_receipt_format import canonicalize
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from allowly.verify import (
     VerificationError,
@@ -27,21 +30,30 @@ VALID_DOC = {
     ],
 }
 
-V2_DOC = {
+def _b64u(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode()
+
+
+_TEST_PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(bytes(32))
+_TEST_PUBLIC_KEY = _TEST_PRIVATE_KEY.public_key().public_bytes_raw()
+
+
+V4_DOC = {
     "workspace_id": "ws_test",
     "keys": [
         {
             "key_id": "test-key/v1",
             "alg": "Ed25519",
-            "public_key": "O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik",
+            "public_key": _b64u(_TEST_PUBLIC_KEY),
+            "public_key_fingerprint": f"sha256:{hashlib.sha256(_TEST_PUBLIC_KEY).hexdigest()}",
             "active_from": "2026-01-01T00:00:00.000Z",
             "active_until": None,
         }
     ],
 }
 
-V2_RECEIPT = {
-    "schema_version": "3",
+V4_RECEIPT = {
+    "schema_version": "4",
     "receipt_id": "rcp_01HXZMINIMAL0000000000000",
     "workspace_id": "ws_test",
     "issued_at": "2026-04-21T14:32:17.482Z",
@@ -56,8 +68,8 @@ V2_RECEIPT = {
     "engine_version": "2026-04-17.1",
     "alg": "Ed25519",
     "key_id": "test-key/v1",
-    "signature": "O98ntdo49t38E6a2M-19qjaC-2TzTw8tYqOn-fsUAYzfyf0dWTx9uje9NQlkvCl-fP68o_ATkBSW3mpyguoODQ",
 }
+V4_RECEIPT["signature"] = _b64u(_TEST_PRIVATE_KEY.sign(canonicalize(V4_RECEIPT)))
 
 
 @pytest.fixture(autouse=True)
@@ -206,14 +218,26 @@ def test_verify_receipt_requires_and_forwards_workspace_binding(monkeypatch):
         seen.update(kwargs)
 
     monkeypatch.setattr("allowly.verify._verify_receipt", verifier)
-    verify_receipt({}, [], expected_workspace_id="ws_1")
+    trusted = {"sha256:" + "0" * 64}
+    verify_receipt(
+        {},
+        [],
+        expected_workspace_id="ws_1",
+        trusted_key_fingerprints=trusted,
+    )
     assert seen["expected_workspace_id"] == "ws_1"
+    assert seen["trusted_key_fingerprints"] == trusted
 
 
-def test_verify_v2_receipt_with_signed_algorithm_and_key_id():
-    keys = load_keys_from_json(V2_DOC)
+def test_verify_v4_receipt_with_signed_algorithm_and_key_id():
+    keys = load_keys_from_json(V4_DOC)
 
-    verify_receipt(V2_RECEIPT, keys, expected_workspace_id="ws_test")
+    verify_receipt(
+        V4_RECEIPT,
+        keys,
+        expected_workspace_id="ws_test",
+        trusted_key_fingerprints={V4_DOC["keys"][0]["public_key_fingerprint"]},
+    )
 
 
 def test_fetch_keys_doc_encodes_workspace_id():

@@ -4,7 +4,7 @@ requires-python = ">=3.10"
 
 [[package]]
 name = "allowly"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -28,8 +28,8 @@ verifier = [
 
 [package.metadata]
 requires-dist = [
-    { name = "allowly-receipt-format", marker = "extra == 'dev'", specifier = ">=3.0.0,<4.0.0" },
-    { name = "allowly-receipt-format", marker = "extra == 'verifier'", specifier = ">=3.0.0,<4.0.0" },
+    { name = "allowly-receipt-format", marker = "extra == 'dev'", specifier = ">=4.0.0,<5.0.0" },
+    { name = "allowly-receipt-format", marker = "extra == 'verifier'", specifier = ">=4.0.0,<5.0.0" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=42" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=2.9,<3" },
     { name = "fastmcp", marker = "extra == 'fastmcp'", specifier = ">=2.9,<3" },
@@ -42,14 +42,14 @@ provides-extras = ["fastmcp", "verifier", "dev"]
 
 [[package]]
 name = "allowly-receipt-format"
-version = "3.0.0"
+version = "4.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0c/5a/fb1023f3c4419ea07d130db2f13122305ba9027e8d65d17da9db0654ea03/allowly_receipt_format-3.0.0.tar.gz", hash = "sha256:f34519f78d00e094e5c1763ff745db50e7701a3c5eb878745a7a63ea8a579bad", size = 13249, upload-time = "2026-07-23T02:57:31.751Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/86/4d/cd30ade1b597ee0ee1bdbfea33fd6f77c294999f4cc42504152690df13e2/allowly_receipt_format-4.0.0.tar.gz", hash = "sha256:27cd96a06edea1a23c340d9015ef1c0434b6dc1d4b2d7b56653d18b3991d6eec", size = 18059, upload-time = "2026-08-02T07:14:52.971Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f5/e5/3637697a384c6adbe38729b3b31ae8629635938a8e361c0ce7d87fb9c16f/allowly_receipt_format-3.0.0-py3-none-any.whl", hash = "sha256:98456d2abb2993069f52d9b1b06e7e9f64ebab53e6332cd7cf429e5eb73e6b28", size = 12676, upload-time = "2026-07-23T02:57:30.495Z" },
+    { url = "https://files.pythonhosted.org/packages/60/d9/45545ccdda5810e31d907bb5d26d5c4953864425a79b94708b61fccd23fe/allowly_receipt_format-4.0.0-py3-none-any.whl", hash = "sha256:18a038b9ffe9be25c63bd2f39b1f26fffbebb89e43622de9d2b479b06ea14b93", size = 16630, upload-time = "2026-08-02T07:14:51.615Z" },
 ]
 
 [[package]]
