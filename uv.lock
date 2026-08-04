@@ -42,14 +42,14 @@ provides-extras = ["fastmcp", "verifier", "dev"]
 
 [[package]]
 name = "allowly-receipt-format"
-version = "4.0.0"
+version = "4.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/86/4d/cd30ade1b597ee0ee1bdbfea33fd6f77c294999f4cc42504152690df13e2/allowly_receipt_format-4.0.0.tar.gz", hash = "sha256:27cd96a06edea1a23c340d9015ef1c0434b6dc1d4b2d7b56653d18b3991d6eec", size = 18059, upload-time = "2026-08-02T07:14:52.971Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/e3e98e0aeaa288b730047219ec3a92b60b725e1972ecdfe0ed7eac216d1f/allowly_receipt_format-4.0.1.tar.gz", hash = "sha256:952d6570bfc4b9d367157f72db4653add3284930a76fac322c0adbac46dc46ff", size = 18063, upload-time = "2026-08-04T21:55:08.179Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/60/d9/45545ccdda5810e31d907bb5d26d5c4953864425a79b94708b61fccd23fe/allowly_receipt_format-4.0.0-py3-none-any.whl", hash = "sha256:18a038b9ffe9be25c63bd2f39b1f26fffbebb89e43622de9d2b479b06ea14b93", size = 16630, upload-time = "2026-08-02T07:14:51.615Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/41/fc6bcf26f3735dc1e985abed0ffdf42d5a8bd7cec87565c026ac03364d38/allowly_receipt_format-4.0.1-py3-none-any.whl", hash = "sha256:557cb4c9e2ceffb705626815716227fa66cc792aa33b9a289c4e9a73e53469c5", size = 16633, upload-time = "2026-08-04T21:55:07.146Z" },
 ]
 
 [[package]]
