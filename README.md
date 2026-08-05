@@ -90,7 +90,7 @@ integration examples honest and makes SDK gaps visible early.
 ## Offline receipt verification
 
 Install `allowly[verifier]` to verify signed receipts locally. The extra uses
-`allowly-receipt-format>=4.0.0,<5.0.0`, which verifies receipt wire format 4 (the package major equals the wire format). `alg` and
+`allowly-receipt-format>=4.0.1,<5.0.0`, which verifies receipt wire format 4 (the package major equals the wire format). `alg` and
 `key_id` are signed top-level fields, and `signature` is the base64url string.
 
 Wire format 4 also supports daily `receipt.checkpoint` commitments. For an

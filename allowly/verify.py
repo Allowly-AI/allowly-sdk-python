@@ -35,7 +35,7 @@ def _import_verifier():
         return verify_receipt, load_keys_from_json, VerificationError, PublicKey
     except ImportError as exc:
         raise ImportError(
-            "Receipt verification requires allowly-receipt-format>=4.0.0. "
+            "Receipt verification requires allowly-receipt-format>=4.0.1. "
             "Install the verifier extra: pip install 'allowly[verifier]'"
         ) from exc
 
