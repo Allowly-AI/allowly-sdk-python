@@ -377,15 +377,12 @@ class _AuthorizationsResource:
         authorization_id: str,
         *,
         revoked_by: str | None = None,
-        superseded_by: str | None = None,
         notes: str | None = None,
         idempotency_key: str | None = None,
     ) -> AuthorizationRevokeResponse:
         body: dict[str, Any] = {}
         if revoked_by:
             body["revoked_by"] = revoked_by
-        if superseded_by:
-            body["superseded_by"] = superseded_by
         if notes:
             body["notes"] = notes
         headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
