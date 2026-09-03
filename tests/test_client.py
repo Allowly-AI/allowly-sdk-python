@@ -1295,18 +1295,9 @@ async def test_authorizations_revoke_requires_revoked_confirmations(client):
         await client.authorizations.revoke("auth_123")
 
 
-@respx.mock
-@pytest.mark.asyncio
-async def test_authorizations_revoke_with_superseded_by(client):
-    route = respx.delete(f"{BASE}/v1/authorizations/auth_123").mock(return_value=httpx.Response(200, json={
-        "authorization_id": "auth_123",
-        "revoked_at": "2026-05-01T09:00:00Z",
-        "receipt": PENDING_RECEIPT,
-        "revoked_confirmations": [],
-    }))
-    await client.authorizations.revoke("auth_123", superseded_by="auth_456")
-    body = json.loads(route.calls[0].request.content)
-    assert body["superseded_by"] == "auth_456"
+def test_authorizations_revoke_rejects_superseded_by(client):
+    with pytest.raises(TypeError, match="unexpected keyword argument 'superseded_by'"):
+        client.authorizations.revoke("auth_123", superseded_by="auth_456")
 
 
 @respx.mock
