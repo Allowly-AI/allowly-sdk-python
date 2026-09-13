@@ -338,22 +338,33 @@ class Allowly:
             raise AllowlyProtocolError("seal response profile does not match the request")
         if _require_str(raw, "record_sha256") != record_sha256:
             raise AllowlyProtocolError("seal response record_sha256 does not match the request")
+        workspace_id = _require_str(raw, "workspace_id")
+        if not workspace_id:
+            raise AllowlyProtocolError("seal response workspace_id must be non-empty")
         decision = _require_str(raw, "decision")
         if decision != "allow":
             raise AllowlyProtocolError("seal response decision must be 'allow'")
         reason = _require_str(raw, "reason")
         envelope = _parse_receipt_envelope(raw.get("receipt"))
-        receipt = (
-            envelope.receipt
-            if isinstance(envelope, ReceiptEnvelopeSigned)
-            else await self.receipts.fetch_signed(
+        pending_receipt_id = (
+            None if isinstance(envelope, ReceiptEnvelopeSigned) else envelope.receipt_id
+        )
+        receipt = envelope.receipt if isinstance(envelope, ReceiptEnvelopeSigned) else (
+            await self.receipts.fetch_signed(
                 envelope.receipt_id,
                 poll_interval=poll_interval,
                 timeout=timeout,
             )
         )
+        _validate_seal_receipt(
+            receipt,
+            record_sha256=record_sha256,
+            expected_workspace_id=workspace_id,
+            expected_receipt_id=pending_receipt_id,
+        )
         return SealResponse(
             request_id=request_id,
+            workspace_id=workspace_id,
             profile=SEAL_PROFILE,
             record_sha256=record_sha256,
             decision="allow",
@@ -648,6 +659,10 @@ class _ReceiptsResource:
                     retry_delay = exc.retry_after_seconds
             else:
                 if isinstance(envelope, ReceiptEnvelopeSigned):
+                    if _require_str(envelope.receipt, "receipt_id") != receipt_id:
+                        raise AllowlyProtocolError(
+                            "signed receipt_id does not match the requested receipt"
+                        )
                     return envelope.receipt
             await asyncio.sleep(
                 min(retry_delay, max(0, deadline - loop.time()))
@@ -791,6 +806,43 @@ def _require_dict(value: Any, name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise AllowlyProtocolError(f"{name} must be an object")
     return value
+
+
+def _validate_seal_receipt(
+    receipt: dict[str, Any],
+    *,
+    record_sha256: str,
+    expected_workspace_id: str,
+    expected_receipt_id: str | None,
+) -> None:
+    from .verify import SEAL_ACTION, SEAL_AGENT_ID, SEAL_PROFILE, SEAL_USER_ID
+
+    receipt_id = _require_str(receipt, "receipt_id")
+    if not receipt_id:
+        raise AllowlyProtocolError("seal receipt_id must be non-empty")
+    if expected_receipt_id is not None and receipt_id != expected_receipt_id:
+        raise AllowlyProtocolError("seal receipt_id does not match the pending receipt")
+    expected_fields = {
+        "schema_version": "4",
+        "action": SEAL_ACTION,
+        "decision": "allow",
+        "agent_id": SEAL_AGENT_ID,
+        "user_id": SEAL_USER_ID,
+        "alg": "Ed25519",
+    }
+    for key, expected in expected_fields.items():
+        if _require_str(receipt, key) != expected:
+            raise AllowlyProtocolError(f"seal receipt {key} does not match the request")
+    if _require_str(receipt, "workspace_id") != expected_workspace_id:
+        raise AllowlyProtocolError("seal receipt workspace_id does not match the response")
+    for key in ("key_id", "signature"):
+        if not _require_str(receipt, key):
+            raise AllowlyProtocolError(f"seal receipt {key} must be non-empty")
+    context = _require_dict(receipt.get("context"), "seal receipt context")
+    if _require_str(context, "seal_profile") != SEAL_PROFILE:
+        raise AllowlyProtocolError("seal receipt profile does not match the request")
+    if _require_str(context, "record_sha256") != record_sha256:
+        raise AllowlyProtocolError("seal receipt record_sha256 does not match the request")
 
 
 def _require_str(raw: dict[str, Any], key: str) -> str:

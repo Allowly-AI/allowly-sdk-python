@@ -84,8 +84,9 @@ Use `seal_value(parsed_json, ...)` only when the original JSON text is no
 longer available. A parsed value cannot reveal duplicate object names or the
 original number spelling, so `seal` is the safer input boundary.
 
-To verify later, load keys from caller-trusted workspace configuration and
-keep the two checks separate:
+To verify later, preserve the authenticated `workspace_id` response and a key
+document fetched from Allowly through an authenticated or previously trusted
+source. Keep the signature and record checks separate:
 
 ```python
 from allowly.verify import load_keys_from_json, verify_seal_json
@@ -94,7 +95,7 @@ result = verify_seal_json(
     raw_json,
     sealed.receipt,
     load_keys_from_json(keys_doc),
-    expected_workspace_id=configured_workspace_id,
+    expected_workspace_id=sealed.workspace_id,
     trusted_key_fingerprints=configured_key_fingerprints,
 )
 assert result.signature_verified
