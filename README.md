@@ -62,6 +62,45 @@ Allowly(
 
 The token is only sent when provided; never set it for the public API.
 
+## Seal a JSON record
+
+`seal` hashes strict raw JSON in your process, sends only its digest to Allowly,
+and waits for the full signed receipt. Generate and persist `request_id` in
+your workflow so a retry recovers the same seal:
+
+```python
+import uuid
+
+request_id = str(uuid.uuid4())
+sealed = await allowly.seal(
+    raw_json,
+    request_id=request_id,
+    metadata={"source": "invoice-workflow"},
+)
+save_beside_record(sealed.receipt)
+```
+
+Use `seal_value(parsed_json, ...)` only when the original JSON text is no
+longer available. A parsed value cannot reveal duplicate object names or the
+original number spelling, so `seal` is the safer input boundary.
+
+To verify later, load keys from caller-trusted workspace configuration and
+keep the two checks separate:
+
+```python
+from allowly.verify import load_keys_from_json, verify_seal_json
+
+result = verify_seal_json(
+    raw_json,
+    sealed.receipt,
+    load_keys_from_json(keys_doc),
+    expected_workspace_id=configured_workspace_id,
+    trusted_key_fingerprints=configured_key_fingerprints,
+)
+assert result.signature_verified
+assert result.record_matches
+```
+
 Inline authorization creation requires `agent_id`, `actions`, and `expires_at`.
 Policy-based creation uses `policy_id` instead and rejects inline action or
 decision-override fields.
@@ -89,8 +128,9 @@ integration examples honest and makes SDK gaps visible early.
 
 ## Offline receipt verification
 
-Install `allowly[verifier]` to verify signed receipts locally. The extra uses
-`allowly-receipt-format>=4.0.1,<5.0.0`, which verifies receipt wire format 4 (the package major equals the wire format). `alg` and
+Install `allowly[verifier]` to hash SEAL records and verify signed receipts
+locally. The extra uses `allowly-receipt-format>=4.1.0,<5.0.0`, which verifies
+receipt wire format 4 (the package major equals the wire format). `alg` and
 `key_id` are signed top-level fields, and `signature` is the base64url string.
 
 Wire format 4 also supports daily `receipt.checkpoint` commitments. For an

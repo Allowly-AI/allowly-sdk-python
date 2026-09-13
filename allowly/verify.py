@@ -27,20 +27,51 @@ from urllib.parse import quote, urlparse
 def _import_verifier():
     try:
         from allowly_receipt_format import (
+            SEAL_PROFILE,
+            SealInputError,
+            SealVerificationResult,
+            hash_seal_json,
+            hash_seal_value,
             verify_receipt,
+            verify_seal_json,
+            verify_seal_value,
             load_keys_from_json,
             VerificationError,
             PublicKey,
         )
-        return verify_receipt, load_keys_from_json, VerificationError, PublicKey
+        return (
+            verify_receipt,
+            verify_seal_json,
+            verify_seal_value,
+            hash_seal_json,
+            hash_seal_value,
+            load_keys_from_json,
+            VerificationError,
+            PublicKey,
+            SealInputError,
+            SealVerificationResult,
+            SEAL_PROFILE,
+        )
     except ImportError as exc:
         raise ImportError(
-            "Receipt verification requires allowly-receipt-format>=4.0.1. "
+            "SEAL and receipt verification require allowly-receipt-format>=4.1.0. "
             "Install the verifier extra: pip install 'allowly[verifier]'"
         ) from exc
 
 
-_verify_receipt, _load_keys_from_json, VerificationError, PublicKey = _import_verifier()
+(
+    _verify_receipt,
+    _verify_seal_json,
+    _verify_seal_value,
+    _hash_seal_json,
+    _hash_seal_value,
+    _load_keys_from_json,
+    VerificationError,
+    PublicKey,
+    SealInputError,
+    SealVerificationResult,
+    SEAL_PROFILE,
+) = _import_verifier()
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"
 DEFAULT_KEYS_DOC_CACHE_TTL_SECONDS = 300
@@ -61,6 +92,54 @@ def verify_receipt(
         now=now,
         expected_workspace_id=expected_workspace_id,
         trusted_key_fingerprints=trusted_key_fingerprints,
+    )
+
+
+def hash_seal_json(raw_json: str | bytes) -> str:
+    """Hash strict raw JSON locally under the versioned SEAL profile."""
+    return _hash_seal_json(raw_json)
+
+
+def hash_seal_value(record: Any) -> str:
+    """Hash a parsed JSON value; raw duplicate names and spellings are unavailable."""
+    return _hash_seal_value(record)
+
+
+def verify_seal_json(
+    raw_json: str | bytes,
+    receipt: dict[str, Any],
+    public_keys: list[PublicKey],
+    *,
+    expected_workspace_id: str,
+    trusted_key_fingerprints: set[str] | frozenset[str] | None = None,
+    now: datetime | None = None,
+) -> SealVerificationResult:
+    return _verify_seal_json(
+        raw_json,
+        receipt,
+        public_keys,
+        expected_workspace_id=expected_workspace_id,
+        trusted_key_fingerprints=trusted_key_fingerprints,
+        now=now,
+    )
+
+
+def verify_seal_value(
+    record: Any,
+    receipt: dict[str, Any],
+    public_keys: list[PublicKey],
+    *,
+    expected_workspace_id: str,
+    trusted_key_fingerprints: set[str] | frozenset[str] | None = None,
+    now: datetime | None = None,
+) -> SealVerificationResult:
+    return _verify_seal_value(
+        record,
+        receipt,
+        public_keys,
+        expected_workspace_id=expected_workspace_id,
+        trusted_key_fingerprints=trusted_key_fingerprints,
+        now=now,
     )
 
 
@@ -148,9 +227,16 @@ def clear_keys_doc_cache() -> None:
 
 __all__ = [
     "verify_receipt",
+    "verify_seal_json",
+    "verify_seal_value",
+    "hash_seal_json",
+    "hash_seal_value",
     "load_keys_from_json",
     "fetch_keys_doc",
     "clear_keys_doc_cache",
     "VerificationError",
     "PublicKey",
+    "SealInputError",
+    "SealVerificationResult",
+    "SEAL_PROFILE",
 ]

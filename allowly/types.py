@@ -26,6 +26,16 @@ ReceiptEnvelope = Union[ReceiptEnvelopePending, ReceiptEnvelopeSigned]
 
 
 @dataclass
+class SealResponse:
+    request_id: str
+    profile: str
+    record_sha256: str
+    decision: Literal["allow"]
+    reason: str
+    receipt: dict[str, Any]
+
+
+@dataclass
 class BudgetInfo:
     limit_micros: int
     spent_micros: int

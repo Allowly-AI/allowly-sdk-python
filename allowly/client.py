@@ -22,6 +22,7 @@ from .types import (
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
     ReceiptEnvelope,
+    SealResponse,
     ActionEntry,
     FallbackMode,
     ActionCheckResultAllow,
@@ -260,6 +261,105 @@ class Allowly:
             headers=headers,
         )
         return _parse_budget_settlement_response(raw)
+
+    async def seal(
+        self,
+        record_json: str | bytes,
+        *,
+        request_id: str,
+        metadata: dict[str, str] | None = None,
+        poll_interval: float = 1.0,
+        timeout: float = 120.0,
+    ) -> SealResponse:
+        """Hash strict raw JSON locally, create a SEAL, and wait for its receipt."""
+        from .verify import hash_seal_json
+
+        return await self._seal_digest(
+            hash_seal_json(record_json),
+            request_id=request_id,
+            metadata=metadata,
+            poll_interval=poll_interval,
+            timeout=timeout,
+        )
+
+    async def seal_value(
+        self,
+        record: Any,
+        *,
+        request_id: str,
+        metadata: dict[str, str] | None = None,
+        poll_interval: float = 1.0,
+        timeout: float = 120.0,
+    ) -> SealResponse:
+        """Seal a parsed JSON value after duplicate keys and spellings are lost."""
+        from .verify import hash_seal_value
+
+        return await self._seal_digest(
+            hash_seal_value(record),
+            request_id=request_id,
+            metadata=metadata,
+            poll_interval=poll_interval,
+            timeout=timeout,
+        )
+
+    async def _seal_digest(
+        self,
+        record_sha256: str,
+        *,
+        request_id: str,
+        metadata: dict[str, str] | None,
+        poll_interval: float,
+        timeout: float,
+    ) -> SealResponse:
+        from .verify import SEAL_PROFILE
+
+        if not isinstance(request_id, str) or not request_id:
+            raise ValueError("request_id must be a non-empty string")
+        if poll_interval <= 0:
+            raise ValueError("poll_interval must be positive")
+        if timeout <= 0:
+            raise ValueError("timeout must be positive")
+        clean_metadata = _validate_seal_metadata(metadata)
+        body: dict[str, Any] = {
+            "request_id": request_id,
+            "profile": SEAL_PROFILE,
+            "record_sha256": record_sha256,
+        }
+        if clean_metadata is not None:
+            body["metadata"] = clean_metadata
+
+        raw = _require_dict(
+            await self._request("POST", "/v1/seal", json=body),
+            "seal response",
+        )
+        if _require_str(raw, "request_id") != request_id:
+            raise AllowlyProtocolError("seal response request_id does not match the request")
+        if _require_str(raw, "profile") != SEAL_PROFILE:
+            raise AllowlyProtocolError("seal response profile does not match the request")
+        if _require_str(raw, "record_sha256") != record_sha256:
+            raise AllowlyProtocolError("seal response record_sha256 does not match the request")
+        decision = _require_str(raw, "decision")
+        if decision != "allow":
+            raise AllowlyProtocolError("seal response decision must be 'allow'")
+        reason = _require_str(raw, "reason")
+        envelope = _parse_receipt_envelope(raw.get("receipt"))
+        receipt = (
+            envelope.receipt
+            if isinstance(envelope, ReceiptEnvelopeSigned)
+            else await self.receipts.fetch_signed(
+                envelope.receipt_id,
+                poll_interval=poll_interval,
+                timeout=timeout,
+            )
+        )
+        return SealResponse(
+            request_id=request_id,
+            profile=SEAL_PROFILE,
+            record_sha256=record_sha256,
+            decision="allow",
+            reason=reason,
+            receipt=receipt,
+        )
 
 
 class _AuthorizationsResource:
@@ -577,6 +677,17 @@ def _parse_receipt_envelope(raw: Any) -> ReceiptEnvelope:
             receipt=_require_dict(raw.get("receipt"), "signed receipt"),
         )
     raise AllowlyProtocolError("receipt status must be 'pending' or 'signed'")
+
+
+def _validate_seal_metadata(metadata: dict[str, str] | None) -> dict[str, str] | None:
+    if metadata is None:
+        return None
+    if not isinstance(metadata, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str)
+        for key, value in metadata.items()
+    ):
+        raise ValueError("metadata must be an object of string values")
+    return dict(metadata)
 
 
 def _validate_fallback_mode(mode: str) -> FallbackMode:
