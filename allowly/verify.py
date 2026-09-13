@@ -24,63 +24,28 @@ from urllib.parse import quote, urlparse
 # allowly-receipt-format 4.x (import path allowly_receipt_format). It ships as an
 # optional extra so the core SDK stays dependency-light:
 #     pip install 'allowly[verifier]'
-def _import_verifier():
-    try:
-        from allowly_receipt_format import (
-            SEAL_ACTION,
-            SEAL_AGENT_ID,
-            SEAL_PROFILE,
-            SEAL_USER_ID,
-            SealInputError,
-            SealVerificationResult,
-            hash_seal_json,
-            hash_seal_value,
-            verify_receipt,
-            verify_seal_json,
-            verify_seal_value,
-            load_keys_from_json,
-            VerificationError,
-            PublicKey,
-        )
-        return (
-            verify_receipt,
-            verify_seal_json,
-            verify_seal_value,
-            hash_seal_json,
-            hash_seal_value,
-            load_keys_from_json,
-            VerificationError,
-            PublicKey,
-            SealInputError,
-            SealVerificationResult,
-            SEAL_ACTION,
-            SEAL_AGENT_ID,
-            SEAL_PROFILE,
-            SEAL_USER_ID,
-        )
-    except ImportError as exc:
-        raise ImportError(
-            "SEAL and receipt verification require allowly-receipt-format>=4.1.0. "
-            "Install the verifier extra: pip install 'allowly[verifier]'"
-        ) from exc
-
-
-(
-    _verify_receipt,
-    _verify_seal_json,
-    _verify_seal_value,
-    _hash_seal_json,
-    _hash_seal_value,
-    _load_keys_from_json,
-    VerificationError,
-    PublicKey,
-    SealInputError,
-    SealVerificationResult,
-    SEAL_ACTION,
-    SEAL_AGENT_ID,
-    SEAL_PROFILE,
-    SEAL_USER_ID,
-) = _import_verifier()
+try:
+    from allowly_receipt_format import (
+        SEAL_ACTION,
+        SEAL_AGENT_ID,
+        SEAL_PROFILE,
+        SEAL_USER_ID,
+        SealInputError,
+        SealVerificationResult,
+        hash_seal_json,
+        hash_seal_value,
+        verify_receipt as _verify_receipt,
+        verify_seal_json as _verify_seal_json,
+        verify_seal_value as _verify_seal_value,
+        load_keys_from_json as _load_keys_from_json,
+        VerificationError,
+        PublicKey,
+    )
+except ImportError as exc:
+    raise ImportError(
+        "SEAL and receipt verification require allowly-receipt-format>=4.1.0. "
+        "Install the verifier extra: pip install 'allowly[verifier]'"
+    ) from exc
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"
 DEFAULT_KEYS_DOC_CACHE_TTL_SECONDS = 300
@@ -102,16 +67,6 @@ def verify_receipt(
         expected_workspace_id=expected_workspace_id,
         trusted_key_fingerprints=trusted_key_fingerprints,
     )
-
-
-def hash_seal_json(raw_json: str | bytes) -> str:
-    """Hash strict raw JSON locally under the versioned SEAL profile."""
-    return _hash_seal_json(raw_json)
-
-
-def hash_seal_value(record: Any) -> str:
-    """Hash a parsed JSON value; raw duplicate names and spellings are unavailable."""
-    return _hash_seal_value(record)
 
 
 def verify_seal_json(
