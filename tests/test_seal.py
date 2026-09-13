@@ -31,7 +31,22 @@ PENDING_RECEIPT = {
 SIGNED_RECEIPT = {
     "schema_version": "4",
     "receipt_id": "rcp_abc",
+    "workspace_id": "ws_test",
+    "issued_at": "2026-04-21T14:32:17.482Z",
+    "decision": "allow",
+    "reason": "authorization_granted_action_active",
+    "user_id": "allowly:seal",
+    "agent_id": "allowly.seal",
     "action": "record.seal",
+    "resource": None,
+    "context": {
+        "seal_profile": "allowly.seal.jcs-sha256.v1",
+        "record_sha256": RECORD_SHA256,
+    },
+    "authorization_id": "auth_seal",
+    "engine_version": "2026-04-17.1",
+    "alg": "Ed25519",
+    "key_id": "test-key/v1",
     "signature": "signature",
 }
 
@@ -47,6 +62,7 @@ async def test_seal_hashes_locally_posts_only_digest_and_polls() -> None:
             200,
             json={
                 "request_id": "req_123",
+                "workspace_id": "ws_test",
                 "profile": SEAL_PROFILE,
                 "record_sha256": RECORD_SHA256,
                 "decision": "allow",
@@ -71,6 +87,7 @@ async def test_seal_hashes_locally_posts_only_digest_and_polls() -> None:
         )
 
     assert result.record_sha256 == RECORD_SHA256
+    assert result.workspace_id == "ws_test"
     assert result.receipt == SIGNED_RECEIPT
     assert posted == {
         "request_id": "req_123",
@@ -90,6 +107,7 @@ async def test_seal_value_returns_immediately_signed_receipt() -> None:
             200,
             json={
                 "request_id": "req_value",
+                "workspace_id": "ws_test",
                 "profile": SEAL_PROFILE,
                 "record_sha256": RECORD_SHA256,
                 "decision": "allow",
@@ -124,6 +142,7 @@ async def test_seal_rejects_response_binding_mismatch() -> None:
             200,
             json={
                 "request_id": "req_other",
+                "workspace_id": "ws_test",
                 "profile": SEAL_PROFILE,
                 "record_sha256": RECORD_SHA256,
                 "decision": "allow",
@@ -135,6 +154,88 @@ async def test_seal_rejects_response_binding_mismatch() -> None:
     async with Allowly(api_key="test-key", base_url=BASE) as client:
         with pytest.raises(AllowlyProtocolError, match="request_id does not match"):
             await client.seal('{"a":1,"b":2}', request_id="req_expected")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_seal_rejects_receipt_from_another_workspace() -> None:
+    respx.post(f"{BASE}/v1/seal").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "request_id": "req_workspace",
+                "workspace_id": "ws_other",
+                "profile": SEAL_PROFILE,
+                "record_sha256": RECORD_SHA256,
+                "decision": "allow",
+                "reason": "authorization_granted_action_active",
+                "receipt": {"status": "signed", "receipt": SIGNED_RECEIPT},
+            },
+        )
+    )
+    async with Allowly(api_key="test-key", base_url=BASE) as client:
+        with pytest.raises(AllowlyProtocolError, match="workspace_id"):
+            await client.seal('{"a":1,"b":2}', request_id="req_workspace")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_seal_rejects_unrelated_signed_receipt() -> None:
+    respx.post(f"{BASE}/v1/seal").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "request_id": "req_unrelated",
+                "workspace_id": "ws_test",
+                "profile": SEAL_PROFILE,
+                "record_sha256": RECORD_SHA256,
+                "decision": "allow",
+                "reason": "authorization_granted_action_active",
+                "receipt": {
+                    "status": "signed",
+                    "receipt": {**SIGNED_RECEIPT, "action": "record.publish"},
+                },
+            },
+        )
+    )
+    async with Allowly(api_key="test-key", base_url=BASE) as client:
+        with pytest.raises(AllowlyProtocolError, match="action does not match"):
+            await client.seal('{"a":1,"b":2}', request_id="req_unrelated")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_seal_poll_rejects_swapped_receipt_id() -> None:
+    respx.post(f"{BASE}/v1/seal").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "request_id": "req_swap",
+                "workspace_id": "ws_test",
+                "profile": SEAL_PROFILE,
+                "record_sha256": RECORD_SHA256,
+                "decision": "allow",
+                "reason": "authorization_granted_action_active",
+                "receipt": PENDING_RECEIPT,
+            },
+        )
+    )
+    respx.get(f"{BASE}/v1/receipts/rcp_abc").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "status": "signed",
+                "receipt": {**SIGNED_RECEIPT, "receipt_id": "rcp_other"},
+            },
+        )
+    )
+    async with Allowly(api_key="test-key", base_url=BASE) as client:
+        with pytest.raises(AllowlyProtocolError, match="receipt_id"):
+            await client.seal(
+                '{"a":1,"b":2}',
+                request_id="req_swap",
+                poll_interval=0.001,
+            )
 
 
 def _b64url(value: bytes) -> str:

@@ -27,7 +27,10 @@ from urllib.parse import quote, urlparse
 def _import_verifier():
     try:
         from allowly_receipt_format import (
+            SEAL_ACTION,
+            SEAL_AGENT_ID,
             SEAL_PROFILE,
+            SEAL_USER_ID,
             SealInputError,
             SealVerificationResult,
             hash_seal_json,
@@ -50,7 +53,10 @@ def _import_verifier():
             PublicKey,
             SealInputError,
             SealVerificationResult,
+            SEAL_ACTION,
+            SEAL_AGENT_ID,
             SEAL_PROFILE,
+            SEAL_USER_ID,
         )
     except ImportError as exc:
         raise ImportError(
@@ -70,7 +76,10 @@ def _import_verifier():
     PublicKey,
     SealInputError,
     SealVerificationResult,
+    SEAL_ACTION,
+    SEAL_AGENT_ID,
     SEAL_PROFILE,
+    SEAL_USER_ID,
 ) = _import_verifier()
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"

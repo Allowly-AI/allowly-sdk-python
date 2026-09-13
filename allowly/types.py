@@ -28,6 +28,7 @@ ReceiptEnvelope = Union[ReceiptEnvelopePending, ReceiptEnvelopeSigned]
 @dataclass
 class SealResponse:
     request_id: str
+    workspace_id: str
     profile: str
     record_sha256: str
     decision: Literal["allow"]
