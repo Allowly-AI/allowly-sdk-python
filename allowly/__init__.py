@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .client import Allowly
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
+from .seal_webhook import SealWebhookClient
 from .types import (
     ActionCheckResult,
     ActionCheckResultAllow,
@@ -25,10 +26,13 @@ from .types import (
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
     SealResponse,
+    SealWebhookDelivery,
+    SealWebhookStatus,
 )
 
 __all__ = [
     "Allowly",
+    "SealWebhookClient",
     "AllowlyAPIError",
     "AllowlyProtocolError",
     "FieldError",
@@ -52,6 +56,8 @@ __all__ = [
     "ReceiptEnvelopePending",
     "ReceiptEnvelopeSigned",
     "SealResponse",
+    "SealWebhookDelivery",
+    "SealWebhookStatus",
     "Decision",
     "FallbackMode",
 ]

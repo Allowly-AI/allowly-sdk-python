@@ -62,7 +62,38 @@ Allowly(
 
 The token is only sent when provided; never set it for the public API.
 
-## Seal a JSON record
+## Send JSON through a private SEAL webhook
+
+Copy the private URL from the dashboard's **SEAL** page. The URL is the only
+credential this client sends; it does not use an ordinary API key.
+
+```python
+import asyncio
+import os
+
+from allowly import SealWebhookClient
+
+
+async def seal_event(raw_json: str, event_id: str):
+    async with SealWebhookClient(os.environ["ALLOWLY_SEAL_WEBHOOK_URL"]) as webhook:
+        delivery = await webhook.send(raw_json, idempotency_key=event_id)
+        while delivery.status in {"received", "signing"}:
+            await asyncio.sleep(1)
+            delivery = await webhook.get_delivery(delivery.attempt_id)
+        if delivery.status != "sealed":
+            raise RuntimeError(delivery.error_code or "SEAL delivery failed")
+        return delivery.receipt, await webhook.get_keys()
+```
+
+The webhook processes your JSON to create a fingerprint; Allowly stores the
+fingerprint and signed receipt. Keep the original record in your workflow.
+Treat the full URL like a password and keep it out of logs, tickets, and source
+control. Regenerating or disabling it stops the old URL. Delivery associations
+and status remain available for 7 days; preserve signed receipts and keys under
+your own retention policy. With no `idempotency_key`, retrying after a lost
+response can create another seal.
+
+## Seal a JSON record with local hashing
 
 `seal` hashes strict raw JSON in your process, sends only its digest to Allowly,
 and waits for the full signed receipt. Generate and persist `request_id` in
