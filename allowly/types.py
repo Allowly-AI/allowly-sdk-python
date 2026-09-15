@@ -45,6 +45,7 @@ class SealWebhookDelivery:
     updated_at: str
     profile: Literal["allowly.seal.jcs-sha256.v1"]
     record_sha256: str | None
+    metadata: dict[str, str] | None
     receipt_id: str | None
     error_code: str | None
     status_url: str

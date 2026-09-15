@@ -20,6 +20,7 @@ def _delivery(**overrides):
         "updated_at": "2026-09-13T12:00:01Z",
         "profile": "allowly.seal.jcs-sha256.v1",
         "record_sha256": "a" * 64,
+        "metadata": None,
         "receipt_id": "rcp_test",
         "error_code": None,
         "status_url": (f"{BASE}/v1/seal/webhooks/deliveries/swd_attempt?token={TOKEN}"),
@@ -35,21 +36,47 @@ def _delivery(**overrides):
 @pytest.mark.asyncio
 async def test_send_posts_exact_json_without_api_key() -> None:
     raw = b'{"event":"created","amount":1.00}'
+    details = {
+        "type": "invoice",
+        "reference": "INV-1042",
+        "statement": "Approved for payment",
+    }
     route = respx.post(WEBHOOK_URL).mock(
-        return_value=httpx.Response(202, json=_delivery())
+        return_value=httpx.Response(202, json=_delivery(metadata=details))
     )
 
     async with SealWebhookClient(WEBHOOK_URL) as webhook:
-        result = await webhook.send(raw, idempotency_key="sender-event-7")
+        result = await webhook.send(
+            raw,
+            idempotency_key="sender-event-7",
+            type="invoice",
+            reference="INV-1042",
+            statement="Approved for payment",
+        )
 
     assert result.attempt_id == "swd_attempt"
     assert result.status == "signing"
+    assert result.metadata == details
     assert route.call_count == 1
     request = route.calls[0].request
     assert request.content == raw
     assert request.headers["content-type"] == "application/json"
     assert request.headers["idempotency-key"] == "sender-event-7"
+    assert request.headers["allowly-seal-type"] == "invoice"
+    assert request.headers["allowly-seal-reference"] == "INV-1042"
+    assert request.headers["allowly-seal-statement"] == "Approved for payment"
     assert "authorization" not in request.headers
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "value",
+    [" leading", "trailing ", "café", "inside\tgap", "x" * 257],
+)
+async def test_send_rejects_invalid_detail_header_values(value: str) -> None:
+    async with SealWebhookClient(WEBHOOK_URL) as webhook:
+        with pytest.raises(ValueError):
+            await webhook.send("{}", reference=value)
 
 
 @respx.mock
@@ -151,6 +178,111 @@ async def test_webhook_rejects_unknown_delivery_status() -> None:
     )
     async with SealWebhookClient(WEBHOOK_URL) as webhook:
         with pytest.raises(AllowlyProtocolError, match="unknown SEAL webhook status"):
+            await webhook.send("{}")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_webhook_defaults_missing_metadata_from_older_runtimes_to_none() -> None:
+    body = _delivery()
+    del body["metadata"]
+    respx.post(WEBHOOK_URL).mock(return_value=httpx.Response(202, json=body))
+
+    async with SealWebhookClient(WEBHOOK_URL) as webhook:
+        delivery = await webhook.send("{}")
+
+    assert delivery.metadata is None
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_webhook_recovers_signed_metadata_when_top_level_is_missing() -> None:
+    signed_metadata = {
+        "type": "invoice",
+        "reference": "INV-1042",
+        "statement": "Approved for payment",
+    }
+    body = _delivery(
+        status="sealed",
+        receipt={
+            "schema_version": "4",
+            "receipt_id": "rcp_test",
+            "workspace_id": "ws_test",
+            "context": {"seal_metadata": signed_metadata},
+        },
+    )
+    del body["metadata"]
+    respx.get(f"{BASE}/v1/seal/webhooks/receipts/rcp_test?token={TOKEN}").mock(
+        return_value=httpx.Response(200, json=body)
+    )
+
+    async with SealWebhookClient(WEBHOOK_URL) as webhook:
+        delivery = await webhook.get_receipt("rcp_test")
+
+    assert delivery.metadata == signed_metadata
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_webhook_rejects_metadata_conflicting_with_signed_receipt() -> None:
+    respx.get(f"{BASE}/v1/seal/webhooks/receipts/rcp_test?token={TOKEN}").mock(
+        return_value=httpx.Response(
+            200,
+            json=_delivery(
+                status="sealed",
+                metadata={"reference": "UNSIGNED"},
+                receipt={
+                    "schema_version": "4",
+                    "receipt_id": "rcp_test",
+                    "workspace_id": "ws_test",
+                    "context": {"seal_metadata": {"reference": "SIGNED"}},
+                },
+            ),
+        )
+    )
+
+    async with SealWebhookClient(WEBHOOK_URL) as webhook:
+        with pytest.raises(AllowlyProtocolError, match="metadata does not match"):
+            await webhook.get_receipt("rcp_test")
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "metadata",
+    [["not-an-object"], {"reference": 42}],
+)
+async def test_webhook_rejects_malformed_signed_metadata(metadata: object) -> None:
+    respx.get(f"{BASE}/v1/seal/webhooks/receipts/rcp_test?token={TOKEN}").mock(
+        return_value=httpx.Response(
+            200,
+            json=_delivery(
+                status="sealed",
+                receipt={
+                    "schema_version": "4",
+                    "receipt_id": "rcp_test",
+                    "workspace_id": "ws_test",
+                    "context": {"seal_metadata": metadata},
+                },
+            ),
+        )
+    )
+
+    async with SealWebhookClient(WEBHOOK_URL) as webhook:
+        with pytest.raises(AllowlyProtocolError, match="signed SEAL receipt metadata"):
+            await webhook.get_receipt("rcp_test")
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("metadata", [["not-an-object"], {"reference": 42}])
+async def test_webhook_rejects_malformed_present_metadata(metadata: object) -> None:
+    respx.post(WEBHOOK_URL).mock(
+        return_value=httpx.Response(202, json=_delivery(metadata=metadata))
+    )
+
+    async with SealWebhookClient(WEBHOOK_URL) as webhook:
+        with pytest.raises(AllowlyProtocolError, match="metadata"):
             await webhook.send("{}")
 
 

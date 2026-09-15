@@ -76,7 +76,13 @@ from allowly import SealWebhookClient
 
 async def seal_event(raw_json: str, event_id: str):
     async with SealWebhookClient(os.environ["ALLOWLY_SEAL_WEBHOOK_URL"]) as webhook:
-        delivery = await webhook.send(raw_json, idempotency_key=event_id)
+        delivery = await webhook.send(
+            raw_json,
+            idempotency_key=event_id,
+            type="invoice",
+            reference="INV-1042",
+            statement="Approved for payment",
+        )
         while delivery.status in {"received", "signing"}:
             await asyncio.sleep(1)
             delivery = await webhook.get_delivery(delivery.attempt_id)
@@ -87,6 +93,12 @@ async def seal_event(raw_json: str, event_id: str):
 
 The webhook processes your JSON to create a fingerprint; Allowly stores the
 fingerprint and signed receipt. Keep the original record in your workflow.
+Receipt details are sent in the three explicit `Allowly-Seal-*` headers. Their
+values must use printable ASCII, may contain interior spaces, and must not have
+leading or trailing whitespace. The client rejects invalid values instead of
+changing them. Direct API metadata still supports its existing Unicode values.
+When a signed receipt is present, the client returns its signed metadata and
+rejects a conflicting top-level delivery projection.
 Treat the full URL like a password and keep it out of logs, tickets, and source
 control. Regenerating or disabling it stops the old URL. Delivery associations
 and status remain available for 7 days; preserve signed receipts and keys under
