@@ -47,13 +47,36 @@ class SealWebhookClient:
         record_json: str | bytes,
         *,
         idempotency_key: str | None = None,
+        type: str | None = None,
+        reference: str | None = None,
+        statement: str | None = None,
     ) -> SealWebhookDelivery:
-        """Send one complete JSON record without an API key."""
+        """Send one complete JSON record and optional signed receipt details."""
         if not isinstance(record_json, (str, bytes)):
             raise TypeError("record_json must be str or bytes")
         headers = {"Content-Type": "application/json"}
         if idempotency_key is not None:
             headers["Idempotency-Key"] = idempotency_key
+        for name, value in (
+            ("Type", type),
+            ("Reference", reference),
+            ("Statement", statement),
+        ):
+            if value is None:
+                continue
+            if not isinstance(value, str):
+                raise TypeError(f"{name.lower()} must be a string")
+            if any(not 0x20 <= ord(character) <= 0x7E for character in value):
+                raise ValueError(
+                    f"{name.lower()} must contain printable ASCII only"
+                )
+            if len(value) > 256:
+                raise ValueError(f"{name.lower()} must be at most 256 characters")
+            if value != value.strip():
+                raise ValueError(
+                    f"{name.lower()} must not contain leading or trailing whitespace"
+                )
+            headers[f"Allowly-Seal-{name}"] = value
         raw = await self._request(
             "POST",
             self._webhook_url,
@@ -188,6 +211,10 @@ def _parse_delivery(value: Any) -> SealWebhookDelivery:
     if profile != _SEAL_PROFILE:
         raise AllowlyProtocolError("SEAL webhook response has an unknown profile")
     receipt = _optional_dict(raw, "receipt")
+    metadata = _optional_metadata(
+        raw.get("metadata"),
+        "SEAL webhook response metadata",
+    )
     receipt_id = _optional_str(raw, "receipt_id")
     workspace_id = _require_str(raw, "workspace_id")
     if receipt is not None:
@@ -197,6 +224,16 @@ def _parse_delivery(value: Any) -> SealWebhookDelivery:
             raise AllowlyProtocolError(
                 "SEAL webhook workspace_id binding does not match"
             )
+        context = _optional_dict(receipt, "context")
+        signed_metadata = _optional_metadata(
+            context.get("seal_metadata") if context is not None else None,
+            "signed SEAL receipt metadata",
+        )
+        if metadata is not None and metadata != signed_metadata:
+            raise AllowlyProtocolError(
+                "SEAL webhook response metadata does not match the signed receipt"
+            )
+        metadata = signed_metadata
     return SealWebhookDelivery(
         attempt_id=_require_str(raw, "attempt_id"),
         workspace_id=workspace_id,
@@ -205,6 +242,7 @@ def _parse_delivery(value: Any) -> SealWebhookDelivery:
         updated_at=_require_str(raw, "updated_at"),
         profile=profile,
         record_sha256=_optional_str(raw, "record_sha256"),
+        metadata=metadata,
         receipt_id=receipt_id,
         error_code=_optional_str(raw, "error_code"),
         status_url=_require_str(raw, "status_url"),
@@ -243,6 +281,18 @@ def _optional_dict(raw: dict[str, Any], key: str) -> dict[str, Any] | None:
     if key not in raw or raw[key] is None:
         return None
     return _require_dict(raw[key], f"SEAL webhook response {key}")
+
+
+def _optional_metadata(value: Any, name: str) -> dict[str, str] | None:
+    if value is None:
+        return None
+    metadata = _require_dict(value, name)
+    if any(
+        type(key) is not str or type(item) is not str
+        for key, item in metadata.items()
+    ):
+        raise AllowlyProtocolError(f"{name} must contain only string values")
+    return cast(dict[str, str], metadata)
 
 
 def _parse_retry_after(value: str | None) -> float | None:
