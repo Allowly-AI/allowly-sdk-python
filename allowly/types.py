@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal, Union
 
-
 Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
+SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed"]
 
 
 @dataclass
@@ -23,6 +23,35 @@ class ReceiptEnvelopeSigned:
 
 
 ReceiptEnvelope = Union[ReceiptEnvelopePending, ReceiptEnvelopeSigned]
+
+
+@dataclass
+class SealResponse:
+    request_id: str
+    workspace_id: str
+    profile: str
+    record_sha256: str
+    decision: Literal["allow"]
+    reason: str
+    receipt: dict[str, Any]
+
+
+@dataclass
+class SealWebhookDelivery:
+    attempt_id: str
+    workspace_id: str
+    status: SealWebhookStatus
+    received_at: str
+    updated_at: str
+    profile: Literal["allowly.seal.jcs-sha256.v1"]
+    record_sha256: str | None
+    metadata: dict[str, str] | None
+    receipt_id: str | None
+    error_code: str | None
+    status_url: str
+    receipt_url: str | None
+    keys_url: str
+    receipt: dict[str, Any] | None
 
 
 @dataclass
