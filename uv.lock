@@ -4,7 +4,7 @@ requires-python = ">=3.10"
 
 [[package]]
 name = "allowly"
-version = "0.4.0"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -28,8 +28,8 @@ verifier = [
 
 [package.metadata]
 requires-dist = [
-    { name = "allowly-receipt-format", marker = "extra == 'dev'", specifier = ">=4.0.1,<5.0.0" },
-    { name = "allowly-receipt-format", marker = "extra == 'verifier'", specifier = ">=4.0.1,<5.0.0" },
+    { name = "allowly-receipt-format", marker = "extra == 'dev'", specifier = ">=4.1.0,<5.0.0" },
+    { name = "allowly-receipt-format", marker = "extra == 'verifier'", specifier = ">=4.1.0,<5.0.0" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=42" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=2.9,<3" },
     { name = "fastmcp", marker = "extra == 'fastmcp'", specifier = ">=2.9,<3" },
@@ -42,14 +42,15 @@ provides-extras = ["fastmcp", "verifier", "dev"]
 
 [[package]]
 name = "allowly-receipt-format"
-version = "4.0.1"
+version = "4.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
+    { name = "rfc8785" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/e3e98e0aeaa288b730047219ec3a92b60b725e1972ecdfe0ed7eac216d1f/allowly_receipt_format-4.0.1.tar.gz", hash = "sha256:952d6570bfc4b9d367157f72db4653add3284930a76fac322c0adbac46dc46ff", size = 18063, upload-time = "2026-08-04T21:55:08.179Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c4/0d/70db1203a2822d2214b8a7fe28929d8a36c42cce1fa7151e760b05bebc13/allowly_receipt_format-4.1.0.tar.gz", hash = "sha256:dc1afccb025ea119cb11a685216b7e45205a3b11c4154724e301847b9d479845", size = 25381, upload-time = "2026-09-16T19:20:29.342Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/41/fc6bcf26f3735dc1e985abed0ffdf42d5a8bd7cec87565c026ac03364d38/allowly_receipt_format-4.0.1-py3-none-any.whl", hash = "sha256:557cb4c9e2ceffb705626815716227fa66cc792aa33b9a289c4e9a73e53469c5", size = 16633, upload-time = "2026-08-04T21:55:07.146Z" },
+    { url = "https://files.pythonhosted.org/packages/06/e6/be808c8bd121843eb623414b3c3d49ced38c84c44695691b9bd8104d4235/allowly_receipt_format-4.1.0-py3-none-any.whl", hash = "sha256:23f1bbe3d14cfc7d2abbca2b0ade8bf386101961bbe2c59517c0f54a03642c5c", size = 24742, upload-time = "2026-09-16T19:20:27.839Z" },
 ]
 
 [[package]]
@@ -1323,6 +1324,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/43/98/4e55c9c486404ec12373708d015ebce157966965a5ebe7f28ff2c784d41b/respx-0.23.1.tar.gz", hash = "sha256:242dcc6ce6b5b9bf621f5870c82a63997e8e82bc7c947f9ffe272b8f3dd5a780", size = 29243, upload-time = "2026-04-08T14:37:16.008Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1d/4a/221da6ca167db45693d8d26c7dc79ccfc978a440251bf6721c9aaf251ac0/respx-0.23.1-py2.py3-none-any.whl", hash = "sha256:b18004b029935384bccfa6d7d9d74b4ec9af73a081cc28600fffc0447f4b8c1a", size = 25557, upload-time = "2026-04-08T14:37:14.613Z" },
+]
+
+[[package]]
+name = "rfc8785"
+version = "0.1.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/2f/fa1d2e740c490191b572d33dbca5daa180cb423c24396b856f5886371d8b/rfc8785-0.1.4.tar.gz", hash = "sha256:e545841329fe0eee4f6a3b44e7034343100c12b4ec566dc06ca9735681deb4da", size = 14321, upload-time = "2024-09-27T16:33:31.206Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/78/119878110660b2ad709888c8a1614fce7e2fab39080ab960656dc8605bf6/rfc8785-0.1.4-py3-none-any.whl", hash = "sha256:520d690b448ecf0703691c76e1a34a24ddcd4fc5bc41d589cb7c58ec651bcd48", size = 9240, upload-time = "2024-09-27T16:33:29.683Z" },
 ]
 
 [[package]]
