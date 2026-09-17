@@ -1,4 +1,4 @@
-"""Allowly middleware for FastMCP 2.x servers.
+"""Allowly middleware for FastMCP 3.x servers.
 
 Usage:
     from fastmcp import FastMCP
@@ -6,7 +6,7 @@ Usage:
     mcp = FastMCP("my-server")
     mcp.add_middleware(AllowlyMCPMiddleware(
         api_key="allowly_l1_s001_...",
-        user_id_fn=lambda context: context.fastmcp_context.session.user_id,
+        user_id_fn=trusted_user_id,
         authorization_id_fn=lambda user_id: db.get_authorization_id(user_id),
     ))
 """
@@ -19,7 +19,7 @@ from typing import Any, Awaitable, Callable, Optional, Union
 import mcp.types as mt
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 
 from allowly.client import Allowly
 
