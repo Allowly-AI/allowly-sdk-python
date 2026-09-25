@@ -6,6 +6,14 @@ from typing import Any, Literal, Union
 Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
 SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed"]
+ExecutionStatus = Literal[
+    "denied",
+    "confirmation_required",
+    "escalation_required",
+    "succeeded",
+    "failed",
+    "unknown",
+]
 
 
 @dataclass
@@ -72,6 +80,76 @@ class BudgetSettlementResponse:
     spent_before_micros: int
     spent_after_micros: int
     receipt: ReceiptEnvelope
+
+
+@dataclass
+class ExecutionDownstream:
+    source: Literal["registered_destination"]
+    http_status: int | None
+    response_fingerprint: str | None
+    response_fingerprint_scope: Literal["complete", "unavailable"]
+    result: dict[str, Any] | None = None
+    result_error: Literal["response_not_json", "response_mapping_failed"] | None = None
+
+
+@dataclass
+class OutcomeEvidence:
+    profile: Literal["allowly.seal.jcs-sha256.v1"]
+    record: dict[str, Any]
+    record_sha256: str
+    receipt: ReceiptEnvelope | None
+    evidence_error: Literal["unavailable"] | None = None
+
+
+@dataclass
+class ExecutionRequestDescriptor:
+    operation_id: str
+    authorization_id: str
+    destination_id: str
+    action: str
+    method: Literal["POST"]
+    url: str
+
+
+@dataclass
+class ExecutionResponse:
+    operation_id: str
+    status: ExecutionStatus
+    decision: Decision
+    reason: str
+    destination_id: str
+    action: str
+    request_fingerprint_profile: Literal["allowly.execution.request.v1"]
+    request_fingerprint: str
+    request_descriptor: ExecutionRequestDescriptor
+    decision_receipt: ReceiptEnvelope
+    downstream: ExecutionDownstream | None = None
+    outcome_evidence: OutcomeEvidence | None = None
+    confirm_nonce: str | None = None
+    confirm_expires_at: str | None = None
+    confirm_prompt_hint: str | None = None
+    escalation_id: str | None = None
+    escalation_expires_at: str | None = None
+    escalation_to: str | None = None
+    escalation: EscalationInfo | None = None
+
+
+@dataclass
+class ReceiptAcknowledgmentCaller:
+    kind: Literal["workspace_runtime_key"]
+    api_key_id: str
+    agent_identity: dict[str, Any] | None = None
+
+
+@dataclass
+class ReceiptAcknowledgmentResponse:
+    acknowledgment_id: str
+    receipt_id: str
+    receipt_sha256: str
+    client_timestamp: str
+    received_at: str
+    caller: ReceiptAcknowledgmentCaller
+    evidence: OutcomeEvidence
 
 
 @dataclass
@@ -176,6 +254,7 @@ class AuthorizationCreateResponse:
     budget_spent_micros: int | None = None
     replaced_authorization_id: str | None = None
     revocation_receipt: ReceiptEnvelopePending | None = None
+    authorization_provenance: dict[str, Any] | None = None
     #: X-Allowly-Billing-Warning response header, when present.
     billing_warning: str | None = None
 

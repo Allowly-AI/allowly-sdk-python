@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Awaitable, Callable, Optional, Union
 
 import mcp.types as mt
@@ -40,6 +41,33 @@ class MCPAuthorizationContext:
 UserIdFn = Callable[[MCPAuthorizationContext], Union[UserIdResult, Awaitable[UserIdResult]]]
 
 
+@dataclass(frozen=True)
+class MCPCheckInput:
+    """Trusted policy fields selected for one MCP tool request.
+
+    Tool arguments are available to ``check_input_fn`` for explicit mapping,
+    but the middleware never copies them into policy input automatically.
+    """
+
+    action: str | None = None
+    resource: str | None = None
+    context: dict[str, Any] | None = None
+    client_timestamp: datetime | str | None = None
+    estimated_cost_micros: int | None = None
+    idempotency_key: str | None = None
+
+
+AgentTokenResult = Optional[str]
+AgentTokenFn = Callable[
+    [MCPAuthorizationContext],
+    Union[AgentTokenResult, Awaitable[AgentTokenResult]],
+]
+CheckInputFn = Callable[
+    [MCPAuthorizationContext],
+    Union[MCPCheckInput, Awaitable[MCPCheckInput]],
+]
+
+
 class AllowlyMCPMiddleware(Middleware):
     """Gate every FastMCP tool call through Allowly.
 
@@ -57,6 +85,8 @@ class AllowlyMCPMiddleware(Middleware):
         *,
         base_url: Optional[str] = None,
         user_id_fn: UserIdFn | None = None,
+        agent_token_fn: AgentTokenFn | None = None,
+        check_input_fn: CheckInputFn | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {}
         if base_url:
@@ -64,6 +94,8 @@ class AllowlyMCPMiddleware(Middleware):
         self.client = Allowly(api_key, **kwargs)
         self.authorization_id_fn = authorization_id_fn
         self.user_id_fn = user_id_fn
+        self.agent_token_fn = agent_token_fn
+        self.check_input_fn = check_input_fn
 
     async def aclose(self) -> None:
         await self.client.aclose()
@@ -85,6 +117,34 @@ class AllowlyMCPMiddleware(Middleware):
             return result  # type: ignore[return-value]
         return None
 
+    async def _resolve_agent_token(
+        self, context: MCPAuthorizationContext
+    ) -> Optional[str]:
+        if self.agent_token_fn is None:
+            return None
+        try:
+            result = self.agent_token_fn(context)
+            token = await result if hasattr(result, "__await__") else result
+        except Exception:
+            raise ToolError("agent_token_unavailable") from None
+        if not isinstance(token, str) or not token.strip():
+            raise ToolError("agent_token_not_found")
+        return token
+
+    async def _resolve_check_input(
+        self, context: MCPAuthorizationContext
+    ) -> MCPCheckInput:
+        if self.check_input_fn is None:
+            return MCPCheckInput()
+        try:
+            result = self.check_input_fn(context)
+            resolved = await result if hasattr(result, "__await__") else result
+        except Exception:
+            raise ToolError("check_input_unavailable") from None
+        if not isinstance(resolved, MCPCheckInput):
+            raise ToolError("check_input_invalid")
+        return resolved
+
     async def on_call_tool(
         self,
         context: MiddlewareContext[mt.CallToolRequestParams],
@@ -96,14 +156,39 @@ class AllowlyMCPMiddleware(Middleware):
         auth_context = MCPAuthorizationContext(
             tool_name=name,
             arguments=args,
+            request=context.message,
             fastmcp_context=context.fastmcp_context,
         )
         authorization_id = await self._resolve_authorization_id(auth_context)
         if authorization_id is None:
             raise ToolError("authorization_not_found")
 
-        result = await self.client.check(authorization_id=authorization_id, actions=[name])
-        action_result = result.results[name]
+        check_input = await self._resolve_check_input(auth_context)
+        action = check_input.action if check_input.action is not None else name
+        if not isinstance(action, str) or not action.strip():
+            raise ToolError("check_action_invalid")
+        agent_token = await self._resolve_agent_token(auth_context)
+        check_kwargs: dict[str, Any] = {
+            "authorization_id": authorization_id,
+            "actions": [action],
+        }
+        if check_input.resource is not None:
+            check_kwargs["resource"] = check_input.resource
+        if check_input.context is not None:
+            check_kwargs["context"] = check_input.context
+        if check_input.client_timestamp is not None:
+            check_kwargs["client_timestamp"] = check_input.client_timestamp
+        if check_input.estimated_cost_micros is not None:
+            check_kwargs["estimated_cost_micros"] = check_input.estimated_cost_micros
+        if check_input.idempotency_key is not None:
+            check_kwargs["idempotency_key"] = check_input.idempotency_key
+        if agent_token is not None:
+            check_kwargs["agent_token"] = agent_token
+
+        result = await self.client.check(**check_kwargs)
+        action_result = result.results.get(action)
+        if action_result is None:
+            raise ToolError("missing_result")
         if action_result.decision == "allow":
             return await call_next(context)
         raise ToolError(json.dumps(_decision_payload(action_result)))

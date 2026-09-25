@@ -48,6 +48,104 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+## Auth0 agent identity and managed execution
+
+For an authorization bound to an Auth0 machine identity, supply the short-lived
+access token separately from the Allowly runtime key. A token supplier runs for
+each check or execution. Use your existing OAuth client library to fetch and
+cache Auth0 tokens; keep the client secret outside this SDK.
+
+```python
+from datetime import datetime, timezone
+
+allowly = Allowly(
+    api_key=os.environ["ALLOWLY_API_KEY"],
+    agent_token_supplier=get_auth0_agent_token,
+)
+
+decision = await allowly.check(
+    authorization_id="auth_...",
+    actions=["order.submit"],
+    client_timestamp=datetime.now(timezone.utc),
+)
+
+execution = await allowly.execute(
+    operation_id="order-123-attempt-1",
+    authorization_id="auth_...",
+    destination_id="dst_...",
+    payload={"order": {"id": "123", "amount_micros": 1_250_000}},
+    client_timestamp=datetime.now(timezone.utc),
+    idempotency_key="order-123-attempt-1",
+)
+if execution.status == "unknown":
+    execution = await allowly.get_execution("order-123-attempt-1")
+```
+
+Persist the operation ID, idempotency key, and exact payload together. Never
+retry an unknown outcome under a new ID. `succeeded` reports a downstream 2xx
+HTTP result; it does not prove that the destination completed its business
+work. Allowly uses the destination credential stored in its registered
+destination. Do not put that credential in `payload`.
+
+Each execution response includes `request_fingerprint_profile` and the exact
+`request_descriptor`. To reproduce `request_fingerprint`, calculate
+`"sha256:" + hash_seal_value({"profile": profile, "descriptor": descriptor,
+"payload": exact_original_payload})`; `dataclasses.asdict()` preserves the
+descriptor's wire field names.
+
+After fetching the complete signed receipt, the verifier extra can calculate
+the canonical receipt hash for an acknowledgment:
+
+```python
+from allowly.verify import hash_seal_value
+
+ack = await allowly.acknowledge_receipt(
+    receipt_id=signed_receipt["receipt_id"],
+    receipt_sha256=hash_seal_value(signed_receipt),
+    client_timestamp=datetime.now(timezone.utc),
+    idempotency_key=f"ack:{signed_receipt['receipt_id']}",
+)
+
+# Retrieve the same acknowledgment later by its returned ID.
+ack = await allowly.get_receipt_acknowledgment(
+    signed_receipt["receipt_id"],
+    ack.acknowledgment_id,
+)
+```
+
+Client timestamps are customer-reported and must include a timezone. They do
+not replace the timestamp issued by Allowly in a receipt.
+
+## FastMCP identity mapping
+
+FastMCP middleware maps policy inputs explicitly. Raw tool arguments are
+available to the callback, but the middleware does not copy them into Allowly
+context.
+
+```python
+from allowly.mcp import AllowlyMCPMiddleware, MCPCheckInput
+
+middleware = AllowlyMCPMiddleware(
+    api_key=os.environ["ALLOWLY_API_KEY"],
+    user_id_fn=lambda request: request.fastmcp_context.session.user_id,
+    authorization_id_fn=lambda user_id: authorization_id_for(user_id),
+    agent_token_fn=lambda request: auth0_agent_token_for(request.fastmcp_context),
+    check_input_fn=lambda request: MCPCheckInput(
+        action="email.send",
+        resource=f"gmail:thread:{request.arguments['thread_id']}",
+        context={"recipient_domain": request.arguments["recipient_domain"]},
+        client_timestamp=datetime.now(timezone.utc),
+        idempotency_key=request.arguments["operation_id"],
+    ),
+)
+mcp.add_middleware(middleware)
+```
+
+The three resolver callbacks may be synchronous or asynchronous. When an
+`agent_token_fn` is configured, an error or an empty result blocks the tool
+before the check. Map only the fields the policy needs; ordinary tool arguments
+do not automatically satisfy policy context.
+
 Local development against the documented Caddy endpoint requires the edge
 token that Cloudflare injects for public traffic. Pass it explicitly:
 
@@ -151,6 +249,8 @@ decision-override fields.
 
 Unavailable checks fail closed unless an action is explicitly mapped to
 `"fail_open"` with `fallback_by_action`. Unmapped actions always fail closed.
+Identity-enabled checks always fail closed, including token supplier failures
+and `identity_verification_unavailable` responses.
 
 For actions that need third-party approval, define the escalation rule on the
 agent policy, create the authorization from that `policy_id`, and then resolve
@@ -173,7 +273,7 @@ integration examples honest and makes SDK gaps visible early.
 ## Offline receipt verification
 
 Install `allowly[verifier]` to hash SEAL records and verify signed receipts
-locally. The extra uses `allowly-receipt-format>=4.1.0,<5.0.0`, which verifies
+locally. The extra uses `allowly-receipt-format>=4.2.0,<5.0.0`, which verifies
 receipt wire format 4 (the package major equals the wire format). `alg` and
 `key_id` are signed top-level fields, and `signature` is the base64url string.
 

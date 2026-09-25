@@ -4,7 +4,7 @@ requires-python = ">=3.10"
 
 [[package]]
 name = "allowly"
-version = "0.5.0"
+version = "0.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
@@ -28,8 +28,8 @@ verifier = [
 
 [package.metadata]
 requires-dist = [
-    { name = "allowly-receipt-format", marker = "extra == 'dev'", specifier = ">=4.1.0,<5.0.0" },
-    { name = "allowly-receipt-format", marker = "extra == 'verifier'", specifier = ">=4.1.0,<5.0.0" },
+    { name = "allowly-receipt-format", marker = "extra == 'dev'", directory = "../allowly-receipt-format/verifiers/python" },
+    { name = "allowly-receipt-format", marker = "extra == 'verifier'", directory = "../allowly-receipt-format/verifiers/python" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=42" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=2.9,<3" },
     { name = "fastmcp", marker = "extra == 'fastmcp'", specifier = ">=2.9,<3" },
@@ -42,15 +42,17 @@ provides-extras = ["fastmcp", "verifier", "dev"]
 
 [[package]]
 name = "allowly-receipt-format"
-version = "4.1.0"
-source = { registry = "https://pypi.org/simple" }
+version = "4.2.0"
+source = { directory = "../allowly-receipt-format/verifiers/python" }
 dependencies = [
     { name = "cryptography" },
     { name = "rfc8785" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c4/0d/70db1203a2822d2214b8a7fe28929d8a36c42cce1fa7151e760b05bebc13/allowly_receipt_format-4.1.0.tar.gz", hash = "sha256:dc1afccb025ea119cb11a685216b7e45205a3b11c4154724e301847b9d479845", size = 25381, upload-time = "2026-09-16T19:20:29.342Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/06/e6/be808c8bd121843eb623414b3c3d49ced38c84c44695691b9bd8104d4235/allowly_receipt_format-4.1.0-py3-none-any.whl", hash = "sha256:23f1bbe3d14cfc7d2abbca2b0ade8bf386101961bbe2c59517c0f54a03642c5c", size = 24742, upload-time = "2026-09-16T19:20:27.839Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "cryptography", specifier = ">=42.0" },
+    { name = "rfc8785", specifier = ">=0.1.4,<1" },
 ]
 
 [[package]]

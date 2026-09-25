@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+import inspect
+from collections.abc import Awaitable, Callable
 from typing import Any
 from urllib.parse import quote, urlparse
 
@@ -17,11 +19,18 @@ from .types import (
     BudgetSettlementResponse,
     EscalationInfo,
     EscalationResolveResponse,
+    ExecutionDownstream,
+    ExecutionRequestDescriptor,
+    ExecutionResponse,
+    ExecutionStatus,
+    OutcomeEvidence,
     PolicyConditionEvidence,
     PolicyEvalInfo,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
     ReceiptEnvelope,
+    ReceiptAcknowledgmentCaller,
+    ReceiptAcknowledgmentResponse,
     SealResponse,
     ActionEntry,
     FallbackMode,
@@ -32,6 +41,8 @@ from .types import (
 )
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"
+
+AgentTokenSupplier = Callable[[], str | Awaitable[str]]
 
 
 class Allowly:
@@ -55,8 +66,13 @@ class Allowly:
         fallback_by_action: dict[str, FallbackMode] | None = None,
         dangerously_allow_insecure_base_url: bool = False,
         edge_token: str | None = None,
+        agent_token: str | None = None,
+        agent_token_supplier: AgentTokenSupplier | None = None,
     ) -> None:
         self._api_key = api_key
+        self._edge_token = edge_token
+        self._agent_token = agent_token
+        self._agent_token_supplier = agent_token_supplier
         base_url = _validate_base_url(base_url, dangerously_allow_insecure_base_url)
         if check_timeout_ms <= 0:
             raise ValueError("check_timeout_ms must be positive")
@@ -100,13 +116,38 @@ class Allowly:
         method: str,
         path: str,
         *,
-        expected_success_status: int = 200,
+        expected_success_status: int | tuple[int, ...] = 200,
         **kwargs: Any,
     ) -> tuple[Any, httpx.Headers]:
+        request_headers = kwargs.get("headers")
+        request_agent_token = (
+            request_headers.get("X-Allowly-Agent-Token")
+            if isinstance(request_headers, dict)
+            else None
+        )
+
+        sensitive_values = [
+            value
+            for value in (self._api_key, self._edge_token, request_agent_token)
+            if isinstance(value, str) and value
+        ]
+
+        def safe_error_text(value: Any, fallback: str) -> str:
+            rendered = value if isinstance(value, str) else fallback
+            for sensitive_value in sensitive_values:
+                rendered = rendered.replace(sensitive_value, "[REDACTED]")
+            return rendered
+
         resp = await self._http.request(method, path, **kwargs)
-        if resp.is_success and resp.status_code != expected_success_status:
+        expected_statuses = (
+            (expected_success_status,)
+            if isinstance(expected_success_status, int)
+            else expected_success_status
+        )
+        if resp.is_success and resp.status_code not in expected_statuses:
             raise AllowlyProtocolError(
-                f"expected HTTP {expected_success_status}, got {resp.status_code}"
+                f"expected HTTP {' or '.join(str(status) for status in expected_statuses)}, "
+                f"got {resp.status_code}"
             )
         if resp.status_code == 204:
             return None, resp.headers
@@ -126,14 +167,17 @@ class Allowly:
                 err = {}
             raw_fields = err.get("fields")
             fields = [
-                FieldError(field=str(f.get("field", "")), message=str(f.get("message", "")))
+                FieldError(
+                    field=safe_error_text(f.get("field"), ""),
+                    message=safe_error_text(f.get("message"), ""),
+                )
                 for f in (raw_fields if isinstance(raw_fields, list) else [])
                 if isinstance(f, dict)
             ]
             raise AllowlyAPIError(
                 status=resp.status_code,
-                code=err.get("code", "error"),
-                message=err.get("message", "Unknown error"),
+                code=safe_error_text(err.get("code"), "error"),
+                message=safe_error_text(err.get("message"), "Unknown error"),
                 fields=fields,
                 retry_after_seconds=_parse_retry_after(resp.headers.get("Retry-After")),
             )
@@ -150,6 +194,8 @@ class Allowly:
         context: dict[str, Any] | None = None,
         wait: bool = False,
         idempotency_key: str | None = None,
+        client_timestamp: datetime | str | None = None,
+        agent_token: str | None = None,
     ) -> CheckResponse:
         """Check whether an authorization permits each requested action."""
         path = "/v1/check" + ("?wait=true" if wait else "")
@@ -161,8 +207,14 @@ class Allowly:
             "estimated_cost_micros": estimated_cost_micros,
             "context": context or {},
         }
+        if client_timestamp is not None:
+            body["client_timestamp"] = _client_timestamp(client_timestamp)
+        headers = await self._identity_headers(
+            agent_token,
+            idempotency_key=idempotency_key,
+        )
+        identity_enabled = bool(headers and "X-Allowly-Agent-Token" in headers)
         try:
-            headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
             timeout = max(self._check_timeout, 6.0) if wait else self._check_timeout
             raw, response_headers = await asyncio.wait_for(
                 self._request_with_headers(
@@ -179,25 +231,31 @@ class Allowly:
                 authorization_id=authorization_id,
                 actions=actions,
                 failure="timeout",
+                force_fail_closed=identity_enabled,
             )
         except (httpx.DecodingError, httpx.TransportError):
             return self._fallback_check_response(
                 authorization_id=authorization_id,
                 actions=actions,
                 failure="unreachable",
+                force_fail_closed=identity_enabled,
             )
         except AllowlyAPIError as exc:
+            if exc.code == "identity_verification_unavailable":
+                raise
             if exc.status == 408:
                 return self._fallback_check_response(
                     authorization_id=authorization_id,
                     actions=actions,
                     failure="timeout",
+                    force_fail_closed=identity_enabled,
                 )
             if exc.status >= 500:
                 return self._fallback_check_response(
                     authorization_id=authorization_id,
                     actions=actions,
                     failure="unreachable",
+                    force_fail_closed=identity_enabled,
                 )
             raise
         response = _parse_check_response(
@@ -208,16 +266,44 @@ class Allowly:
         response.billing_warning = response_headers.get("X-Allowly-Billing-Warning")
         return response
 
+    async def _identity_headers(
+        self,
+        agent_token: str | None,
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, str] | None:
+        headers: dict[str, str] = {}
+        effective_agent_token: str | None = agent_token
+        if effective_agent_token is None and self._agent_token_supplier is not None:
+            supplied = self._agent_token_supplier()
+            effective_agent_token = await supplied if inspect.isawaitable(supplied) else supplied
+            if not isinstance(effective_agent_token, str) or not effective_agent_token.strip():
+                raise ValueError("agent token supplier must return a non-empty string")
+        elif effective_agent_token is None:
+            effective_agent_token = self._agent_token
+        if effective_agent_token is not None:
+            if not isinstance(effective_agent_token, str) or not effective_agent_token.strip():
+                raise ValueError("agent token must be a non-empty string")
+            headers["X-Allowly-Agent-Token"] = effective_agent_token
+        if idempotency_key is not None:
+            headers["Idempotency-Key"] = idempotency_key
+        return headers or None
+
     def _fallback_check_response(
         self,
         *,
         authorization_id: str,
         actions: list[str],
         failure: str,
+        force_fail_closed: bool = False,
     ) -> CheckResponse:
         results = {}
         for action in actions:
-            mode = self._fallback_by_action.get(action, "fail_closed")
+            mode: FallbackMode = (
+                "fail_closed"
+                if force_fail_closed
+                else self._fallback_by_action.get(action, "fail_closed")
+            )
             decision = "allow" if mode == "fail_open" else "deny"
             reason = f"fallback_{'open' if mode == 'fail_open' else 'closed'}_{failure}"
             base = {
@@ -261,6 +347,123 @@ class Allowly:
             headers=headers,
         )
         return _parse_budget_settlement_response(raw)
+
+    async def execute(
+        self,
+        *,
+        operation_id: str,
+        authorization_id: str,
+        destination_id: str,
+        payload: Any,
+        client_timestamp: datetime | str,
+        idempotency_key: str,
+        agent_token: str | None = None,
+    ) -> ExecutionResponse:
+        """Authorize and dispatch one payload to a registered destination.
+
+        Exact retries must reuse the same operation ID, idempotency key, and
+        body. An ``unknown`` result must be inspected and must not be resent
+        automatically with a new identifier.
+        """
+        raw = await self._request(
+            "POST",
+            "/v1/execute",
+            json={
+                "operation_id": operation_id,
+                "authorization_id": authorization_id,
+                "destination_id": destination_id,
+                "payload": payload,
+                "client_timestamp": _client_timestamp(client_timestamp),
+            },
+            headers=await self._identity_headers(
+                agent_token,
+                idempotency_key=idempotency_key,
+            ),
+            expected_success_status=(200, 201),
+        )
+        response = _parse_execution_response(raw)
+        if (
+            response.operation_id != operation_id
+            or response.destination_id != destination_id
+            or response.request_descriptor.authorization_id != authorization_id
+        ):
+            raise AllowlyProtocolError(
+                "execution response does not match the requested operation"
+            )
+        return response
+
+    async def get_execution(
+        self,
+        operation_id: str,
+        *,
+        agent_token: str | None = None,
+    ) -> ExecutionResponse:
+        raw = await self._request(
+            "GET",
+            f"/v1/executions/{quote(operation_id, safe='')}",
+            headers=await self._identity_headers(agent_token),
+        )
+        response = _parse_execution_response(raw)
+        if response.operation_id != operation_id:
+            raise AllowlyProtocolError(
+                "execution response does not match the requested operation"
+            )
+        return response
+
+    async def acknowledge_receipt(
+        self,
+        *,
+        receipt_id: str,
+        receipt_sha256: str,
+        client_timestamp: datetime | str,
+        idempotency_key: str,
+        agent_token: str | None = None,
+    ) -> ReceiptAcknowledgmentResponse:
+        raw = await self._request(
+            "POST",
+            f"/v1/receipts/{quote(receipt_id, safe='')}/acknowledgments",
+            json={
+                "receipt_sha256": receipt_sha256,
+                "client_timestamp": _client_timestamp(client_timestamp),
+            },
+            headers=await self._identity_headers(
+                agent_token,
+                idempotency_key=idempotency_key,
+            ),
+            expected_success_status=(200, 201),
+        )
+        response = _parse_receipt_acknowledgment_response(raw)
+        if response.receipt_id != receipt_id:
+            raise AllowlyProtocolError(
+                "receipt acknowledgment response does not match the requested receipt"
+            )
+        return response
+
+    async def get_receipt_acknowledgment(
+        self,
+        receipt_id: str,
+        acknowledgment_id: str,
+        *,
+        agent_token: str | None = None,
+    ) -> ReceiptAcknowledgmentResponse:
+        """Retrieve or repair one stored receipt acknowledgment."""
+        raw = await self._request(
+            "GET",
+            (
+                f"/v1/receipts/{quote(receipt_id, safe='')}/acknowledgments/"
+                f"{quote(acknowledgment_id, safe='')}"
+            ),
+            headers=await self._identity_headers(agent_token),
+        )
+        response = _parse_receipt_acknowledgment_response(raw)
+        if (
+            response.receipt_id != receipt_id
+            or response.acknowledgment_id != acknowledgment_id
+        ):
+            raise AllowlyProtocolError(
+                "receipt acknowledgment response does not match the requested acknowledgment"
+            )
+        return response
 
     async def seal(
         self,
@@ -478,6 +681,11 @@ class _AuthorizationsResource:
             revocation_receipt=(
                 _parse_pending_envelope(revocation_receipt)
                 if revocation_receipt is not None
+                else None
+            ),
+            authorization_provenance=(
+                _require_dict(raw["authorization_provenance"], "authorization provenance")
+                if raw.get("authorization_provenance") is not None
                 else None
             ),
             billing_warning=response_headers.get("X-Allowly-Billing-Warning"),
@@ -887,6 +1095,180 @@ def _require_null(raw: dict[str, Any], key: str) -> None:
     if key not in raw or raw[key] is not None:
         raise AllowlyProtocolError(f"{key} must be null")
     return None
+
+
+def _client_timestamp(value: datetime | str) -> str:
+    if isinstance(value, datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("client_timestamp must include a timezone")
+        rendered = value.isoformat()
+        return rendered[:-6] + "Z" if rendered.endswith("+00:00") else rendered
+    if not isinstance(value, str) or not value:
+        raise ValueError("client_timestamp must be a non-empty timezone-aware timestamp")
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+    except ValueError as exc:
+        raise ValueError("client_timestamp must be a valid timezone-aware timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("client_timestamp must include a timezone")
+    return value
+
+
+def _parse_execution_response(raw: Any) -> ExecutionResponse:
+    body = _require_dict(raw, "execution response")
+    operation_id = _require_str(body, "operation_id")
+    destination_id = _require_str(body, "destination_id")
+    action = _require_str(body, "action")
+    status = _require_str(body, "status")
+    allowed_statuses: set[ExecutionStatus] = {
+        "denied",
+        "confirmation_required",
+        "escalation_required",
+        "succeeded",
+        "failed",
+        "unknown",
+    }
+    if status not in allowed_statuses:
+        raise AllowlyProtocolError(f"invalid execution status: {status!r}")
+    decision = _require_str(body, "decision")
+    if decision not in {"allow", "deny", "confirm", "escalate"}:
+        raise AllowlyProtocolError(f"invalid execution decision: {decision!r}")
+    downstream_raw = body.get("downstream")
+    downstream = None
+    if downstream_raw is not None:
+        downstream_body = _require_dict(downstream_raw, "execution downstream")
+        source = _require_str(downstream_body, "source")
+        if source != "registered_destination":
+            raise AllowlyProtocolError(f"invalid execution downstream source: {source!r}")
+        http_status = downstream_body.get("http_status")
+        if http_status is not None and (isinstance(http_status, bool) or not isinstance(http_status, int)):
+            raise AllowlyProtocolError("execution downstream http_status must be an integer or null")
+        response_fingerprint = downstream_body.get("response_fingerprint")
+        if response_fingerprint is not None and not isinstance(response_fingerprint, str):
+            raise AllowlyProtocolError(
+                "execution downstream response_fingerprint must be a string or null"
+            )
+        response_fingerprint_scope = _require_str(
+            downstream_body, "response_fingerprint_scope"
+        )
+        if response_fingerprint_scope not in {"complete", "unavailable"}:
+            raise AllowlyProtocolError(
+                "invalid execution downstream response_fingerprint_scope: "
+                f"{response_fingerprint_scope!r}"
+            )
+        result_raw = downstream_body.get("result")
+        result = None if result_raw is None else _require_dict(result_raw, "execution downstream result")
+        result_error = downstream_body.get("result_error")
+        if result_error not in {None, "response_not_json", "response_mapping_failed"}:
+            raise AllowlyProtocolError(f"invalid execution downstream result_error: {result_error!r}")
+        downstream = ExecutionDownstream(
+            source="registered_destination",
+            http_status=http_status,
+            response_fingerprint=response_fingerprint,
+            response_fingerprint_scope=response_fingerprint_scope,
+            result=result,
+            result_error=result_error,
+        )
+    evidence_raw = body.get("outcome_evidence")
+    evidence = _parse_outcome_evidence(evidence_raw) if evidence_raw is not None else None
+    fingerprint_profile = _require_str(body, "request_fingerprint_profile")
+    if fingerprint_profile != "allowly.execution.request.v1":
+        raise AllowlyProtocolError(
+            f"invalid execution request fingerprint profile: {fingerprint_profile!r}"
+        )
+    descriptor_body = _require_dict(body.get("request_descriptor"), "execution request descriptor")
+    descriptor_method = _require_str(descriptor_body, "method")
+    if descriptor_method != "POST":
+        raise AllowlyProtocolError(
+            f"invalid execution request descriptor method: {descriptor_method!r}"
+        )
+    request_descriptor = ExecutionRequestDescriptor(
+        operation_id=_require_str(descriptor_body, "operation_id"),
+        authorization_id=_require_str(descriptor_body, "authorization_id"),
+        destination_id=_require_str(descriptor_body, "destination_id"),
+        action=_require_str(descriptor_body, "action"),
+        method="POST",
+        url=_require_str(descriptor_body, "url"),
+    )
+    if (
+        request_descriptor.operation_id != operation_id
+        or request_descriptor.destination_id != destination_id
+        or request_descriptor.action != action
+    ):
+        raise AllowlyProtocolError(
+            "execution request descriptor does not match the response"
+        )
+    return ExecutionResponse(
+        operation_id=operation_id,
+        status=status,
+        decision=decision,
+        reason=_require_str(body, "reason"),
+        destination_id=destination_id,
+        action=action,
+        request_fingerprint_profile="allowly.execution.request.v1",
+        request_fingerprint=_require_str(body, "request_fingerprint"),
+        request_descriptor=request_descriptor,
+        decision_receipt=_parse_receipt_envelope(body.get("decision_receipt")),
+        downstream=downstream,
+        outcome_evidence=evidence,
+        confirm_nonce=_optional_str(body, "confirm_nonce"),
+        confirm_expires_at=_optional_str(body, "confirm_expires_at"),
+        confirm_prompt_hint=_optional_str(body, "confirm_prompt_hint"),
+        escalation_id=_optional_str(body, "escalation_id"),
+        escalation_expires_at=_optional_str(body, "escalation_expires_at"),
+        escalation_to=_optional_str(body, "escalation_to"),
+        escalation=_parse_escalation_info(body.get("escalation")),
+    )
+
+
+def _parse_outcome_evidence(raw: Any) -> OutcomeEvidence:
+    body = _require_dict(raw, "outcome evidence")
+    profile = _require_str(body, "profile")
+    if profile != "allowly.seal.jcs-sha256.v1":
+        raise AllowlyProtocolError(f"invalid outcome evidence profile: {profile!r}")
+    receipt_raw = body.get("receipt")
+    evidence_error = body.get("evidence_error")
+    if evidence_error not in {None, "unavailable"}:
+        raise AllowlyProtocolError(
+            f"invalid outcome evidence error: {evidence_error!r}"
+        )
+    return OutcomeEvidence(
+        profile="allowly.seal.jcs-sha256.v1",
+        record=_require_dict(body.get("record"), "outcome evidence record"),
+        record_sha256=_require_str(body, "record_sha256"),
+        receipt=(
+            _parse_receipt_envelope(receipt_raw)
+            if receipt_raw is not None
+            else None
+        ),
+        evidence_error=evidence_error,
+    )
+
+
+def _parse_receipt_acknowledgment_response(raw: Any) -> ReceiptAcknowledgmentResponse:
+    body = _require_dict(raw, "receipt acknowledgment response")
+    caller_body = _require_dict(body.get("caller"), "receipt acknowledgment caller")
+    caller_kind = _require_str(caller_body, "kind")
+    if caller_kind != "workspace_runtime_key":
+        raise AllowlyProtocolError(f"invalid receipt acknowledgment caller kind: {caller_kind!r}")
+    agent_identity_raw = caller_body.get("agent_identity")
+    return ReceiptAcknowledgmentResponse(
+        acknowledgment_id=_require_str(body, "acknowledgment_id"),
+        receipt_id=_require_str(body, "receipt_id"),
+        receipt_sha256=_require_str(body, "receipt_sha256"),
+        client_timestamp=_require_str(body, "client_timestamp"),
+        received_at=_require_str(body, "received_at"),
+        caller=ReceiptAcknowledgmentCaller(
+            kind="workspace_runtime_key",
+            api_key_id=_require_str(caller_body, "api_key_id"),
+            agent_identity=(
+                _require_dict(agent_identity_raw, "receipt acknowledgment agent identity")
+                if agent_identity_raw is not None
+                else None
+            ),
+        ),
+        evidence=_parse_outcome_evidence(body.get("evidence")),
+    )
 
 
 def _parse_budget_info(raw: Any) -> BudgetInfo | None:

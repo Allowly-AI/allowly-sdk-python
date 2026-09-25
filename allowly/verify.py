@@ -43,7 +43,7 @@ try:
     )
 except ImportError as exc:
     raise ImportError(
-        "SEAL and receipt verification require allowly-receipt-format>=4.1.0. "
+        "SEAL and receipt verification require allowly-receipt-format>=4.2.0. "
         "Install the verifier extra: pip install 'allowly[verifier]'"
     ) from exc
 
