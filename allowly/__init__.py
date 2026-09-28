@@ -3,6 +3,7 @@ from __future__ import annotations
 from .client import Allowly
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .seal_webhook import SealWebhookClient
+from .execution import LocalExecutionResult, ExecutionRecoveryRequired, complete_execution_evidence
 from .types import (
     ActionCheckResult,
     ActionCheckResultAllow,
@@ -23,6 +24,7 @@ from .types import (
     ExecutionRequestDescriptor,
     ExecutionResponse,
     ExecutionStatus,
+    ExecutableOperationGrant,
     FallbackMode,
     PolicyConditionEvidence,
     PolicyEvalInfo,
@@ -40,6 +42,9 @@ from .types import (
 __all__ = [
     "Allowly",
     "SealWebhookClient",
+    "LocalExecutionResult",
+    "ExecutionRecoveryRequired",
+    "complete_execution_evidence",
     "AllowlyAPIError",
     "AllowlyProtocolError",
     "FieldError",
@@ -58,6 +63,7 @@ __all__ = [
     "ExecutionRequestDescriptor",
     "ExecutionResponse",
     "ExecutionStatus",
+    "ExecutableOperationGrant",
     "AuthorizationCreateResponse",
     "AuthorizationRevokeResponse",
     "ConfirmationApproveResponse",

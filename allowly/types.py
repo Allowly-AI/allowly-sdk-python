@@ -7,6 +7,7 @@ Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
 SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed"]
 ExecutionStatus = Literal[
+    "approved",
     "denied",
     "confirmation_required",
     "escalation_required",
@@ -84,12 +85,13 @@ class BudgetSettlementResponse:
 
 @dataclass
 class ExecutionDownstream:
-    source: Literal["registered_destination"]
+    source: Literal["registered_destination", "customer_runtime"]
     http_status: int | None
     response_fingerprint: str | None
     response_fingerprint_scope: Literal["complete", "unavailable"]
     result: dict[str, Any] | None = None
     result_error: Literal["response_not_json", "response_mapping_failed"] | None = None
+    business_completion: Literal["not_verified"] | None = None
 
 
 @dataclass
@@ -107,8 +109,11 @@ class ExecutionRequestDescriptor:
     authorization_id: str
     destination_id: str
     action: str
-    method: Literal["POST"]
-    url: str
+    method: str
+    url: str | None = None
+    origin: str | None = None
+    path: str | None = None
+    query: str | None = None
 
 
 @dataclass
@@ -132,6 +137,15 @@ class ExecutionResponse:
     escalation_expires_at: str | None = None
     escalation_to: str | None = None
     escalation: EscalationInfo | None = None
+    execution_mode: Literal["managed_gateway", "customer_sdk"] = "managed_gateway"
+    effective_evidence_mode: Literal["receipt", "witnessed"] | None = None
+    approval: dict[str, Any] | None = None
+    approval_sha256: str | None = None
+    approval_expires_at: str | None = None
+    decision_state: Literal["allowed", "not_allowed"] | None = None
+    target_state: Literal["not_started", "response_observed", "unknown"] | None = None
+    evidence_state: str | None = None
+    witness_session: dict[str, Any] | None = None
 
 
 @dataclass
@@ -234,9 +248,20 @@ class CheckResponse:
 
 
 @dataclass
+class ExecutableOperationGrant:
+    enabled_executable_id: str
+    provider_id: str
+    operation_id: str
+    catalog_revision: str
+    definition_fingerprint: str
+    minimum_evidence_mode: Literal["receipt", "witnessed"] = "receipt"
+
+
+@dataclass
 class ActionEntry:
     name: str
     constraints: dict[str, Any] = field(default_factory=dict)
+    executable_operations: list[ExecutableOperationGrant] = field(default_factory=list)
 
 
 @dataclass

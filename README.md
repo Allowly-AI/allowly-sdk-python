@@ -116,6 +116,88 @@ ack = await allowly.get_receipt_acknowledgment(
 Client timestamps are customer-reported and must include a timezone. They do
 not replace the timestamp issued by Allowly in a receipt.
 
+## Execute from customer code
+
+Enable an app in **Settings → Executables**, then bind its exact operation to
+the policy action. Enabling an app alone does not grant permission. Install
+`allowly[verifier]` for the customer execution helper.
+
+```python
+from allowly import Allowly
+
+async with Allowly(api_key=ALLOWLY_RUNTIME_KEY, agent_token=AGENT_TOKEN) as allowly:
+    result = await allowly.execute_http(
+        "https://api.stripe.com/v1/refunds",
+        operation_id="refund-order-123",  # stable across retries
+        authorization_id="auth_...",
+        enabled_executable_id="exe_...",
+        catalog_operation_id="stripe.refunds.create",
+        action="billing.refund",
+        method="POST",
+        headers={"authorization": f"Bearer {STRIPE_KEY}",
+                 "content-type": "application/x-www-form-urlencoded"},
+        body="payment_intent=pi_example&amount=2500",
+        evidence_mode="receipt",
+    )
+    # result.response stays local; Allowly receives commitments and outcome metadata.
+```
+
+Use the operation ID from the catalog returned by your deployment; the initial
+catalog contains documentation-checked candidates, not a live compatibility
+guarantee. Policy inputs such as `policy_input={"context": {"amount": 2500}}`
+are customer-reported. Neither a receipt nor the compact witness record proves
+that those inputs match the meaning of the provider body.
+
+The helper calls remote `/v1/execute`, validates the approval, and claims dispatch
+once before sending locally. It fails closed on unavailable checks and stops on
+deny, confirmation, or escalation. The older `execute(...)` method keeps its
+managed-gateway behavior. Low-level customer methods are `prepare_execution`,
+`claim_execution_dispatch`, `get_execution_witness_token`,
+`report_execution_outcome`, and `get_execution`.
+
+Allowly receives the origin, path, query string and policy inputs. Header values
+and body bytes are committed by hash. Keep provider credentials in local headers,
+not in the URL, query string or policy context.
+
+The private journal defaults to `.allowly/executions`; put it on persistent
+storage and use a separate directory per workspace. A repeated operation raises
+`ExecutionRecoveryRequired` with its directory. Reconcile with `get_execution`
+or call `flush_execution_outcome(operation_dir)` to retry a saved report. Neither
+repeats the provider action. An interrupted or timed-out send may already have
+acted; never generate a replacement operation ID automatically. There is no
+exactly-once guarantee for arbitrary providers. If `result.outcome_pending` is
+true, its API response still describes approval; `result.response` contains the
+locally observed response and the journal retains the report for upload.
+
+Set `evidence_mode="witnessed"` to request the native witness transport. Configure
+`native_binary` and an independently provisioned `trusted_notary_key` file; a
+policy can also require this mode. The helper validates the key fingerprint and
+waits for online witness admission and MPC setup before claiming dispatch. It
+never silently falls back to a regular receipt. The experimental native profile
+supports HTTP/1.1 over TLS 1.2, a **2 KiB complete request** and **16 KiB response**,
+with UTF-8 bodies, no compression or redirect following. Unsupported responses
+can be discovered after a provider action and leave an evidence gap.
+
+Signing stays asynchronous. To assemble the Allowly side of the evidence later:
+
+```python
+from allowly import complete_execution_evidence
+
+package = await complete_execution_evidence(
+    allowly, result.operation_dir,
+    public_keys=trusted_workspace_keys, expected_workspace_id="ws_...",
+)
+```
+
+This verifies the decision receipt signature and its exact approval hash. For
+witnessed execution, independently run the native `verify-execute` command on
+the full customer-held presentation using the trusted notary key. The compact
+record held by Allowly proves the notary's approval reference; full request-byte
+verification needs the customer presentation. Keep that presentation private:
+it includes provider credentials and response data. HTTP status is not proof of
+business completion. Native transport setup and limitations are documented in
+the workspace's `mcp-allowly_tlsnotary/EXECUTE.md`.
+
 ## FastMCP identity mapping
 
 FastMCP middleware maps policy inputs explicitly. Raw tool arguments are

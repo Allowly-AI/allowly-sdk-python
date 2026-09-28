@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict
 from datetime import datetime
 import inspect
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import quote, urlparse
 
 import httpx
@@ -43,6 +44,9 @@ from .types import (
 DEFAULT_BASE_URL = "https://api.allowly.ai"
 
 AgentTokenSupplier = Callable[[], str | Awaitable[str]]
+
+if TYPE_CHECKING:
+    from .execution import LocalExecutionResult
 
 
 class Allowly:
@@ -386,6 +390,10 @@ class Allowly:
             response.operation_id != operation_id
             or response.destination_id != destination_id
             or response.request_descriptor.authorization_id != authorization_id
+            or response.execution_mode != "managed_gateway"
+            or response.status == "approved"
+            or response.request_descriptor.method != "POST"
+            or (response.downstream is not None and response.downstream.source != "registered_destination")
         ):
             raise AllowlyProtocolError(
                 "execution response does not match the requested operation"
@@ -409,6 +417,97 @@ class Allowly:
                 "execution response does not match the requested operation"
             )
         return response
+
+    async def prepare_execution(
+        self, *, operation_id: str, authorization_id: str,
+        enabled_executable_id: str, catalog_operation_id: str, action: str,
+        http_request: dict[str, Any], policy_input: dict[str, Any],
+        client_timestamp: datetime | str, idempotency_key: str,
+        evidence_mode: str = "receipt", agent_token: str | None = None,
+    ) -> ExecutionResponse:
+        """Approve a customer-side execution remotely; this never sends to the provider."""
+        raw = await self._request(
+            "POST", "/v1/execute", expected_success_status=(200, 201),
+            headers=await self._identity_headers(agent_token, idempotency_key=idempotency_key),
+            json={"mode": "customer_sdk", "operation_id": operation_id,
+                  "authorization_id": authorization_id,
+                  "enabled_executable_id": enabled_executable_id,
+                  "catalog_operation_id": catalog_operation_id, "action": action,
+                  "http_request": http_request, "policy_input": policy_input,
+                  "evidence_mode": evidence_mode,
+                  "client_timestamp": _client_timestamp(client_timestamp)},
+        )
+        result = _parse_execution_response(raw)
+        if (result.operation_id != operation_id or result.destination_id != enabled_executable_id
+                or result.action != action or result.execution_mode != "customer_sdk"
+                or result.request_descriptor.authorization_id != authorization_id):
+            raise AllowlyProtocolError("execution approval does not match the requested operation")
+        return result
+
+    async def claim_execution_dispatch(
+        self, operation_id: str, *, approval_sha256: str, agent_token: str | None = None,
+    ) -> dict[str, Any]:
+        raw = await self._request(
+            "POST", f"/v1/executions/{quote(operation_id, safe='')}/dispatch",
+            json={"approval_sha256": approval_sha256},
+            headers=await self._identity_headers(agent_token),
+        )
+        if (not isinstance(raw, dict) or raw.get("operation_id") != operation_id
+                or raw.get("approval_sha256") != approval_sha256
+                or raw.get("dispatch_state") != "claimed"):
+            raise AllowlyProtocolError("invalid execution dispatch claim")
+        return raw
+
+    async def get_execution_witness_token(
+        self, operation_id: str, *, approval_sha256: str, agent_token: str | None = None,
+    ) -> dict[str, Any]:
+        raw = await self._request(
+            "POST", f"/v1/executions/{quote(operation_id, safe='')}/witness-session-token",
+            json={"approval_sha256": approval_sha256},
+            headers=await self._identity_headers(agent_token),
+        )
+        if not isinstance(raw, dict) or raw.get("approval_sha256") != approval_sha256:
+            raise AllowlyProtocolError("invalid execution witness admission")
+        return raw
+
+    async def report_execution_outcome(
+        self, operation_id: str, *, outcome: dict[str, Any], idempotency_key: str,
+        agent_token: str | None = None,
+    ) -> ExecutionResponse:
+        raw = await self._request(
+            "POST", f"/v1/executions/{quote(operation_id, safe='')}/outcome",
+            json=outcome, headers=await self._identity_headers(agent_token, idempotency_key=idempotency_key),
+        )
+        result = _parse_execution_response(raw)
+        if result.operation_id != operation_id or result.approval_sha256 != outcome.get("approval_sha256"):
+            raise AllowlyProtocolError("execution outcome does not match the requested operation")
+        return result
+
+    async def execute_http(
+        self, url: str, *, operation_id: str, authorization_id: str,
+        enabled_executable_id: str, catalog_operation_id: str, action: str,
+        method: str = "GET", headers: dict[str, str] | None = None, body: str = "",
+        evidence_mode: Literal["receipt", "witnessed"] = "receipt",
+        policy_input: dict[str, Any] | None = None,
+        storage_dir: str = ".allowly/executions", agent_token: str | None = None,
+        native_binary: str | None = None, trusted_notary_key: str | None = None,
+        timeout: float = 30.0,
+    ) -> LocalExecutionResult:
+        """Remotely authorize, then execute locally. See allowly.execution.execute_http."""
+        from .execution import execute_http
+        return await execute_http(
+            self, url, operation_id=operation_id, authorization_id=authorization_id,
+            enabled_executable_id=enabled_executable_id, catalog_operation_id=catalog_operation_id,
+            action=action, method=method, headers=headers, body=body,
+            evidence_mode=evidence_mode, policy_input=policy_input, storage_dir=storage_dir,
+            agent_token=agent_token, native_binary=native_binary,
+            trusted_notary_key=trusted_notary_key, timeout=timeout,
+        )
+
+    async def flush_execution_outcome(self, operation_dir: str, *, agent_token: str | None = None) -> ExecutionResponse:
+        """Retry only a saved outcome report; never repeat the provider request."""
+        from .execution import flush_execution_outcome
+        return await flush_execution_outcome(self, operation_dir, agent_token=agent_token)
 
     async def acknowledge_receipt(
         self,
@@ -644,7 +743,9 @@ class _AuthorizationsResource:
                 "actions": [
                     {"name": action, "constraints": {}}
                     if isinstance(action, str)
-                    else {"name": action.name, "constraints": action.constraints}
+                    else {"name": action.name, "constraints": action.constraints,
+                          **({"executable_operations": [asdict(grant) for grant in action.executable_operations]}
+                             if action.executable_operations else {})}
                     for action in actions
                 ],
                 "requires_confirm_for": requires_confirm_for or [],
@@ -1121,6 +1222,7 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
     action = _require_str(body, "action")
     status = _require_str(body, "status")
     allowed_statuses: set[ExecutionStatus] = {
+        "approved",
         "denied",
         "confirmation_required",
         "escalation_required",
@@ -1138,7 +1240,7 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
     if downstream_raw is not None:
         downstream_body = _require_dict(downstream_raw, "execution downstream")
         source = _require_str(downstream_body, "source")
-        if source != "registered_destination":
+        if source not in {"registered_destination", "customer_runtime"}:
             raise AllowlyProtocolError(f"invalid execution downstream source: {source!r}")
         http_status = downstream_body.get("http_status")
         if http_status is not None and (isinstance(http_status, bool) or not isinstance(http_status, int)):
@@ -1162,12 +1264,13 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
         if result_error not in {None, "response_not_json", "response_mapping_failed"}:
             raise AllowlyProtocolError(f"invalid execution downstream result_error: {result_error!r}")
         downstream = ExecutionDownstream(
-            source="registered_destination",
+            source=source,
             http_status=http_status,
             response_fingerprint=response_fingerprint,
             response_fingerprint_scope=response_fingerprint_scope,
             result=result,
             result_error=result_error,
+            business_completion=downstream_body.get("business_completion"),
         )
     evidence_raw = body.get("outcome_evidence")
     evidence = _parse_outcome_evidence(evidence_raw) if evidence_raw is not None else None
@@ -1178,7 +1281,12 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
         )
     descriptor_body = _require_dict(body.get("request_descriptor"), "execution request descriptor")
     descriptor_method = _require_str(descriptor_body, "method")
-    if descriptor_method != "POST":
+    execution_mode = body.get("execution_mode", "managed_gateway")
+    if execution_mode not in {"managed_gateway", "customer_sdk"}:
+        raise AllowlyProtocolError("invalid execution mode")
+    if descriptor_method not in {"GET", "POST", "PUT", "PATCH", "DELETE"} or (
+        execution_mode == "managed_gateway" and descriptor_method != "POST"
+    ):
         raise AllowlyProtocolError(
             f"invalid execution request descriptor method: {descriptor_method!r}"
         )
@@ -1187,8 +1295,12 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
         authorization_id=_require_str(descriptor_body, "authorization_id"),
         destination_id=_require_str(descriptor_body, "destination_id"),
         action=_require_str(descriptor_body, "action"),
-        method="POST",
-        url=_require_str(descriptor_body, "url"),
+        method=descriptor_method,
+        url=(_require_str(descriptor_body, "url") if execution_mode == "managed_gateway"
+             else _optional_str(descriptor_body, "url")),
+        origin=_optional_str(descriptor_body, "origin"),
+        path=_optional_str(descriptor_body, "path"),
+        query=_optional_str(descriptor_body, "query"),
     )
     if (
         request_descriptor.operation_id != operation_id
@@ -1218,6 +1330,15 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
         escalation_expires_at=_optional_str(body, "escalation_expires_at"),
         escalation_to=_optional_str(body, "escalation_to"),
         escalation=_parse_escalation_info(body.get("escalation")),
+        execution_mode=execution_mode,
+        effective_evidence_mode=_optional_str(body, "effective_evidence_mode"),
+        approval=body.get("approval"),
+        approval_sha256=_optional_str(body, "approval_sha256"),
+        approval_expires_at=_optional_str(body, "approval_expires_at"),
+        decision_state=_optional_str(body, "decision_state"),
+        target_state=_optional_str(body, "target_state"),
+        evidence_state=_optional_str(body, "evidence_state"),
+        witness_session=body.get("witness_session"),
     )
 
 
