@@ -168,24 +168,16 @@ class AllowlyMCPMiddleware(Middleware):
         if not isinstance(action, str) or not action.strip():
             raise ToolError("check_action_invalid")
         agent_token = await self._resolve_agent_token(auth_context)
-        check_kwargs: dict[str, Any] = {
-            "authorization_id": authorization_id,
-            "actions": [action],
-        }
-        if check_input.resource is not None:
-            check_kwargs["resource"] = check_input.resource
-        if check_input.context is not None:
-            check_kwargs["context"] = check_input.context
-        if check_input.client_timestamp is not None:
-            check_kwargs["client_timestamp"] = check_input.client_timestamp
-        if check_input.estimated_cost_micros is not None:
-            check_kwargs["estimated_cost_micros"] = check_input.estimated_cost_micros
-        if check_input.idempotency_key is not None:
-            check_kwargs["idempotency_key"] = check_input.idempotency_key
-        if agent_token is not None:
-            check_kwargs["agent_token"] = agent_token
-
-        result = await self.client.check(**check_kwargs)
+        result = await self.client.check(
+            authorization_id=authorization_id,
+            actions=[action],
+            resource=check_input.resource,
+            context=check_input.context,
+            client_timestamp=check_input.client_timestamp,
+            estimated_cost_micros=check_input.estimated_cost_micros,
+            idempotency_key=check_input.idempotency_key,
+            agent_token=agent_token,
+        )
         action_result = result.results.get(action)
         if action_result is None:
             raise ToolError("missing_result")

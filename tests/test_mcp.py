@@ -142,7 +142,7 @@ async def test_fastmcp_maps_only_explicit_policy_input_and_agent_token():
             resource=f"gmail:thread:{context.arguments['thread_id']}",
             context={"recipient_domain": context.arguments["recipient_domain"]},
             client_timestamp="2026-09-24T20:01:02.123Z",
-            estimated_cost_micros=24000,
+            estimated_cost_micros=0,
             idempotency_key="send-123",
         )
 
@@ -179,7 +179,7 @@ async def test_fastmcp_maps_only_explicit_policy_input_and_agent_token():
         resource="gmail:thread:abc",
         context={"recipient_domain": "example.com"},
         client_timestamp="2026-09-24T20:01:02.123Z",
-        estimated_cost_micros=24000,
+        estimated_cost_micros=0,
         idempotency_key="send-123",
         agent_token="trusted-jwt",
     )
