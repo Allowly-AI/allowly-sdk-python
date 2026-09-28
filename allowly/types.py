@@ -5,6 +5,70 @@ from typing import Any, Literal, Union
 
 Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
+
+
+@dataclass
+class CustomExecutableCreateRequest:
+    """One public HTTPS operation. Headers contain names, never credential values."""
+
+    name: str
+    url: str
+    method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
+    request_content_type: Literal["application/json", "application/x-www-form-urlencoded"] | None = None
+    required_headers: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ExecutableEvidenceCapability:
+    available: bool
+    evidence_source: Literal["customer_reported", "independent_allowly_witness"]
+    profile: str | None
+    reason: str | None
+    api_request_match_verification: str | None
+
+
+@dataclass
+class ExecutableCapabilities:
+    customer_reported_receipt: ExecutableEvidenceCapability
+    tls_witness: ExecutableEvidenceCapability
+
+
+@dataclass
+class ExecutableOperation:
+    provider_id: str
+    operation_id: str
+    label: str
+    method: str
+    path: str
+    effect: str
+    request_content_type: str | None
+    required_headers: list[str]
+    status: str
+    definition_fingerprint: str
+    capabilities: ExecutableCapabilities
+    allowly_live_tested: bool
+    tls_witness_tested: bool
+
+
+@dataclass
+class EnabledExecutableResponse:
+    enabled_executable_id: str
+    provider_id: str
+    provider_name: str
+    category: str
+    origin: str
+    catalog_revision: str
+    status: str
+    credential_location: Literal["customer_runtime"]
+    connection_status: Literal["not_verified"]
+    allowly_live_tested: bool
+    tls_witness_tested: bool
+    operations: list[ExecutableOperation]
+    operation_count: int
+    enabled_at: str
+    disabled_at: str | None
+
+
 SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed"]
 ExecutionStatus = Literal[
     "approved",

@@ -11,6 +11,11 @@ from .types import (
     ActionCheckResultDeny,
     ActionCheckResultEscalate,
     ActionEntry,
+    CustomExecutableCreateRequest,
+    EnabledExecutableResponse,
+    ExecutableOperation,
+    ExecutableCapabilities,
+    ExecutableEvidenceCapability,
     CheckResponse,
     ConfirmationApproveResponse,
     AuthorizationCreateResponse,
@@ -41,6 +46,11 @@ from .types import (
 
 __all__ = [
     "Allowly",
+    "CustomExecutableCreateRequest",
+    "EnabledExecutableResponse",
+    "ExecutableOperation",
+    "ExecutableCapabilities",
+    "ExecutableEvidenceCapability",
     "SealWebhookClient",
     "LocalExecutionResult",
     "ExecutionRecoveryRequired",

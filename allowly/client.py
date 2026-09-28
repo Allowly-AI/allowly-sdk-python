@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import asdict
 from datetime import datetime
 import inspect
+import re
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import quote, urlparse
@@ -13,6 +14,11 @@ import httpx
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .types import (
     CheckResponse,
+    CustomExecutableCreateRequest,
+    EnabledExecutableResponse,
+    ExecutableOperation,
+    ExecutableCapabilities,
+    ExecutableEvidenceCapability,
     ConfirmationApproveResponse,
     AuthorizationCreateResponse,
     AuthorizationRevokeResponse,
@@ -101,6 +107,16 @@ class Allowly:
         self.confirmations = _ConfirmationsResource(self)
         self.escalations = _EscalationsResource(self)
         self.receipts = _ReceiptsResource(self)
+
+    async def create_custom_executable(
+        self, request: CustomExecutableCreateRequest,
+    ) -> EnabledExecutableResponse:
+        """Create one immutable customer-defined operation using a setup credential."""
+        raw = await self._request(
+            "POST", "/v1/setup/custom-executables",
+            json=asdict(request), expected_success_status=201,
+        )
+        return _parse_custom_executable_response(raw)
 
     async def aclose(self) -> None:
         await self._http.aclose()
@@ -977,6 +993,68 @@ class _ReceiptsResource:
                 min(retry_delay, max(0, deadline - loop.time()))
             )
         raise TimeoutError(f"Receipt {receipt_id} not signed after {timeout}s")
+
+
+def _parse_custom_executable_response(value: Any) -> EnabledExecutableResponse:
+    raw = _require_dict(value, "enabled executable")
+
+    def flag(record: dict[str, Any], key: str) -> bool:
+        if not isinstance(record.get(key), bool):
+            raise AllowlyProtocolError(f"{key} must be a boolean")
+        return record[key]
+
+    def capability(
+        value: Any, source: Literal["customer_reported", "independent_allowly_witness"],
+    ) -> ExecutableEvidenceCapability:
+        record = _require_dict(value, "executable evidence capability")
+        if record.get("evidence_source") != source:
+            raise AllowlyProtocolError("invalid executable evidence source")
+        return ExecutableEvidenceCapability(
+            available=flag(record, "available"), evidence_source=source,
+            profile=_optional_str(record, "profile"), reason=_optional_str(record, "reason"),
+            api_request_match_verification=_optional_str(record, "api_request_match_verification"),
+        )
+
+    if (raw.get("credential_location") != "customer_runtime"
+            or raw.get("connection_status") != "not_verified"):
+        raise AllowlyProtocolError("invalid executable credential location or connection status")
+    operations_raw = raw.get("operations")
+    if (not isinstance(operations_raw, list) or len(operations_raw) != 1
+            or _require_int(raw, "operation_count") != 1):
+        raise AllowlyProtocolError("a custom executable must contain exactly one operation")
+    provider_id = _require_str(raw, "provider_id")
+    operations = []
+    for value in operations_raw:
+        operation = _require_dict(value, "executable operation")
+        capabilities = _require_dict(operation.get("capabilities"), "executable capabilities")
+        fingerprint = _require_str(operation, "definition_fingerprint")
+        if (operation.get("provider_id") != provider_id
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", fingerprint)):
+            raise AllowlyProtocolError("invalid executable operation identity or fingerprint")
+        operations.append(ExecutableOperation(
+            provider_id=provider_id, operation_id=_require_str(operation, "operation_id"),
+            label=_require_str(operation, "label"), method=_require_str(operation, "method"),
+            path=_require_str(operation, "path"), effect=_require_str(operation, "effect"),
+            request_content_type=_optional_str(operation, "request_content_type"),
+            required_headers=_require_str_list(operation, "required_headers"),
+            status=_require_str(operation, "status"), definition_fingerprint=fingerprint,
+            capabilities=ExecutableCapabilities(
+                customer_reported_receipt=capability(capabilities.get("customer_reported_receipt"), "customer_reported"),
+                tls_witness=capability(capabilities.get("tls_witness"), "independent_allowly_witness"),
+            ),
+            allowly_live_tested=flag(operation, "allowly_live_tested"),
+            tls_witness_tested=flag(operation, "tls_witness_tested"),
+        ))
+    return EnabledExecutableResponse(
+        enabled_executable_id=_require_str(raw, "enabled_executable_id"), provider_id=provider_id,
+        provider_name=_require_str(raw, "provider_name"), category=_require_str(raw, "category"),
+        origin=_require_str(raw, "origin"), catalog_revision=_require_str(raw, "catalog_revision"),
+        status=_require_str(raw, "status"), credential_location="customer_runtime",
+        connection_status="not_verified", allowly_live_tested=flag(raw, "allowly_live_tested"),
+        tls_witness_tested=flag(raw, "tls_witness_tested"), operations=operations,
+        operation_count=1, enabled_at=_require_str(raw, "enabled_at"),
+        disabled_at=_optional_str(raw, "disabled_at"),
+    )
 
 
 def _parse_pending_envelope(raw: Any) -> ReceiptEnvelopePending:
