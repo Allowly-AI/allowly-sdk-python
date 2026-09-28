@@ -1695,7 +1695,6 @@ CUSTOMER_EXECUTION_RESPONSE = {
     "reason": "authorization_granted_action_active",
     "destination_id": "exe_1",
     "action": "order.submit",
-    "execution_mode": "customer_sdk",
     "request_fingerprint_profile": "allowly.execution.request.v1",
     "request_fingerprint": "sha256:request",
     "request_descriptor": {
@@ -1707,6 +1706,10 @@ CUSTOMER_EXECUTION_RESPONSE = {
         "origin": "https://provider.example",
         "path": "/orders",
         "query": "",
+        "headers": [{"name": "authorization", "value_sha256": "sha256:secret"}],
+        "body_sha256": "sha256:body",
+        "body_size": 4,
+        "content_type": "application/json",
     },
     "decision_receipt": PENDING_RECEIPT,
     "downstream": {
@@ -1715,7 +1718,6 @@ CUSTOMER_EXECUTION_RESPONSE = {
         "response_fingerprint": "sha256:response",
         "response_fingerprint_scope": "complete",
         "result": {"provider_operation_id": "downstream_1", "response_size": 32},
-        "result_error": None,
         "business_completion": "not_verified",
     },
     "outcome_evidence": {
@@ -1879,17 +1881,37 @@ async def test_get_execution_parses_customer_outcome_and_evidence(client):
     )
     result = await client.get_execution("op_1", agent_token="jwt")
     assert result.status == "succeeded"
-    assert result.execution_mode == "customer_sdk"
     assert result.request_fingerprint_profile == "allowly.execution.request.v1"
     assert result.request_descriptor.authorization_id == "auth_1"
     assert result.request_descriptor.origin == "https://provider.example"
+    assert result.request_descriptor.headers[0]["name"] == "authorization"
+    assert result.request_descriptor.body_sha256 == "sha256:body"
     assert result.downstream is not None
     assert result.downstream.source == "customer_runtime"
     assert result.downstream.result == {"provider_operation_id": "downstream_1", "response_size": 32}
+    assert result.downstream.business_completion == "not_verified"
     assert result.outcome_evidence is not None
     assert result.outcome_evidence.record == {"operation_id": "op_1"}
     request = route.calls[0].request
     assert request.headers["x-allowly-agent-token"] == "jwt"
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("business_completion", [None, "complete"])
+async def test_get_execution_rejects_missing_or_invalid_business_completion(client, business_completion):
+    response = {
+        **CUSTOMER_EXECUTION_RESPONSE,
+        "downstream": {
+            **CUSTOMER_EXECUTION_RESPONSE["downstream"],
+            "business_completion": business_completion,
+        },
+    }
+    respx.get(f"{BASE}/v1/executions/op_1").mock(
+        return_value=httpx.Response(200, json=response)
+    )
+    with pytest.raises(AllowlyProtocolError, match="business_completion"):
+        await client.get_execution("op_1")
 
 
 @respx.mock
@@ -1989,22 +2011,6 @@ async def test_prepare_execution_rejects_naive_client_timestamp_before_request(c
             client_timestamp=datetime(2026, 9, 24, 20, 1, 2),
             idempotency_key="idem_1",
         )
-
-
-@respx.mock
-@pytest.mark.asyncio
-@pytest.mark.parametrize("legacy_field", ["execution_mode", "downstream_source"])
-async def test_get_execution_rejects_hosted_response(client, legacy_field):
-    response = {**CUSTOMER_EXECUTION_RESPONSE}
-    if legacy_field == "execution_mode":
-        response["execution_mode"] = "managed_gateway"
-    else:
-        response["downstream"] = {**response["downstream"], "source": "registered_destination"}
-    respx.get(f"{BASE}/v1/executions/op_1").mock(
-        return_value=httpx.Response(200, json=response)
-    )
-    with pytest.raises(AllowlyProtocolError):
-        await client.get_execution("op_1")
 
 
 @respx.mock

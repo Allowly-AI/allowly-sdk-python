@@ -397,7 +397,7 @@ class Allowly:
         raw = await self._request(
             "POST", "/v1/execute", expected_success_status=(200, 201),
             headers=await self._identity_headers(agent_token, idempotency_key=idempotency_key),
-            json={"mode": "customer_sdk", "operation_id": operation_id,
+            json={"operation_id": operation_id,
                   "authorization_id": authorization_id,
                   "enabled_executable_id": enabled_executable_id,
                   "catalog_operation_id": catalog_operation_id, "action": action,
@@ -407,7 +407,7 @@ class Allowly:
         )
         result = _parse_execution_response(raw)
         if (result.operation_id != operation_id or result.destination_id != enabled_executable_id
-                or result.action != action or result.execution_mode != "customer_sdk"
+                or result.action != action
                 or result.request_descriptor.authorization_id != authorization_id):
             raise AllowlyProtocolError("execution approval does not match the requested operation")
         return result
@@ -1288,19 +1288,19 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
                 "invalid execution downstream response_fingerprint_scope: "
                 f"{response_fingerprint_scope!r}"
             )
-        result_raw = downstream_body.get("result")
-        result = None if result_raw is None else _require_dict(result_raw, "execution downstream result")
-        result_error = downstream_body.get("result_error")
-        if result_error not in {None, "response_not_json", "response_mapping_failed"}:
-            raise AllowlyProtocolError(f"invalid execution downstream result_error: {result_error!r}")
+        result = _require_dict(downstream_body.get("result"), "execution downstream result")
+        business_completion = _require_str(downstream_body, "business_completion")
+        if business_completion != "not_verified":
+            raise AllowlyProtocolError(
+                f"invalid execution downstream business_completion: {business_completion!r}"
+            )
         downstream = ExecutionDownstream(
             source=source,
             http_status=http_status,
             response_fingerprint=response_fingerprint,
             response_fingerprint_scope=response_fingerprint_scope,
             result=result,
-            result_error=result_error,
-            business_completion=downstream_body.get("business_completion"),
+            business_completion="not_verified",
         )
     evidence_raw = body.get("outcome_evidence")
     evidence = _parse_outcome_evidence(evidence_raw) if evidence_raw is not None else None
@@ -1311,13 +1311,20 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
         )
     descriptor_body = _require_dict(body.get("request_descriptor"), "execution request descriptor")
     descriptor_method = _require_str(descriptor_body, "method")
-    execution_mode = _require_str(body, "execution_mode")
-    if execution_mode != "customer_sdk":
-        raise AllowlyProtocolError("invalid execution mode")
     if descriptor_method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
         raise AllowlyProtocolError(
             f"invalid execution request descriptor method: {descriptor_method!r}"
         )
+    raw_headers = descriptor_body.get("headers")
+    if not isinstance(raw_headers, list):
+        raise AllowlyProtocolError("execution request descriptor headers must be an array")
+    headers = []
+    for item in raw_headers:
+        header = _require_dict(item, "execution request header")
+        headers.append({
+            "name": _require_str(header, "name"),
+            "value_sha256": _require_str(header, "value_sha256"),
+        })
     request_descriptor = ExecutionRequestDescriptor(
         operation_id=_require_str(descriptor_body, "operation_id"),
         authorization_id=_require_str(descriptor_body, "authorization_id"),
@@ -1327,6 +1334,10 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
         origin=_require_str(descriptor_body, "origin"),
         path=_require_str(descriptor_body, "path"),
         query=_require_str(descriptor_body, "query"),
+        headers=headers,
+        body_sha256=_require_str(descriptor_body, "body_sha256"),
+        body_size=_require_int(descriptor_body, "body_size"),
+        content_type=_optional_str(descriptor_body, "content_type"),
     )
     if (
         request_descriptor.operation_id != operation_id
@@ -1356,7 +1367,6 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
         escalation_expires_at=_optional_str(body, "escalation_expires_at"),
         escalation_to=_optional_str(body, "escalation_to"),
         escalation=_parse_escalation_info(body.get("escalation")),
-        execution_mode=execution_mode,
         effective_evidence_mode=_optional_str(body, "effective_evidence_mode"),
         approval=body.get("approval"),
         approval_sha256=_optional_str(body, "approval_sha256"),

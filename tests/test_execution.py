@@ -36,9 +36,12 @@ def approval_response(payload, evidence_mode=None):
             "request_fingerprint_profile": "allowly.execution.request.v1", "request_fingerprint": "sha256:" + "1" * 64,
             "request_descriptor": {"operation_id": payload["operation_id"], "authorization_id": payload["authorization_id"],
                                    "destination_id": payload["enabled_executable_id"], "action": payload["action"],
-                                   **{k: payload["http_request"][k] for k in ("method", "origin", "path", "query")}},
+                                   **{k: payload["http_request"][k] for k in (
+                                       "method", "origin", "path", "query", "headers",
+                                       "body_sha256", "body_size", "content_type",
+                                   )}},
             "decision_receipt": {"status": "pending", "receipt_id": "rcp_1", "ready_at_estimate": None, "url": BASE + "/v1/receipts/rcp_1"},
-            "execution_mode": "customer_sdk", "effective_evidence_mode": descriptor["evidence_mode"],
+            "effective_evidence_mode": descriptor["evidence_mode"],
             "approval": descriptor, "approval_sha256": "sha256:" + hash_seal_value(descriptor),
             "approval_expires_at": descriptor["expires_at"], "decision_state": "allowed", "target_state": "not_started", "evidence_state": "pending"}
 

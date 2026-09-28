@@ -153,9 +153,8 @@ class ExecutionDownstream:
     http_status: int | None
     response_fingerprint: str | None
     response_fingerprint_scope: Literal["complete", "unavailable"]
-    result: dict[str, Any] | None = None
-    result_error: Literal["response_not_json", "response_mapping_failed"] | None = None
-    business_completion: Literal["not_verified"] | None = None
+    result: dict[str, Any]
+    business_completion: Literal["not_verified"]
 
 
 @dataclass
@@ -177,6 +176,10 @@ class ExecutionRequestDescriptor:
     origin: str
     path: str
     query: str
+    headers: list[dict[str, str]]
+    body_sha256: str
+    body_size: int
+    content_type: str | None
 
 
 @dataclass
@@ -200,7 +203,6 @@ class ExecutionResponse:
     escalation_expires_at: str | None = None
     escalation_to: str | None = None
     escalation: EscalationInfo | None = None
-    execution_mode: Literal["customer_sdk"] = "customer_sdk"
     effective_evidence_mode: Literal["receipt", "witnessed"] | None = None
     approval: dict[str, Any] | None = None
     approval_sha256: str | None = None
