@@ -1688,31 +1688,35 @@ async def test_fetch_signed_default_timeout_covers_one_signer_tick(client, monke
         await client.receipts.fetch_signed("rcp_abc", timeout=30.0)
 
 
-EXECUTION_RESPONSE = {
+CUSTOMER_EXECUTION_RESPONSE = {
     "operation_id": "op_1",
     "status": "succeeded",
     "decision": "allow",
     "reason": "authorization_granted_action_active",
-    "destination_id": "dst_1",
+    "destination_id": "exe_1",
     "action": "order.submit",
+    "execution_mode": "customer_sdk",
     "request_fingerprint_profile": "allowly.execution.request.v1",
     "request_fingerprint": "sha256:request",
     "request_descriptor": {
         "operation_id": "op_1",
         "authorization_id": "auth_1",
-        "destination_id": "dst_1",
+        "destination_id": "exe_1",
         "action": "order.submit",
         "method": "POST",
-        "url": "https://destination.example/orders",
+        "origin": "https://provider.example",
+        "path": "/orders",
+        "query": "",
     },
     "decision_receipt": PENDING_RECEIPT,
     "downstream": {
-        "source": "registered_destination",
+        "source": "customer_runtime",
         "http_status": 202,
         "response_fingerprint": "sha256:response",
         "response_fingerprint_scope": "complete",
-        "result": {"provider_operation_id": "downstream_1"},
+        "result": {"provider_operation_id": "downstream_1", "response_size": 32},
         "result_error": None,
+        "business_completion": "not_verified",
     },
     "outcome_evidence": {
         "profile": "allowly.seal.jcs-sha256.v1",
@@ -1863,66 +1867,53 @@ async def test_invalid_agent_token_supplier_result_cannot_downgrade_identity(sup
     await identity_client.aclose()
 
 
+def test_hosted_execute_is_not_public(client):
+    assert not hasattr(client, "execute")
+
+
 @respx.mock
 @pytest.mark.asyncio
-async def test_execute_parses_evidence_and_preserves_stable_identifiers(client):
-    route = respx.post(f"{BASE}/v1/execute").mock(
-        return_value=httpx.Response(201, json=EXECUTION_RESPONSE)
+async def test_get_execution_parses_customer_outcome_and_evidence(client):
+    route = respx.get(f"{BASE}/v1/executions/op_1").mock(
+        return_value=httpx.Response(200, json=CUSTOMER_EXECUTION_RESPONSE)
     )
-    result = await client.execute(
-        operation_id="op_1",
-        authorization_id="auth_1",
-        destination_id="dst_1",
-        payload={"order": {"id": "ord_1"}},
-        client_timestamp=datetime(2026, 9, 24, 20, 1, 2, tzinfo=timezone.utc),
-        idempotency_key="idem_1",
-        agent_token="jwt",
-    )
+    result = await client.get_execution("op_1", agent_token="jwt")
     assert result.status == "succeeded"
+    assert result.execution_mode == "customer_sdk"
     assert result.request_fingerprint_profile == "allowly.execution.request.v1"
     assert result.request_descriptor.authorization_id == "auth_1"
+    assert result.request_descriptor.origin == "https://provider.example"
     assert result.downstream is not None
-    assert result.downstream.result == {"provider_operation_id": "downstream_1"}
+    assert result.downstream.source == "customer_runtime"
+    assert result.downstream.result == {"provider_operation_id": "downstream_1", "response_size": 32}
     assert result.outcome_evidence is not None
     assert result.outcome_evidence.record == {"operation_id": "op_1"}
     request = route.calls[0].request
-    assert request.headers["idempotency-key"] == "idem_1"
     assert request.headers["x-allowly-agent-token"] == "jwt"
-    body = json.loads(request.content)
-    assert body["operation_id"] == "op_1"
-    assert body["client_timestamp"] == "2026-09-24T20:01:02Z"
-    assert "resource" not in body and "context" not in body
 
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_execute_keeps_explicit_unavailable_evidence_state(client):
+async def test_get_execution_keeps_explicit_unavailable_evidence_state(client):
     response = {
-        **EXECUTION_RESPONSE,
+        **CUSTOMER_EXECUTION_RESPONSE,
         "downstream": {
-            **EXECUTION_RESPONSE["downstream"],
+            **CUSTOMER_EXECUTION_RESPONSE["downstream"],
             "http_status": None,
             "response_fingerprint": None,
             "response_fingerprint_scope": "unavailable",
             "result": {},
         },
         "outcome_evidence": {
-            **EXECUTION_RESPONSE["outcome_evidence"],
+            **CUSTOMER_EXECUTION_RESPONSE["outcome_evidence"],
             "receipt": None,
             "evidence_error": "unavailable",
         },
     }
-    respx.post(f"{BASE}/v1/execute").mock(
-        return_value=httpx.Response(201, json=response)
+    respx.get(f"{BASE}/v1/executions/op_1").mock(
+        return_value=httpx.Response(200, json=response)
     )
-    result = await client.execute(
-        operation_id="op_1",
-        authorization_id="auth_1",
-        destination_id="dst_1",
-        payload={},
-        client_timestamp="2026-09-24T20:01:02Z",
-        idempotency_key="idem_1",
-    )
+    result = await client.get_execution("op_1")
     assert result.downstream is not None
     assert result.downstream.response_fingerprint_scope == "unavailable"
     assert result.outcome_evidence is not None
@@ -1961,26 +1952,19 @@ async def test_execute_keeps_explicit_unavailable_evidence_state(client):
         ),
     ],
 )
-async def test_execute_parses_paused_review_fields(client, status, decision, review_fields):
+async def test_get_execution_parses_paused_review_fields(client, status, decision, review_fields):
     response = {
-        **EXECUTION_RESPONSE,
+        **CUSTOMER_EXECUTION_RESPONSE,
         "status": status,
         "decision": decision,
         "downstream": None,
         "outcome_evidence": None,
         **review_fields,
     }
-    respx.post(f"{BASE}/v1/execute").mock(
+    respx.get(f"{BASE}/v1/executions/op_1").mock(
         return_value=httpx.Response(200, json=response)
     )
-    result = await client.execute(
-        operation_id="op_1",
-        authorization_id="auth_1",
-        destination_id="dst_1",
-        payload={"order": {"id": "ord_1"}},
-        client_timestamp="2026-09-24T20:01:02Z",
-        idempotency_key="idem_1",
-    )
+    result = await client.get_execution("op_1")
     assert result.status == status
     if decision == "confirm":
         assert result.confirm_nonce == "nonce_1"
@@ -1992,16 +1976,35 @@ async def test_execute_parses_paused_review_fields(client, status, decision, rev
 
 
 @pytest.mark.asyncio
-async def test_execute_rejects_naive_client_timestamp_before_request(client):
+async def test_prepare_execution_rejects_naive_client_timestamp_before_request(client):
     with pytest.raises(ValueError, match="timezone"):
-        await client.execute(
+        await client.prepare_execution(
             operation_id="op_1",
             authorization_id="auth_1",
-            destination_id="dst_1",
-            payload={},
+            enabled_executable_id="exe_1",
+            catalog_operation_id="provider.orders.create",
+            action="order.submit",
+            http_request={},
+            policy_input={},
             client_timestamp=datetime(2026, 9, 24, 20, 1, 2),
             idempotency_key="idem_1",
         )
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("legacy_field", ["execution_mode", "downstream_source"])
+async def test_get_execution_rejects_hosted_response(client, legacy_field):
+    response = {**CUSTOMER_EXECUTION_RESPONSE}
+    if legacy_field == "execution_mode":
+        response["execution_mode"] = "managed_gateway"
+    else:
+        response["downstream"] = {**response["downstream"], "source": "registered_destination"}
+    respx.get(f"{BASE}/v1/executions/op_1").mock(
+        return_value=httpx.Response(200, json=response)
+    )
+    with pytest.raises(AllowlyProtocolError):
+        await client.get_execution("op_1")
 
 
 @respx.mock

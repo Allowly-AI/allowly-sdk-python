@@ -165,7 +165,8 @@ def test_unsafe_urls_rejected(url):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("corrupt_response", [False, True])
-async def test_witness_gate_claims_before_release_and_preserves_evidence(tmp_path, corrupt_response):
+@pytest.mark.parametrize("configured", [False, True])
+async def test_witness_gate_claims_before_release_and_preserves_evidence(tmp_path, monkeypatch, corrupt_response, configured):
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
     key = ec.generate_private_key(ec.SECP256R1()).public_key()
@@ -188,6 +189,13 @@ assert json.loads((out/'dispatch.approved.json').read_text()) == {'approval_sha2
 (out/'verified.json').write_text(json.dumps({'verified':True,'approval_sha256':data['approval_sha256'],'request_binding_verification':'verified_from_full_presentation'}))
 ''')
     binary.chmod(0o700)
+    if configured:
+        config = tmp_path / "witness" / "ws_1" / "config.json"
+        config.parent.mkdir(parents=True)
+        config.write_text(json.dumps({"version": 1, "workspaceId": "ws_1",
+                                      "nativeBinaryPath": str(binary), "trustedNotaryKeyPath": str(trust),
+                                      "fingerprintSha256": _notary_fingerprint(trust)}))
+        monkeypatch.setenv("ALLOWLY_CONFIG_DIR", str(tmp_path))
     def mutate(r):
         r["witness_session"] = {"session_id": "wit_1", "witness_url": "wss://witness.example.com/sessions/wit_1",
                                 "native_profile": "customer_held_tlsn_bundle_v1", "trusted_notary_key_fingerprint_sha256": _notary_fingerprint(trust)}
@@ -197,7 +205,8 @@ assert json.loads((out/'dispatch.approved.json').read_text()) == {'approval_sha2
             **seen["approved"]["witness_session"], "workspace_id": "ws_1", "approval_sha256": seen["approved"]["approval_sha256"], "admission_token": "a" * 43}))
         async with Allowly("key", base_url=BASE) as client:
             result = await client.execute_http(URL, **PARAMS, storage_dir=str(tmp_path / "journal"), evidence_mode="witnessed",
-                                               native_binary=str(binary), trusted_notary_key=str(trust))
+                                               native_binary=None if configured else str(binary),
+                                               trusted_notary_key=None if configured else str(trust))
     assert len(seen["dispatch"]) == 1
     if corrupt_response:
         assert result.response is None
@@ -207,6 +216,47 @@ assert json.loads((out/'dispatch.approved.json').read_text()) == {'approval_sha2
         assert result.response["status"] == 201
         assert seen["outcome"][0]["notary_attestation"] == {}
         assert seen["outcome"][0]["evidence_bundle_sha256"] == "sha256:" + hashlib.sha256(b"{}").hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_missing_witness_setup_can_be_retried_after_install(tmp_path, monkeypatch):
+    monkeypatch.setenv("ALLOWLY_CONFIG_DIR", str(tmp_path / "config"))
+    def mutate(response):
+        response["witness_session"] = {"trusted_notary_key_fingerprint_sha256": "0" * 64}
+    with respx.mock as mock:
+        seen, _ = runtime(mock, mutate=mutate)
+        async with Allowly("key", base_url=BASE) as client:
+            with pytest.raises(ValueError, match="allowly setup witness"):
+                await client.execute_http(URL, **PARAMS, storage_dir=str(tmp_path / "journal"), evidence_mode="witnessed")
+    assert not seen["dispatch"] and not (tmp_path / "journal").exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("config_error", ["workspace", "fingerprint"])
+async def test_witness_setup_is_bound_to_workspace_and_confirmed_key(tmp_path, monkeypatch, config_error):
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+    key = ec.generate_private_key(ec.SECP256R1()).public_key()
+    trust = tmp_path / "notary.json"
+    trust.write_text(json.dumps({"alg": 2, "data": list(key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint))}))
+    binary = tmp_path / "helper"
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o700)
+    config = tmp_path / "config" / "witness" / "ws_1" / "config.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(json.dumps({"version": 1, "workspaceId": "ws_2" if config_error == "workspace" else "ws_1",
+                                  "nativeBinaryPath": str(binary), "trustedNotaryKeyPath": str(trust),
+                                  "fingerprintSha256": "0" * 64 if config_error == "fingerprint" else _notary_fingerprint(trust)}))
+    monkeypatch.setenv("ALLOWLY_CONFIG_DIR", str(tmp_path / "config"))
+    def mutate(response):
+        response["witness_session"] = {"trusted_notary_key_fingerprint_sha256": _notary_fingerprint(trust)}
+    with respx.mock as mock:
+        seen, _ = runtime(mock, mutate=mutate)
+        async with Allowly("key", base_url=BASE) as client:
+            expected_error = ValueError if config_error == "workspace" else AllowlyProtocolError
+            with pytest.raises(expected_error):
+                await client.execute_http(URL, **PARAMS, storage_dir=str(tmp_path / "journal"), evidence_mode="witnessed")
+    assert not seen["dispatch"] and not (tmp_path / "journal").exists()
 
 
 @pytest.mark.asyncio
@@ -280,18 +330,6 @@ async def test_remote_outage_ignores_check_fail_open_setting(tmp_path, monkeypat
         async with Allowly("key", base_url=BASE, fallback_by_action={"billing.refund": "fail_open"}) as client:
             with pytest.raises(httpx.ConnectError):
                 await client.execute_http(URL, **PARAMS, storage_dir=str(tmp_path))
-
-
-@pytest.mark.asyncio
-async def test_managed_execute_rejects_customer_prepare_response():
-    descriptor, _ = _request(URL, PARAMS["method"], PARAMS["headers"], PARAMS["body"])
-    payload = {**PARAMS, "http_request": descriptor, "policy_input": {}, "evidence_mode": "receipt"}
-    with respx.mock as mock:
-        mock.post(BASE + "/v1/execute").mock(return_value=httpx.Response(201, json=approval_response(payload)))
-        async with Allowly("key", base_url=BASE) as client:
-            with pytest.raises(AllowlyProtocolError):
-                await client.execute(operation_id=PARAMS["operation_id"], authorization_id="auth_1", destination_id="exe_1",
-                                     payload={}, client_timestamp=datetime.now(timezone.utc), idempotency_key="id_1")
 
 
 @pytest.mark.asyncio

@@ -229,6 +229,48 @@ def _notary_fingerprint(path: Path) -> str:
     return hashlib.sha256(public.public_bytes(Encoding.X962, PublicFormat.CompressedPoint)).hexdigest()
 
 
+def _witness_files(
+    workspace_id: str, native_binary: str | None, trusted_notary_key: str | None,
+) -> tuple[str, Path, str]:
+    """Resolve CLI-installed witness files and verify its locally pinned key."""
+    pinned_fingerprint: str | None = None
+    if native_binary is None or trusted_notary_key is None:
+        if not isinstance(workspace_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", workspace_id):
+            raise AllowlyProtocolError("invalid witness workspace ID")
+        config_dir = Path(os.environ.get("ALLOWLY_CONFIG_DIR") or Path.home() / ".allowly")
+        config_path = config_dir / "witness" / workspace_id / "config.json"
+        try:
+            config = _read(config_path, 4096)
+        except FileNotFoundError:
+            raise ValueError(f"witness setup is missing for {workspace_id}; run `allowly setup witness`") from None
+        except (OSError, ValueError, UnicodeError):
+            raise ValueError(f"witness setup is invalid for {workspace_id}; run `allowly setup witness`") from None
+        if (not isinstance(config, dict) or type(config.get("version")) is not int
+                or config["version"] != 1 or config.get("workspaceId") != workspace_id
+                or not isinstance(config.get("nativeBinaryPath"), str)
+                or not isinstance(config.get("trustedNotaryKeyPath"), str)
+                or not isinstance(config.get("fingerprintSha256"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", config["fingerprintSha256"])):
+            raise ValueError(f"witness setup is invalid for {workspace_id}; run `allowly setup witness`")
+        native_binary = native_binary or config["nativeBinaryPath"]
+        trusted_notary_key = trusted_notary_key or config["trustedNotaryKeyPath"]
+        pinned_fingerprint = config["fingerprintSha256"]
+    binary_path = Path(native_binary).expanduser()
+    trust_path = Path(trusted_notary_key).expanduser()
+    if not binary_path.is_absolute() or not trust_path.is_absolute():
+        raise ValueError("witness binary and public key paths must be absolute")
+    native = binary_path.resolve(strict=True)
+    trust = trust_path.resolve(strict=True)
+    if not native.is_file() or not os.access(native, os.X_OK):
+        raise ValueError("witness binary is missing or not executable")
+    if not trust.is_file():
+        raise ValueError("witness public key file is missing")
+    fingerprint = _notary_fingerprint(trust)
+    if pinned_fingerprint is not None and fingerprint != pinned_fingerprint:
+        raise AllowlyProtocolError("witness public key differs from the locally confirmed fingerprint")
+    return str(native), trust, fingerprint
+
+
 async def execute_http(
     client: Allowly, url: str, *, operation_id: str, authorization_id: str,
     enabled_executable_id: str, catalog_operation_id: str, action: str,
@@ -242,7 +284,8 @@ async def execute_http(
 
     Use a business-stable operation ID (for example the refund ID), not a fresh
     UUID per retry. Repeating this call never repeats an existing local run.
-    Install ``allowly[verifier]``; witnessed calls also require the native helper.
+    Install ``allowly[verifier]``; witnessed calls use the CLI's confirmed
+    witness setup unless both file paths are supplied explicitly.
     """
     from .verify import hash_seal_value
     if not operation_id or evidence_mode not in {"receipt", "witnessed"} or not 0 < timeout <= 150:
@@ -254,24 +297,31 @@ async def execute_http(
                  "action": action, "http_request": descriptor, "policy_input": policy,
                  "evidence_mode": evidence_mode}
     parent = Path(storage_dir).expanduser().resolve()
-    parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     folder = parent / hashlib.sha256(operation_id.encode()).hexdigest()
+    if folder.exists():
+        raise ExecutionRecoveryRequired(folder)
+    result = await client.prepare_execution(**requested, client_timestamp=_now(),
+                                            idempotency_key=operation_id, agent_token=agent_token)
+    approved = result.decision == "allow" and result.status == "approved"
+    approval = _validate_approval(result, requested) if approved else None
+    witness_files: tuple[str, Path, str] | None = None
+    if approved and result.effective_evidence_mode == "witnessed":
+        assert approval is not None
+        witness_files = _witness_files(approval["workspace_id"], native_binary, trusted_notary_key)
+        if witness_files[2] != (result.witness_session or {}).get("trusted_notary_key_fingerprint_sha256"):
+            raise AllowlyProtocolError("configured notary key differs from admitted witness")
+    parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
         folder.mkdir(mode=0o700)
     except FileExistsError:
         raise ExecutionRecoveryRequired(folder) from None
     state: dict[str, Any] = {"version": 1, "operation_id": operation_id,
                              "request_sha256": "sha256:" + hash_seal_value(requested),
-                             "phase": "prepared"}
+                             "phase": "authorized", "authorization": asdict(result)}
     journal = folder / "journal.json"
     _save(journal, state)
-    result = await client.prepare_execution(**requested, client_timestamp=_now(),
-                                            idempotency_key=operation_id, agent_token=agent_token)
-    state.update(authorization=asdict(result), phase="authorized")
-    _save(journal, state)
-    if result.decision != "allow" or result.status != "approved":
+    if not approved:
         return LocalExecutionResult(result, str(folder))
-    approval = _validate_approval(result, requested)
     binding = {"approval_sha256": result.approval_sha256, "approval": approval}
     _save(folder / "approval.json", binding)
     response: dict[str, Any] | None = None
@@ -293,13 +343,9 @@ async def execute_http(
         _live(approval)
 
     if result.effective_evidence_mode == "witnessed":
-        if not native_binary or not trusted_notary_key:
-            raise ValueError("witnessed execution requires native_binary and trusted_notary_key")
-        native = str(Path(native_binary).expanduser().resolve(strict=True))
-        trust = Path(trusted_notary_key).expanduser().resolve(strict=True)
+        assert witness_files is not None
+        native, trust, _ = witness_files
         session = result.witness_session or {}
-        if _notary_fingerprint(trust) != session.get("trusted_notary_key_fingerprint_sha256"):
-            raise AllowlyProtocolError("configured notary key differs from admitted witness")
         target = descriptor["path"] + ("?" + descriptor["query"] if descriptor["query"] else "")
         estimated = (f"{descriptor['method']} {target} HTTP/1.1\r\nHost: {urlsplit(descriptor['origin']).hostname}\r\nConnection: close\r\nAccept-Encoding: identity\r\n"
                      + "".join(f"{k}: {v}\r\n" for k, v in sorted(private_headers.items()))

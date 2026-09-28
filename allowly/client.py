@@ -368,54 +368,6 @@ class Allowly:
         )
         return _parse_budget_settlement_response(raw)
 
-    async def execute(
-        self,
-        *,
-        operation_id: str,
-        authorization_id: str,
-        destination_id: str,
-        payload: Any,
-        client_timestamp: datetime | str,
-        idempotency_key: str,
-        agent_token: str | None = None,
-    ) -> ExecutionResponse:
-        """Authorize and dispatch one payload to a registered destination.
-
-        Exact retries must reuse the same operation ID, idempotency key, and
-        body. An ``unknown`` result must be inspected and must not be resent
-        automatically with a new identifier.
-        """
-        raw = await self._request(
-            "POST",
-            "/v1/execute",
-            json={
-                "operation_id": operation_id,
-                "authorization_id": authorization_id,
-                "destination_id": destination_id,
-                "payload": payload,
-                "client_timestamp": _client_timestamp(client_timestamp),
-            },
-            headers=await self._identity_headers(
-                agent_token,
-                idempotency_key=idempotency_key,
-            ),
-            expected_success_status=(200, 201),
-        )
-        response = _parse_execution_response(raw)
-        if (
-            response.operation_id != operation_id
-            or response.destination_id != destination_id
-            or response.request_descriptor.authorization_id != authorization_id
-            or response.execution_mode != "managed_gateway"
-            or response.status == "approved"
-            or response.request_descriptor.method != "POST"
-            or (response.downstream is not None and response.downstream.source != "registered_destination")
-        ):
-            raise AllowlyProtocolError(
-                "execution response does not match the requested operation"
-            )
-        return response
-
     async def get_execution(
         self,
         operation_id: str,
@@ -1318,7 +1270,7 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
     if downstream_raw is not None:
         downstream_body = _require_dict(downstream_raw, "execution downstream")
         source = _require_str(downstream_body, "source")
-        if source not in {"registered_destination", "customer_runtime"}:
+        if source != "customer_runtime":
             raise AllowlyProtocolError(f"invalid execution downstream source: {source!r}")
         http_status = downstream_body.get("http_status")
         if http_status is not None and (isinstance(http_status, bool) or not isinstance(http_status, int)):
@@ -1359,12 +1311,10 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
         )
     descriptor_body = _require_dict(body.get("request_descriptor"), "execution request descriptor")
     descriptor_method = _require_str(descriptor_body, "method")
-    execution_mode = body.get("execution_mode", "managed_gateway")
-    if execution_mode not in {"managed_gateway", "customer_sdk"}:
+    execution_mode = _require_str(body, "execution_mode")
+    if execution_mode != "customer_sdk":
         raise AllowlyProtocolError("invalid execution mode")
-    if descriptor_method not in {"GET", "POST", "PUT", "PATCH", "DELETE"} or (
-        execution_mode == "managed_gateway" and descriptor_method != "POST"
-    ):
+    if descriptor_method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
         raise AllowlyProtocolError(
             f"invalid execution request descriptor method: {descriptor_method!r}"
         )
@@ -1374,11 +1324,9 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
         destination_id=_require_str(descriptor_body, "destination_id"),
         action=_require_str(descriptor_body, "action"),
         method=descriptor_method,
-        url=(_require_str(descriptor_body, "url") if execution_mode == "managed_gateway"
-             else _optional_str(descriptor_body, "url")),
-        origin=_optional_str(descriptor_body, "origin"),
-        path=_optional_str(descriptor_body, "path"),
-        query=_optional_str(descriptor_body, "query"),
+        origin=_require_str(descriptor_body, "origin"),
+        path=_require_str(descriptor_body, "path"),
+        query=_require_str(descriptor_body, "query"),
     )
     if (
         request_descriptor.operation_id != operation_id

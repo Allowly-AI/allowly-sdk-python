@@ -48,7 +48,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-## Auth0 agent identity and managed execution
+## Auth0 agent identity
 
 For an authorization bound to an Auth0 machine identity, supply the short-lived
 access token separately from the Allowly runtime key. A token supplier runs for
@@ -68,30 +68,12 @@ decision = await allowly.check(
     actions=["order.submit"],
     client_timestamp=datetime.now(timezone.utc),
 )
-
-execution = await allowly.execute(
-    operation_id="order-123-attempt-1",
-    authorization_id="auth_...",
-    destination_id="dst_...",
-    payload={"order": {"id": "123", "amount_micros": 1_250_000}},
-    client_timestamp=datetime.now(timezone.utc),
-    idempotency_key="order-123-attempt-1",
-)
-if execution.status == "unknown":
-    execution = await allowly.get_execution("order-123-attempt-1")
 ```
 
-Persist the operation ID, idempotency key, and exact payload together. Never
-retry an unknown outcome under a new ID. `succeeded` reports a downstream 2xx
-HTTP result; it does not prove that the destination completed its business
-work. Allowly uses the destination credential stored in its registered
-destination. Do not put that credential in `payload`.
+The SDK sends the agent token in the `X-Allowly-Agent-Token` header for checks
+and customer-hosted execution calls. Provider credentials stay in your runtime.
 
-Each execution response includes `request_fingerprint_profile` and the exact
-`request_descriptor`. To reproduce `request_fingerprint`, calculate
-`"sha256:" + hash_seal_value({"profile": profile, "descriptor": descriptor,
-"payload": exact_original_payload})`; `dataclasses.asdict()` preserves the
-descriptor's wire field names.
+## Receipt acknowledgments
 
 After fetching the complete signed receipt, the verifier extra can calculate
 the canonical receipt hash for an acknowledgment:
@@ -150,8 +132,7 @@ that those inputs match the meaning of the provider body.
 
 The helper calls remote `/v1/execute`, validates the approval, and claims dispatch
 once before sending locally. It fails closed on unavailable checks and stops on
-deny, confirmation, or escalation. The older `execute(...)` method keeps its
-managed-gateway behavior. Low-level customer methods are `prepare_execution`,
+deny, confirmation, or escalation. Low-level customer methods are `prepare_execution`,
 `claim_execution_dispatch`, `get_execution_witness_token`,
 `report_execution_outcome`, and `get_execution`.
 
@@ -169,9 +150,22 @@ exactly-once guarantee for arbitrary providers. If `result.outcome_pending` is
 true, its API response still describes approval; `result.response` contains the
 locally observed response and the journal retains the report for upload.
 
-Set `evidence_mode="witnessed"` to request the native witness transport. Configure
-`native_binary` and an independently provisioned `trusted_notary_key` file; a
-policy can also require this mode. The helper validates the key fingerprint and
+Run `allowly setup witness` in the Allowly CLI for each workspace that will use
+witnessed execution. The command installs the Rust helper, downloads that
+workspace's **public** witness key, shows its locally calculated fingerprint,
+and opens the authenticated workspace key page for you to compare and confirm.
+The CLI saves the confirmed fingerprint and local file paths in
+`~/.allowly/witness/<workspace-id>/config.json` (or below `ALLOWLY_CONFIG_DIR`).
+The SDK reads that setup automatically for the workspace in the execution
+approval and checks the public key against the confirmed fingerprint on every
+witnessed call. Keep this config and the public key available to the runtime
+user on the machine that sends provider requests. No private witness key is
+downloaded.
+
+Set `evidence_mode="witnessed"` to request the native witness transport; a
+policy can also require this mode. Existing deployments may pass both
+`native_binary` and an independently provisioned `trusted_notary_key` file
+explicitly. The SDK compares the configured key with the witness session and
 waits for online witness admission and MPC setup before claiming dispatch. It
 never silently falls back to a regular receipt. The experimental native profile
 supports HTTP/1.1 over TLS 1.2, a **2 KiB complete request** and **16 KiB response**,

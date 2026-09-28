@@ -149,7 +149,7 @@ class BudgetSettlementResponse:
 
 @dataclass
 class ExecutionDownstream:
-    source: Literal["registered_destination", "customer_runtime"]
+    source: Literal["customer_runtime"]
     http_status: int | None
     response_fingerprint: str | None
     response_fingerprint_scope: Literal["complete", "unavailable"]
@@ -174,10 +174,9 @@ class ExecutionRequestDescriptor:
     destination_id: str
     action: str
     method: str
-    url: str | None = None
-    origin: str | None = None
-    path: str | None = None
-    query: str | None = None
+    origin: str
+    path: str
+    query: str
 
 
 @dataclass
@@ -201,7 +200,7 @@ class ExecutionResponse:
     escalation_expires_at: str | None = None
     escalation_to: str | None = None
     escalation: EscalationInfo | None = None
-    execution_mode: Literal["managed_gateway", "customer_sdk"] = "managed_gateway"
+    execution_mode: Literal["customer_sdk"] = "customer_sdk"
     effective_evidence_mode: Literal["receipt", "witnessed"] | None = None
     approval: dict[str, Any] | None = None
     approval_sha256: str | None = None
