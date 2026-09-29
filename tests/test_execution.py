@@ -8,7 +8,7 @@ import pytest
 import respx
 
 from allowly import Allowly, AllowlyProtocolError, ExecutionRecoveryRequired, complete_execution_evidence
-from allowly.execution import _notary_fingerprint, _provider_send, _request, _save
+from allowly.execution import _notary_fingerprint, _provider_send, _request, _save, _witness_files
 from allowly.verify import hash_seal_value
 
 BASE = "https://api.example.com"
@@ -167,37 +167,49 @@ def test_unsafe_urls_rejected(url):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("corrupt_response", [False, True])
+@pytest.mark.parametrize("response_case", ["valid", "corrupt_hash", "proof_mismatch", "artifact_mismatch", "attestation_mismatch", "stdout_mismatch"])
 @pytest.mark.parametrize("configured", [False, True])
-async def test_witness_gate_claims_before_release_and_preserves_evidence(tmp_path, monkeypatch, corrupt_response, configured):
+async def test_witness_gate_claims_before_release_and_preserves_evidence(tmp_path, monkeypatch, response_case, configured):
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
     key = ec.generate_private_key(ec.SECP256R1()).public_key()
     trust = tmp_path / "notary.json"
     trust.write_text(json.dumps({"alg": 2, "data": list(key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint))}))
     binary = tmp_path / "fake-native"
-    binary.write_text(f"#!{sys.executable}\ncorrupt_response={corrupt_response}\n" + '''import hashlib, json, pathlib, sys, time
+    binary.write_text(f"#!{sys.executable}\nresponse_case={response_case!r}\n" + '''import hashlib, json, pathlib, sys, time
 data=json.load(sys.stdin)
 assert 'private-token' in data['request']['headers']['authorization']
 out=pathlib.Path(sys.argv[sys.argv.index('--output')+1]); out.mkdir(mode=0o700)
+(out/'args.json').write_text(json.dumps(sys.argv[1:]))
 (out/'witness.ready.json').write_text(json.dumps({'approval_sha256':data['approval_sha256']}))
 deadline=time.monotonic()+5
 while not (out/'dispatch.approved.json').exists():
     if time.monotonic()>deadline: sys.exit(2)
     time.sleep(.01)
 assert json.loads((out/'dispatch.approved.json').read_text()) == {'approval_sha256':data['approval_sha256']}
-(out/'response.json').write_text(json.dumps({'status':201,'body':'{}','headers':{},'body_bytes':2,'body_sha256':'a'*64 if corrupt_response else hashlib.sha256(b'{}').hexdigest()}))
+response={'status':201,'body':'{}','headers':{},'body_bytes':2,'body_sha256':'a'*64 if response_case == 'corrupt_hash' else hashlib.sha256(b'{}').hexdigest()}
+(out/'response.json').write_text(json.dumps(response))
+verified_response={**response,'body':'no','body_sha256':hashlib.sha256(b'no').hexdigest()} if response_case == 'proof_mismatch' else response
 (out/'presentation.json').write_text('{}')
 (out/'attestation.json').write_text('{}')
-(out/'verified.json').write_text(json.dumps({'verified':True,'approval_sha256':data['approval_sha256'],'request_binding_verification':'verified_from_full_presentation'}))
+verified={'verified':True,'approval_sha256':data['approval_sha256'],'request_binding_verification':'verified_from_full_presentation','response':verified_response,'artifact_sha256':'sha256:' + hashlib.sha256(b'other' if response_case == 'artifact_mismatch' else b'{}').hexdigest(),'attestation_sha256':'sha256:' + hashlib.sha256(b'other' if response_case == 'attestation_mismatch' else b'{}').hexdigest()}
+(out/'verified.json').write_text(json.dumps(verified))
+if response_case == 'stdout_mismatch':
+    verified={**verified,'response':{**response,'body':'no','body_sha256':hashlib.sha256(b'no').hexdigest()}}
+print(json.dumps(verified))
 ''')
     binary.chmod(0o700)
     if configured:
         config = tmp_path / "witness" / "ws_1" / "config.json"
         config.parent.mkdir(parents=True)
+        ca = config.parent / "witness-ca.pem"
+        ca_bytes = b"-----BEGIN CERTIFICATE-----\nlocal-test-ca\n-----END CERTIFICATE-----\n"
+        ca.write_bytes(ca_bytes)
         config.write_text(json.dumps({"version": 1, "workspaceId": "ws_1",
                                       "nativeBinaryPath": str(binary), "trustedNotaryKeyPath": str(trust),
-                                      "fingerprintSha256": _notary_fingerprint(trust)}))
+                                      "fingerprintSha256": _notary_fingerprint(trust),
+                                      "trustedWitnessCaPath": str(ca),
+                                      "witnessCaFingerprintSha256": hashlib.sha256(ca_bytes).hexdigest()}))
         monkeypatch.setenv("ALLOWLY_CONFIG_DIR", str(tmp_path))
     def mutate(r):
         r["witness_session"] = {"session_id": "wit_1", "witness_url": "wss://witness.example.com/sessions/wit_1",
@@ -210,15 +222,54 @@ assert json.loads((out/'dispatch.approved.json').read_text()) == {'approval_sha2
             result = await client.execute_http(URL, **PARAMS, storage_dir=str(tmp_path / "journal"), evidence_mode="witnessed",
                                                native_binary=None if configured else str(binary),
                                                trusted_notary_key=None if configured else str(trust))
+            if response_case == "proof_mismatch":
+                with pytest.raises(ExecutionRecoveryRequired):
+                    await client.execute_http(URL, **PARAMS, storage_dir=str(tmp_path / "journal"), evidence_mode="witnessed",
+                                              native_binary=None if configured else str(binary),
+                                              trusted_notary_key=None if configured else str(trust))
     assert len(seen["dispatch"]) == 1
-    if corrupt_response:
+    native_args = json.loads((tmp_path / "journal" / hashlib.sha256(b"refund-123").hexdigest() / "witness" / "args.json").read_text())
+    assert ("--witness-ca-cert" in native_args) is configured
+    if configured:
+        assert native_args[native_args.index("--witness-ca-cert") + 1] == str(ca)
+    if response_case != "valid":
         assert result.response is None
         assert seen["outcome"][0]["target_state"] == "unknown"
         assert "notary_attestation" not in seen["outcome"][0]
+        if response_case == "proof_mismatch":
+            journal = json.loads((tmp_path / "journal" / hashlib.sha256(b"refund-123").hexdigest() / "journal.json").read_text())
+            assert journal["authorization"]["decision"] == "allow"
+            assert journal["outcome"]["body"]["target_state"] == "unknown"
+            assert len(seen["prepare"]) == len(seen["outcome"]) == 1
     else:
         assert result.response["status"] == 201
         assert seen["outcome"][0]["notary_attestation"] == {}
         assert seen["outcome"][0]["evidence_bundle_sha256"] == "sha256:" + hashlib.sha256(b"{}").hexdigest()
+
+
+def test_changed_local_witness_ca_fails_before_dispatch(tmp_path, monkeypatch):
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+    key = ec.generate_private_key(ec.SECP256R1()).public_key()
+    trust = tmp_path / "notary.json"
+    trust.write_text(json.dumps({"alg": 2, "data": list(key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint))}))
+    binary = tmp_path / "helper"
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o700)
+    workspace = tmp_path / "witness" / "ws_1"
+    workspace.mkdir(parents=True)
+    ca = workspace / "witness-ca.pem"
+    ca.write_bytes(b"original certificate")
+    (workspace / "config.json").write_text(json.dumps({
+        "version": 1, "workspaceId": "ws_1", "nativeBinaryPath": str(binary),
+        "trustedNotaryKeyPath": str(trust), "fingerprintSha256": _notary_fingerprint(trust),
+        "trustedWitnessCaPath": str(ca),
+        "witnessCaFingerprintSha256": hashlib.sha256(ca.read_bytes()).hexdigest(),
+    }))
+    monkeypatch.setenv("ALLOWLY_CONFIG_DIR", str(tmp_path))
+    ca.write_bytes(b"changed certificate")
+    with pytest.raises(AllowlyProtocolError, match="witness CA differs"):
+        _witness_files("ws_1", None, None)
 
 
 @pytest.mark.asyncio

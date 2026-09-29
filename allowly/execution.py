@@ -81,12 +81,16 @@ def _save(path: Path, value: Any) -> None:
             os.unlink(temporary)
 
 
-def _read(path: Path, maximum: int = 2 * 1024 * 1024) -> Any:
+def _read_bytes(path: Path, maximum: int = 2 * 1024 * 1024) -> bytes:
     with path.open("rb") as source:
         data = source.read(maximum + 1)
     if len(data) > maximum:
         raise AllowlyProtocolError("execution artifact exceeds its limit")
-    return json.loads(data)
+    return data
+
+
+def _read(path: Path, maximum: int = 2 * 1024 * 1024) -> Any:
+    return json.loads(_read_bytes(path, maximum))
 
 
 def _request(url: str, method: str, headers: dict[str, str], body: str) -> tuple[dict[str, Any], dict[str, str]]:
@@ -231,9 +235,11 @@ def _notary_fingerprint(path: Path) -> str:
 
 def _witness_files(
     workspace_id: str, native_binary: str | None, trusted_notary_key: str | None,
-) -> tuple[str, Path, str]:
+) -> tuple[str, Path, str, Path | None]:
     """Resolve CLI-installed witness files and verify its locally pinned key."""
     pinned_fingerprint: str | None = None
+    ca_path: str | None = None
+    ca_fingerprint: str | None = None
     if native_binary is None or trusted_notary_key is None:
         if not isinstance(workspace_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", workspace_id):
             raise AllowlyProtocolError("invalid witness workspace ID")
@@ -250,11 +256,17 @@ def _witness_files(
                 or not isinstance(config.get("nativeBinaryPath"), str)
                 or not isinstance(config.get("trustedNotaryKeyPath"), str)
                 or not isinstance(config.get("fingerprintSha256"), str)
-                or not re.fullmatch(r"[0-9a-f]{64}", config["fingerprintSha256"])):
+                or not re.fullmatch(r"[0-9a-f]{64}", config["fingerprintSha256"])
+                or (config.get("trustedWitnessCaPath") is None) != (config.get("witnessCaFingerprintSha256") is None)):
             raise ValueError(f"witness setup is invalid for {workspace_id}; run `allowly setup witness`")
         native_binary = native_binary or config["nativeBinaryPath"]
         trusted_notary_key = trusted_notary_key or config["trustedNotaryKeyPath"]
         pinned_fingerprint = config["fingerprintSha256"]
+        ca_path = config.get("trustedWitnessCaPath")
+        ca_fingerprint = config.get("witnessCaFingerprintSha256")
+        if ca_path is not None and (not isinstance(ca_path, str) or not isinstance(ca_fingerprint, str)
+                                    or not re.fullmatch(r"[0-9a-f]{64}", ca_fingerprint)):
+            raise ValueError(f"witness setup is invalid for {workspace_id}; run `allowly setup witness`")
     binary_path = Path(native_binary).expanduser()
     trust_path = Path(trusted_notary_key).expanduser()
     if not binary_path.is_absolute() or not trust_path.is_absolute():
@@ -268,7 +280,17 @@ def _witness_files(
     fingerprint = _notary_fingerprint(trust)
     if pinned_fingerprint is not None and fingerprint != pinned_fingerprint:
         raise AllowlyProtocolError("witness public key differs from the locally confirmed fingerprint")
-    return str(native), trust, fingerprint
+    trusted_ca: Path | None = None
+    if ca_path is not None:
+        candidate = Path(ca_path).expanduser()
+        if not candidate.is_absolute():
+            raise ValueError("witness CA path must be absolute")
+        trusted_ca = candidate.resolve(strict=True)
+        if not trusted_ca.is_file() or trusted_ca.stat().st_size > 32 * 1024 or trusted_ca.stat().st_size < 1:
+            raise ValueError("witness CA file is invalid")
+        if hashlib.sha256(trusted_ca.read_bytes()).hexdigest() != ca_fingerprint:
+            raise AllowlyProtocolError("witness CA differs from the locally pinned fingerprint")
+    return str(native), trust, fingerprint, trusted_ca
 
 
 async def execute_http(
@@ -304,7 +326,7 @@ async def execute_http(
                                             idempotency_key=operation_id, agent_token=agent_token)
     approved = result.decision == "allow" and result.status == "approved"
     approval = _validate_approval(result, requested) if approved else None
-    witness_files: tuple[str, Path, str] | None = None
+    witness_files: tuple[str, Path, str, Path | None] | None = None
     if approved and result.effective_evidence_mode == "witnessed":
         assert approval is not None
         witness_files = _witness_files(approval["workspace_id"], native_binary, trusted_notary_key)
@@ -344,7 +366,7 @@ async def execute_http(
 
     if result.effective_evidence_mode == "witnessed":
         assert witness_files is not None
-        native, trust, _ = witness_files
+        native, trust, _, trusted_ca = witness_files
         session = result.witness_session or {}
         target = descriptor["path"] + ("?" + descriptor["query"] if descriptor["query"] else "")
         estimated = (f"{descriptor['method']} {target} HTTP/1.1\r\nHost: {urlsplit(descriptor['origin']).hostname}\r\nConnection: close\r\nAccept-Encoding: identity\r\n"
@@ -364,8 +386,11 @@ async def execute_http(
                  "witness": {"url": admission["witness_url"], "session_id": admission["session_id"],
                              "workspace_id": admission["workspace_id"], "admission_token": admission["admission_token"]}}
         # Never pass API/provider credentials through argv or environment.
-        process = await asyncio.create_subprocess_exec(native, "prove-execute", "--output", str(output), "--trusted-key", str(trust),
-                                                      stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL,
+        native_args = [native, "prove-execute", "--output", str(output), "--trusted-key", str(trust)]
+        if trusted_ca is not None:
+            native_args.extend(("--witness-ca-cert", str(trusted_ca)))
+        process = await asyncio.create_subprocess_exec(*native_args,
+                                                      stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                                                       stderr=asyncio.subprocess.DEVNULL, env={"PATH": os.defpath})
         communication = asyncio.create_task(process.communicate(_json(stdin)))
         try:
@@ -394,12 +419,22 @@ async def execute_http(
             if (output / "response.json").exists():
                 response = _observed_response(_read(output / "response.json"), 16 * 1024)
             if process.returncode == 0:
-                verified = _read(output / "verified.json")
+                native_stdout, _ = communication.result()
+                if len(native_stdout) > 64 * 1024:
+                    raise AllowlyProtocolError("native verification output exceeds its limit")
+                verified = json.loads(native_stdout)
+                if not isinstance(verified, dict):
+                    raise AllowlyProtocolError("native verification output is malformed")
+                bundle_sha256 = _sha(_read_bytes(output / "presentation.json", 16 * 1024 * 1024))
+                attestation_bytes = _read_bytes(output / "attestation.json", 1024 * 1024)
                 if (verified.get("verified") is not True or verified.get("approval_sha256") != result.approval_sha256
-                        or verified.get("request_binding_verification") != "verified_from_full_presentation"):
+                        or verified.get("request_binding_verification") != "verified_from_full_presentation"
+                        or verified.get("artifact_sha256") != bundle_sha256
+                        or verified.get("attestation_sha256") != _sha(attestation_bytes)):
                     raise AllowlyProtocolError("native verification result differs from approval")
-                attestation = _read(output / "attestation.json")
-                bundle_sha256 = _sha((output / "presentation.json").read_bytes())
+                if response is None or response != _observed_response(verified.get("response"), 16 * 1024):
+                    raise AllowlyProtocolError("native verified response differs from observed response")
+                attestation = json.loads(attestation_bytes)
         except Exception:
             # Corrupt/missing local artifacts after dispatch leave a durable
             # unknown report, never a second provider call or a false proof.

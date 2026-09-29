@@ -161,6 +161,9 @@ approval and checks the public key against the confirmed fingerprint on every
 witnessed call. Keep this config and the public key available to the runtime
 user on the machine that sends provider requests. No private witness key is
 downloaded.
+For a local witness with a private CA, `allowly setup witness --witness-ca-cert`
+also pins that CA. The SDK checks its fingerprint before dispatch and passes it
+to the helper for the witness socket only. Provider HTTPS trust is unchanged.
 
 Set `evidence_mode="witnessed"` to request the native witness transport; a
 policy can also require this mode. Existing deployments may pass both
