@@ -48,12 +48,41 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-## Auth0 agent identity
+## Allowly agent identity
+
+Create the agent's policy, then run `allowly agent enroll <exact-agent-id>`
+from the Allowly CLI. Store the resulting private credential on the trusted
+machine that runs the agent, then create a **new authorization** for that agent.
+The credential identifies the agent; the authorization and policy still decide
+what it may do. The workspace runtime API key is still required.
+
+```python
+import os
+from allowly import Allowly, NativeAgentCredential
+
+credential = NativeAgentCredential.from_file("/secure/path/agent.json")
+allowly = Allowly(
+    api_key=os.environ["ALLOWLY_API_KEY"],
+    agent_token_supplier=credential.token,
+)
+
+decision = await allowly.check(
+    authorization_id="auth_...",
+    actions=["order.submit"],
+)
+```
+
+The SDK signs a fresh 60-second token for each request. The private key remains
+in your runtime; do not commit or log the credential file. The CLI registers
+only its public key with Allowly.
+
+## Existing Auth0 agent identity
 
 For an authorization bound to an Auth0 machine identity, supply the short-lived
 access token separately from the Allowly runtime key. A token supplier runs for
 each check or execution. Use your existing OAuth client library to fetch and
-cache Auth0 tokens; keep the client secret outside this SDK.
+cache Auth0 tokens; keep the client secret outside this SDK. New self-service
+Auth0 setup is unavailable. Contact us to add your own identity provider.
 
 ```python
 from datetime import datetime, timezone

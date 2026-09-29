@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .client import Allowly
+from .agent_identity import NativeAgentCredential
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .seal_webhook import SealWebhookClient
 from .execution import LocalExecutionResult, ExecutionRecoveryRequired, complete_execution_evidence
@@ -46,6 +47,7 @@ from .types import (
 
 __all__ = [
     "Allowly",
+    "NativeAgentCredential",
     "CustomExecutableCreateRequest",
     "EnabledExecutableResponse",
     "ExecutableOperation",

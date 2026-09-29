@@ -7,6 +7,7 @@ name = "allowly"
 version = "0.6.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "httpx" },
 ]
 
@@ -30,6 +31,7 @@ verifier = [
 requires-dist = [
     { name = "allowly-receipt-format", marker = "extra == 'dev'", directory = "../allowly-receipt-format/verifiers/python" },
     { name = "allowly-receipt-format", marker = "extra == 'verifier'", directory = "../allowly-receipt-format/verifiers/python" },
+    { name = "cryptography", specifier = ">=42" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=42" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=2.9,<3" },
     { name = "fastmcp", marker = "extra == 'fastmcp'", specifier = ">=2.9,<3" },
