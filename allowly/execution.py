@@ -145,6 +145,10 @@ def _request(url: str, method: str, headers: dict[str, str], body: str) -> tuple
 
 def _validate_approval(result: ExecutionResponse, requested: dict[str, Any]) -> dict[str, Any]:
     from .verify import hash_seal_value
+    if (result.decision != "allow" or result.status != "approved"
+            or result.decision_state != "allowed" or result.target_state != "not_started"
+            or result.evidence_state != "pending" or result.downstream is not None):
+        raise AllowlyProtocolError("allow decision did not produce an approved execution")
     approval = result.approval
     if not isinstance(approval, dict):
         raise AllowlyProtocolError("missing execution approval")
@@ -163,6 +167,12 @@ def _validate_approval(result: ExecutionResponse, requested: dict[str, Any]) -> 
     provider_idempotency = actual.pop("provider_idempotency", None)
     if actual != requested["http_request"] or provider_idempotency != {"kind": "none"}:
         raise AllowlyProtocolError("execution approval request does not match")
+    expected_descriptor = {"operation_id": requested["operation_id"],
+                           "authorization_id": requested["authorization_id"],
+                           "destination_id": requested["enabled_executable_id"],
+                           "action": requested["action"], **requested["http_request"]}
+    if asdict(result.request_descriptor) != expected_descriptor:
+        raise AllowlyProtocolError("execution request descriptor does not match the local request")
     mode = result.effective_evidence_mode
     if (mode not in {"receipt", "witnessed"} or approval.get("evidence_mode") != mode
             or (requested["evidence_mode"] == "witnessed" and mode != "witnessed")):

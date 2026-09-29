@@ -137,7 +137,8 @@ async def test_uncertain_send_is_unknown_and_not_retried(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind", ["hash", "body", "expiry", "downgrade"])
+@pytest.mark.parametrize("kind", ["hash", "body", "expiry", "downgrade", "decision_state",
+                                  "target_state", "evidence_state", "downstream", "descriptor"])
 async def test_invalid_approval_never_dispatches(tmp_path, monkeypatch, kind):
     monkeypatch.setattr("allowly.execution._provider_send", lambda *a: pytest.fail("provider called"))
     def mutate(r):
@@ -147,9 +148,22 @@ async def test_invalid_approval_never_dispatches(tmp_path, monkeypatch, kind):
             r["approval"]["request"]["body_sha256"] = "sha256:" + "0" * 64
         elif kind == "expiry":
             r["approval"]["expires_at"] = "2000-01-01T00:00:00Z"
-        else:
+        elif kind == "downgrade":
             r["effective_evidence_mode"] = "receipt"
             r["approval"]["evidence_mode"] = "receipt"
+        elif kind == "decision_state":
+            r["decision_state"] = "not_allowed"
+        elif kind == "target_state":
+            r["target_state"] = "response_observed"
+        elif kind == "evidence_state":
+            r["evidence_state"] = "customer_reported"
+        elif kind == "downstream":
+            r["downstream"] = {"source": "customer_runtime", "http_status": 200,
+                               "response_fingerprint": "sha256:" + "1" * 64,
+                               "response_fingerprint_scope": "complete", "result": {},
+                               "business_completion": "not_verified"}
+        else:
+            r["request_descriptor"]["body_sha256"] = "sha256:" + "0" * 64
         if kind != "hash":
             r["approval_sha256"] = "sha256:" + hash_seal_value(r["approval"])
     with respx.mock as mock:
