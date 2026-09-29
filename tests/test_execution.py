@@ -67,7 +67,7 @@ def runtime(mock, *, mutate=None, outcome_fail=False):
         seen["outcome"].append(report)
         if outcome_fail:
             return httpx.Response(503, json={"error": {"code": "offline", "message": "offline"}})
-        return httpx.Response(200, json={**seen["approved"], "status": "succeeded" if report["target_state"] == "response_observed" else "unknown",
+        return httpx.Response(201, json={**seen["approved"], "status": "succeeded" if report["target_state"] == "response_observed" else "unknown",
                                         "target_state": report["target_state"], "evidence_state": "customer_reported"})
     mock.post(BASE + "/v1/execute").mock(side_effect=prepare)
     mock.post(BASE + "/v1/executions/refund-123/dispatch").mock(side_effect=dispatch)

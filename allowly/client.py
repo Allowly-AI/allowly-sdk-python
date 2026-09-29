@@ -445,6 +445,7 @@ class Allowly:
         raw = await self._request(
             "POST", f"/v1/executions/{quote(operation_id, safe='')}/outcome",
             json=outcome, headers=await self._identity_headers(agent_token, idempotency_key=idempotency_key),
+            expected_success_status=(200, 201),
         )
         result = _parse_execution_response(raw)
         if result.operation_id != operation_id or result.approval_sha256 != outcome.get("approval_sha256"):
