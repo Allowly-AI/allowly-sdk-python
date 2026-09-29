@@ -50,9 +50,10 @@ asyncio.run(main())
 
 ## Allowly agent identity
 
-Create the agent's policy, then run `allowly agent enroll <exact-agent-id>`
+Create the agent in the dashboard, then run `allowly agent enroll <exact-agent-id>`
 from the Allowly CLI. Store the resulting private credential on the trusted
-machine that runs the agent, then create a **new authorization** for that agent.
+machine that runs the agent. Define its policy, then create a **new authorization**
+for that agent. CLI-only setups can still create a live policy before enrollment.
 The credential identifies the agent; the authorization and policy still decide
 what it may do. The workspace runtime API key is still required.
 

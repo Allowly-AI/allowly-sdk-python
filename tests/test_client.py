@@ -305,6 +305,19 @@ def test_interactive_results_are_keyword_only_and_require_decision_fields(
 
 @respx.mock
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("status", "code"), [(404, "agent_not_found"), (503, "agent_registration_unavailable")])
+async def test_setup_error_envelope_preserves_registration_code(client, status, code):
+    respx.post(f"{BASE}/v1/setup/agent-credentials").mock(
+        return_value=httpx.Response(status, json={"error": {"code": code, "message": "Registration failed"}}),
+    )
+    with pytest.raises(AllowlyAPIError) as caught:
+        await client._request("POST", "/v1/setup/agent-credentials", json={})
+    assert caught.value.status == status
+    assert caught.value.code == code
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_check_raises_on_401(client):
     respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(401, json={
         "error": {
