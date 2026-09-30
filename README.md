@@ -241,14 +241,15 @@ package or start the hosted witnessing socket/service.
 
 FastMCP middleware maps policy inputs explicitly. Raw tool arguments are
 available to the callback, but the middleware does not copy them into Allowly
-context.
+context. Provide `trusted_user_id` from your server's authenticated session or
+token.
 
 ```python
 from allowly.mcp import AllowlyMCPMiddleware, MCPCheckInput
 
 middleware = AllowlyMCPMiddleware(
     api_key=os.environ["ALLOWLY_API_KEY"],
-    user_id_fn=lambda request: request.fastmcp_context.session.user_id,
+    user_id_fn=trusted_user_id,
     authorization_id_fn=lambda user_id: authorization_id_for(user_id),
     agent_token_fn=lambda request: auth0_agent_token_for(request.fastmcp_context),
     check_input_fn=lambda request: MCPCheckInput(

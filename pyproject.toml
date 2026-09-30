@@ -19,7 +19,8 @@ Repository = "https://github.com/Allowly-AI/allowly-sdk-python"
 
 [project.optional-dependencies]
 fastmcp = [
-    "fastmcp>=2.9,<3",
+    "fastmcp>=3.4.7,<4",
+    "mcp>=1.28.1,<2",
 ]
 verifier = [
     "allowly-receipt-format>=4.2.0,<5.0.0",
@@ -27,7 +28,8 @@ verifier = [
 dev = [
     "allowly-receipt-format>=4.2.0,<5.0.0",
     "cryptography>=42",
-    "fastmcp>=2.9,<3",
+    "fastmcp>=3.4.7,<4",
+    "mcp>=1.28.1,<2",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "respx>=0.21",

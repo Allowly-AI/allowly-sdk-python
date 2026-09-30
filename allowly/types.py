@@ -5,6 +5,7 @@ from typing import Any, Literal, Union
 
 Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
+SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed"]
 
 
 @dataclass
@@ -69,7 +70,6 @@ class EnabledExecutableResponse:
     disabled_at: str | None
 
 
-SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed"]
 ExecutionStatus = Literal[
     "approved",
     "denied",
