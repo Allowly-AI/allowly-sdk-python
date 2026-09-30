@@ -181,8 +181,16 @@ true, its API response still describes approval; `result.response` contains the
 locally observed response and the journal retains the report for upload.
 
 Run `allowly setup witness` in the Allowly CLI for each workspace that will use
-witnessed execution. The command installs the Rust helper, downloads that
-workspace's **public** witness key, shows its locally calculated fingerprint,
+witnessed execution. The default path downloads a verified precompiled Rust
+helper. Use `allowly setup witness --build-from-source` to download reviewed
+Allowly adapter source and build it with pinned official TLSNotary libraries.
+That path needs Rust 1.95.0, Cargo, Git, Bash, and a native C build toolchain.
+Both paths verify release checksums and remain blocked until reviewed
+`witness-v0.1.0` assets are published and their manifest digest is pinned in the CLI.
+Offline setup still accepts
+`--archive FILE --sha256 HEX` or a reviewed `--helper FILE`.
+The command downloads that workspace's **public** witness key, shows its locally
+calculated fingerprint,
 and opens the authenticated workspace key page for you to compare and confirm.
 The CLI saves the confirmed fingerprint and local file paths in
 `~/.allowly/witness/<workspace-id>/config.json` (or below `ALLOWLY_CONFIG_DIR`).
@@ -223,7 +231,11 @@ record held by Allowly proves the notary's approval reference; full request-byte
 verification needs the customer presentation. Keep that presentation private:
 it includes provider credentials and response data. HTTP status is not proof of
 business completion. Native transport setup and limitations are documented in
-the workspace's `mcp-allowly_tlsnotary/EXECUTE.md`.
+the workspace's `allowly_mcp/witness/EXECUTE.md`. That same repository owns the
+Allowly-hosted Witness Bridge source. The customer helper wraps unchanged
+TLSNotary libraries pinned to `v0.1.0-alpha.15` /
+`47aee45b53e06648c1b2ad3689b367b8c923fdec`. Setup does not install a second MCP
+package or start the hosted witnessing socket/service.
 
 ## FastMCP identity mapping
 
