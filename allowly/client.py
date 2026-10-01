@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict
 from datetime import datetime
-from typing import Any
+import inspect
+import re
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import quote, urlparse
 
 import httpx
@@ -10,6 +14,11 @@ import httpx
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .types import (
     CheckResponse,
+    CustomExecutableCreateRequest,
+    EnabledExecutableResponse,
+    ExecutableOperation,
+    ExecutableCapabilities,
+    ExecutableEvidenceCapability,
     ConfirmationApproveResponse,
     AuthorizationCreateResponse,
     AuthorizationRevokeResponse,
@@ -17,11 +26,18 @@ from .types import (
     BudgetSettlementResponse,
     EscalationInfo,
     EscalationResolveResponse,
+    ExecutionDownstream,
+    ExecutionRequestDescriptor,
+    ExecutionResponse,
+    ExecutionStatus,
+    OutcomeEvidence,
     PolicyConditionEvidence,
     PolicyEvalInfo,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
     ReceiptEnvelope,
+    ReceiptAcknowledgmentCaller,
+    ReceiptAcknowledgmentResponse,
     SealResponse,
     ActionEntry,
     FallbackMode,
@@ -32,6 +48,11 @@ from .types import (
 )
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"
+
+AgentTokenSupplier = Callable[[], str | Awaitable[str]]
+
+if TYPE_CHECKING:
+    from .execution import LocalExecutionResult
 
 
 class Allowly:
@@ -55,8 +76,13 @@ class Allowly:
         fallback_by_action: dict[str, FallbackMode] | None = None,
         dangerously_allow_insecure_base_url: bool = False,
         edge_token: str | None = None,
+        agent_token: str | None = None,
+        agent_token_supplier: AgentTokenSupplier | None = None,
     ) -> None:
         self._api_key = api_key
+        self._edge_token = edge_token
+        self._agent_token = agent_token
+        self._agent_token_supplier = agent_token_supplier
         base_url = _validate_base_url(base_url, dangerously_allow_insecure_base_url)
         if check_timeout_ms <= 0:
             raise ValueError("check_timeout_ms must be positive")
@@ -82,6 +108,16 @@ class Allowly:
         self.escalations = _EscalationsResource(self)
         self.receipts = _ReceiptsResource(self)
 
+    async def create_custom_executable(
+        self, request: CustomExecutableCreateRequest,
+    ) -> EnabledExecutableResponse:
+        """Create one immutable customer-defined operation using a setup credential."""
+        raw = await self._request(
+            "POST", "/v1/setup/custom-executables",
+            json=asdict(request), expected_success_status=201,
+        )
+        return _parse_custom_executable_response(raw)
+
     async def aclose(self) -> None:
         await self._http.aclose()
 
@@ -100,13 +136,38 @@ class Allowly:
         method: str,
         path: str,
         *,
-        expected_success_status: int = 200,
+        expected_success_status: int | tuple[int, ...] = 200,
         **kwargs: Any,
     ) -> tuple[Any, httpx.Headers]:
+        request_headers = kwargs.get("headers")
+        request_agent_token = (
+            request_headers.get("X-Allowly-Agent-Token")
+            if isinstance(request_headers, dict)
+            else None
+        )
+
+        sensitive_values = [
+            value
+            for value in (self._api_key, self._edge_token, request_agent_token)
+            if isinstance(value, str) and value
+        ]
+
+        def safe_error_text(value: Any, fallback: str) -> str:
+            rendered = value if isinstance(value, str) else fallback
+            for sensitive_value in sensitive_values:
+                rendered = rendered.replace(sensitive_value, "[REDACTED]")
+            return rendered
+
         resp = await self._http.request(method, path, **kwargs)
-        if resp.is_success and resp.status_code != expected_success_status:
+        expected_statuses = (
+            (expected_success_status,)
+            if isinstance(expected_success_status, int)
+            else expected_success_status
+        )
+        if resp.is_success and resp.status_code not in expected_statuses:
             raise AllowlyProtocolError(
-                f"expected HTTP {expected_success_status}, got {resp.status_code}"
+                f"expected HTTP {' or '.join(str(status) for status in expected_statuses)}, "
+                f"got {resp.status_code}"
             )
         if resp.status_code == 204:
             return None, resp.headers
@@ -126,14 +187,17 @@ class Allowly:
                 err = {}
             raw_fields = err.get("fields")
             fields = [
-                FieldError(field=str(f.get("field", "")), message=str(f.get("message", "")))
+                FieldError(
+                    field=safe_error_text(f.get("field"), ""),
+                    message=safe_error_text(f.get("message"), ""),
+                )
                 for f in (raw_fields if isinstance(raw_fields, list) else [])
                 if isinstance(f, dict)
             ]
             raise AllowlyAPIError(
                 status=resp.status_code,
-                code=err.get("code", "error"),
-                message=err.get("message", "Unknown error"),
+                code=safe_error_text(err.get("code"), "error"),
+                message=safe_error_text(err.get("message"), "Unknown error"),
                 fields=fields,
                 retry_after_seconds=_parse_retry_after(resp.headers.get("Retry-After")),
             )
@@ -150,6 +214,8 @@ class Allowly:
         context: dict[str, Any] | None = None,
         wait: bool = False,
         idempotency_key: str | None = None,
+        client_timestamp: datetime | str | None = None,
+        agent_token: str | None = None,
     ) -> CheckResponse:
         """Check whether an authorization permits each requested action."""
         path = "/v1/check" + ("?wait=true" if wait else "")
@@ -161,8 +227,14 @@ class Allowly:
             "estimated_cost_micros": estimated_cost_micros,
             "context": context or {},
         }
+        if client_timestamp is not None:
+            body["client_timestamp"] = _client_timestamp(client_timestamp)
+        headers = await self._identity_headers(
+            agent_token,
+            idempotency_key=idempotency_key,
+        )
+        identity_enabled = bool(headers and "X-Allowly-Agent-Token" in headers)
         try:
-            headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
             timeout = max(self._check_timeout, 6.0) if wait else self._check_timeout
             raw, response_headers = await asyncio.wait_for(
                 self._request_with_headers(
@@ -179,25 +251,31 @@ class Allowly:
                 authorization_id=authorization_id,
                 actions=actions,
                 failure="timeout",
+                force_fail_closed=identity_enabled,
             )
         except (httpx.DecodingError, httpx.TransportError):
             return self._fallback_check_response(
                 authorization_id=authorization_id,
                 actions=actions,
                 failure="unreachable",
+                force_fail_closed=identity_enabled,
             )
         except AllowlyAPIError as exc:
+            if exc.code == "identity_verification_unavailable":
+                raise
             if exc.status == 408:
                 return self._fallback_check_response(
                     authorization_id=authorization_id,
                     actions=actions,
                     failure="timeout",
+                    force_fail_closed=identity_enabled,
                 )
             if exc.status >= 500:
                 return self._fallback_check_response(
                     authorization_id=authorization_id,
                     actions=actions,
                     failure="unreachable",
+                    force_fail_closed=identity_enabled,
                 )
             raise
         response = _parse_check_response(
@@ -208,16 +286,44 @@ class Allowly:
         response.billing_warning = response_headers.get("X-Allowly-Billing-Warning")
         return response
 
+    async def _identity_headers(
+        self,
+        agent_token: str | None,
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict[str, str] | None:
+        headers: dict[str, str] = {}
+        effective_agent_token: str | None = agent_token
+        if effective_agent_token is None and self._agent_token_supplier is not None:
+            supplied = self._agent_token_supplier()
+            effective_agent_token = await supplied if inspect.isawaitable(supplied) else supplied
+            if not isinstance(effective_agent_token, str) or not effective_agent_token.strip():
+                raise ValueError("agent token supplier must return a non-empty string")
+        elif effective_agent_token is None:
+            effective_agent_token = self._agent_token
+        if effective_agent_token is not None:
+            if not isinstance(effective_agent_token, str) or not effective_agent_token.strip():
+                raise ValueError("agent token must be a non-empty string")
+            headers["X-Allowly-Agent-Token"] = effective_agent_token
+        if idempotency_key is not None:
+            headers["Idempotency-Key"] = idempotency_key
+        return headers or None
+
     def _fallback_check_response(
         self,
         *,
         authorization_id: str,
         actions: list[str],
         failure: str,
+        force_fail_closed: bool = False,
     ) -> CheckResponse:
         results = {}
         for action in actions:
-            mode = self._fallback_by_action.get(action, "fail_closed")
+            mode: FallbackMode = (
+                "fail_closed"
+                if force_fail_closed
+                else self._fallback_by_action.get(action, "fail_closed")
+            )
             decision = "allow" if mode == "fail_open" else "deny"
             reason = f"fallback_{'open' if mode == 'fail_open' else 'closed'}_{failure}"
             base = {
@@ -261,6 +367,171 @@ class Allowly:
             headers=headers,
         )
         return _parse_budget_settlement_response(raw)
+
+    async def get_execution(
+        self,
+        operation_id: str,
+        *,
+        agent_token: str | None = None,
+    ) -> ExecutionResponse:
+        raw = await self._request(
+            "GET",
+            f"/v1/executions/{quote(operation_id, safe='')}",
+            headers=await self._identity_headers(agent_token),
+        )
+        response = _parse_execution_response(raw)
+        if response.operation_id != operation_id:
+            raise AllowlyProtocolError(
+                "execution response does not match the requested operation"
+            )
+        return response
+
+    async def prepare_execution(
+        self, *, operation_id: str, authorization_id: str,
+        enabled_executable_id: str, catalog_operation_id: str, action: str,
+        http_request: dict[str, Any], policy_input: dict[str, Any],
+        client_timestamp: datetime | str, idempotency_key: str,
+        evidence_mode: str = "receipt", agent_token: str | None = None,
+    ) -> ExecutionResponse:
+        """Approve a customer-side execution remotely; this never sends to the provider."""
+        raw = await self._request(
+            "POST", "/v1/execute", expected_success_status=(200, 201),
+            headers=await self._identity_headers(agent_token, idempotency_key=idempotency_key),
+            json={"operation_id": operation_id,
+                  "authorization_id": authorization_id,
+                  "enabled_executable_id": enabled_executable_id,
+                  "catalog_operation_id": catalog_operation_id, "action": action,
+                  "http_request": http_request, "policy_input": policy_input,
+                  "evidence_mode": evidence_mode,
+                  "client_timestamp": _client_timestamp(client_timestamp)},
+        )
+        result = _parse_execution_response(raw)
+        if (result.operation_id != operation_id or result.destination_id != enabled_executable_id
+                or result.action != action
+                or result.request_descriptor.authorization_id != authorization_id):
+            raise AllowlyProtocolError("execution approval does not match the requested operation")
+        return result
+
+    async def claim_execution_dispatch(
+        self, operation_id: str, *, approval_sha256: str, agent_token: str | None = None,
+    ) -> dict[str, Any]:
+        raw = await self._request(
+            "POST", f"/v1/executions/{quote(operation_id, safe='')}/dispatch",
+            json={"approval_sha256": approval_sha256},
+            headers=await self._identity_headers(agent_token),
+        )
+        if (not isinstance(raw, dict) or raw.get("operation_id") != operation_id
+                or raw.get("approval_sha256") != approval_sha256
+                or raw.get("dispatch_state") != "claimed"):
+            raise AllowlyProtocolError("invalid execution dispatch claim")
+        return raw
+
+    async def get_execution_witness_token(
+        self, operation_id: str, *, approval_sha256: str, agent_token: str | None = None,
+    ) -> dict[str, Any]:
+        raw = await self._request(
+            "POST", f"/v1/executions/{quote(operation_id, safe='')}/witness-session-token",
+            json={"approval_sha256": approval_sha256},
+            headers=await self._identity_headers(agent_token),
+        )
+        if not isinstance(raw, dict) or raw.get("approval_sha256") != approval_sha256:
+            raise AllowlyProtocolError("invalid execution witness admission")
+        return raw
+
+    async def report_execution_outcome(
+        self, operation_id: str, *, outcome: dict[str, Any], idempotency_key: str,
+        agent_token: str | None = None,
+    ) -> ExecutionResponse:
+        raw = await self._request(
+            "POST", f"/v1/executions/{quote(operation_id, safe='')}/outcome",
+            json=outcome, headers=await self._identity_headers(agent_token, idempotency_key=idempotency_key),
+            expected_success_status=(200, 201),
+        )
+        result = _parse_execution_response(raw)
+        if result.operation_id != operation_id or result.approval_sha256 != outcome.get("approval_sha256"):
+            raise AllowlyProtocolError("execution outcome does not match the requested operation")
+        return result
+
+    async def execute_http(
+        self, url: str, *, operation_id: str, authorization_id: str,
+        enabled_executable_id: str, catalog_operation_id: str, action: str,
+        method: str = "GET", headers: dict[str, str] | None = None, body: str = "",
+        evidence_mode: Literal["receipt", "witnessed"] = "receipt",
+        policy_input: dict[str, Any] | None = None,
+        storage_dir: str = ".allowly/executions", agent_token: str | None = None,
+        native_binary: str | None = None, trusted_notary_key: str | None = None,
+        timeout: float = 30.0,
+    ) -> LocalExecutionResult:
+        """Remotely authorize, then execute locally. See allowly.execution.execute_http."""
+        from .execution import execute_http
+        return await execute_http(
+            self, url, operation_id=operation_id, authorization_id=authorization_id,
+            enabled_executable_id=enabled_executable_id, catalog_operation_id=catalog_operation_id,
+            action=action, method=method, headers=headers, body=body,
+            evidence_mode=evidence_mode, policy_input=policy_input, storage_dir=storage_dir,
+            agent_token=agent_token, native_binary=native_binary,
+            trusted_notary_key=trusted_notary_key, timeout=timeout,
+        )
+
+    async def flush_execution_outcome(self, operation_dir: str, *, agent_token: str | None = None) -> ExecutionResponse:
+        """Retry only a saved outcome report; never repeat the provider request."""
+        from .execution import flush_execution_outcome
+        return await flush_execution_outcome(self, operation_dir, agent_token=agent_token)
+
+    async def acknowledge_receipt(
+        self,
+        *,
+        receipt_id: str,
+        receipt_sha256: str,
+        client_timestamp: datetime | str,
+        idempotency_key: str,
+        agent_token: str | None = None,
+    ) -> ReceiptAcknowledgmentResponse:
+        raw = await self._request(
+            "POST",
+            f"/v1/receipts/{quote(receipt_id, safe='')}/acknowledgments",
+            json={
+                "receipt_sha256": receipt_sha256,
+                "client_timestamp": _client_timestamp(client_timestamp),
+            },
+            headers=await self._identity_headers(
+                agent_token,
+                idempotency_key=idempotency_key,
+            ),
+            expected_success_status=(200, 201),
+        )
+        response = _parse_receipt_acknowledgment_response(raw)
+        if response.receipt_id != receipt_id:
+            raise AllowlyProtocolError(
+                "receipt acknowledgment response does not match the requested receipt"
+            )
+        return response
+
+    async def get_receipt_acknowledgment(
+        self,
+        receipt_id: str,
+        acknowledgment_id: str,
+        *,
+        agent_token: str | None = None,
+    ) -> ReceiptAcknowledgmentResponse:
+        """Retrieve or repair one stored receipt acknowledgment."""
+        raw = await self._request(
+            "GET",
+            (
+                f"/v1/receipts/{quote(receipt_id, safe='')}/acknowledgments/"
+                f"{quote(acknowledgment_id, safe='')}"
+            ),
+            headers=await self._identity_headers(agent_token),
+        )
+        response = _parse_receipt_acknowledgment_response(raw)
+        if (
+            response.receipt_id != receipt_id
+            or response.acknowledgment_id != acknowledgment_id
+        ):
+            raise AllowlyProtocolError(
+                "receipt acknowledgment response does not match the requested acknowledgment"
+            )
+        return response
 
     async def seal(
         self,
@@ -441,7 +712,9 @@ class _AuthorizationsResource:
                 "actions": [
                     {"name": action, "constraints": {}}
                     if isinstance(action, str)
-                    else {"name": action.name, "constraints": action.constraints}
+                    else {"name": action.name, "constraints": action.constraints,
+                          **({"executable_operations": [asdict(grant) for grant in action.executable_operations]}
+                             if action.executable_operations else {})}
                     for action in actions
                 ],
                 "requires_confirm_for": requires_confirm_for or [],
@@ -478,6 +751,11 @@ class _AuthorizationsResource:
             revocation_receipt=(
                 _parse_pending_envelope(revocation_receipt)
                 if revocation_receipt is not None
+                else None
+            ),
+            authorization_provenance=(
+                _require_dict(raw["authorization_provenance"], "authorization provenance")
+                if raw.get("authorization_provenance") is not None
                 else None
             ),
             billing_warning=response_headers.get("X-Allowly-Billing-Warning"),
@@ -668,6 +946,68 @@ class _ReceiptsResource:
                 min(retry_delay, max(0, deadline - loop.time()))
             )
         raise TimeoutError(f"Receipt {receipt_id} not signed after {timeout}s")
+
+
+def _parse_custom_executable_response(value: Any) -> EnabledExecutableResponse:
+    raw = _require_dict(value, "enabled executable")
+
+    def flag(record: dict[str, Any], key: str) -> bool:
+        if not isinstance(record.get(key), bool):
+            raise AllowlyProtocolError(f"{key} must be a boolean")
+        return record[key]
+
+    def capability(
+        value: Any, source: Literal["customer_reported", "independent_allowly_witness"],
+    ) -> ExecutableEvidenceCapability:
+        record = _require_dict(value, "executable evidence capability")
+        if record.get("evidence_source") != source:
+            raise AllowlyProtocolError("invalid executable evidence source")
+        return ExecutableEvidenceCapability(
+            available=flag(record, "available"), evidence_source=source,
+            profile=_optional_str(record, "profile"), reason=_optional_str(record, "reason"),
+            api_request_match_verification=_optional_str(record, "api_request_match_verification"),
+        )
+
+    if (raw.get("credential_location") != "customer_runtime"
+            or raw.get("connection_status") != "not_verified"):
+        raise AllowlyProtocolError("invalid executable credential location or connection status")
+    operations_raw = raw.get("operations")
+    if (not isinstance(operations_raw, list) or len(operations_raw) != 1
+            or _require_int(raw, "operation_count") != 1):
+        raise AllowlyProtocolError("a custom executable must contain exactly one operation")
+    provider_id = _require_str(raw, "provider_id")
+    operations = []
+    for value in operations_raw:
+        operation = _require_dict(value, "executable operation")
+        capabilities = _require_dict(operation.get("capabilities"), "executable capabilities")
+        fingerprint = _require_str(operation, "definition_fingerprint")
+        if (operation.get("provider_id") != provider_id
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", fingerprint)):
+            raise AllowlyProtocolError("invalid executable operation identity or fingerprint")
+        operations.append(ExecutableOperation(
+            provider_id=provider_id, operation_id=_require_str(operation, "operation_id"),
+            label=_require_str(operation, "label"), method=_require_str(operation, "method"),
+            path=_require_str(operation, "path"), effect=_require_str(operation, "effect"),
+            request_content_type=_optional_str(operation, "request_content_type"),
+            required_headers=_require_str_list(operation, "required_headers"),
+            status=_require_str(operation, "status"), definition_fingerprint=fingerprint,
+            capabilities=ExecutableCapabilities(
+                customer_reported_receipt=capability(capabilities.get("customer_reported_receipt"), "customer_reported"),
+                tls_witness=capability(capabilities.get("tls_witness"), "independent_allowly_witness"),
+            ),
+            allowly_live_tested=flag(operation, "allowly_live_tested"),
+            tls_witness_tested=flag(operation, "tls_witness_tested"),
+        ))
+    return EnabledExecutableResponse(
+        enabled_executable_id=_require_str(raw, "enabled_executable_id"), provider_id=provider_id,
+        provider_name=_require_str(raw, "provider_name"), category=_require_str(raw, "category"),
+        origin=_require_str(raw, "origin"), catalog_revision=_require_str(raw, "catalog_revision"),
+        status=_require_str(raw, "status"), credential_location="customer_runtime",
+        connection_status="not_verified", allowly_live_tested=flag(raw, "allowly_live_tested"),
+        tls_witness_tested=flag(raw, "tls_witness_tested"), operations=operations,
+        operation_count=1, enabled_at=_require_str(raw, "enabled_at"),
+        disabled_at=_optional_str(raw, "disabled_at"),
+    )
 
 
 def _parse_pending_envelope(raw: Any) -> ReceiptEnvelopePending:
@@ -887,6 +1227,206 @@ def _require_null(raw: dict[str, Any], key: str) -> None:
     if key not in raw or raw[key] is not None:
         raise AllowlyProtocolError(f"{key} must be null")
     return None
+
+
+def _client_timestamp(value: datetime | str) -> str:
+    if isinstance(value, datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("client_timestamp must include a timezone")
+        rendered = value.isoformat()
+        return rendered[:-6] + "Z" if rendered.endswith("+00:00") else rendered
+    if not isinstance(value, str) or not value:
+        raise ValueError("client_timestamp must be a non-empty timezone-aware timestamp")
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+    except ValueError as exc:
+        raise ValueError("client_timestamp must be a valid timezone-aware timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("client_timestamp must include a timezone")
+    return value
+
+
+def _parse_execution_response(raw: Any) -> ExecutionResponse:
+    body = _require_dict(raw, "execution response")
+    operation_id = _require_str(body, "operation_id")
+    destination_id = _require_str(body, "destination_id")
+    action = _require_str(body, "action")
+    status = _require_str(body, "status")
+    allowed_statuses: set[ExecutionStatus] = {
+        "approved",
+        "denied",
+        "confirmation_required",
+        "escalation_required",
+        "succeeded",
+        "failed",
+        "unknown",
+    }
+    if status not in allowed_statuses:
+        raise AllowlyProtocolError(f"invalid execution status: {status!r}")
+    decision = _require_str(body, "decision")
+    if decision not in {"allow", "deny", "confirm", "escalate"}:
+        raise AllowlyProtocolError(f"invalid execution decision: {decision!r}")
+    downstream_raw = body.get("downstream")
+    downstream = None
+    if downstream_raw is not None:
+        downstream_body = _require_dict(downstream_raw, "execution downstream")
+        source = _require_str(downstream_body, "source")
+        if source != "customer_runtime":
+            raise AllowlyProtocolError(f"invalid execution downstream source: {source!r}")
+        http_status = downstream_body.get("http_status")
+        if http_status is not None and (isinstance(http_status, bool) or not isinstance(http_status, int)):
+            raise AllowlyProtocolError("execution downstream http_status must be an integer or null")
+        response_fingerprint = downstream_body.get("response_fingerprint")
+        if response_fingerprint is not None and not isinstance(response_fingerprint, str):
+            raise AllowlyProtocolError(
+                "execution downstream response_fingerprint must be a string or null"
+            )
+        response_fingerprint_scope = _require_str(
+            downstream_body, "response_fingerprint_scope"
+        )
+        if response_fingerprint_scope not in {"complete", "unavailable"}:
+            raise AllowlyProtocolError(
+                "invalid execution downstream response_fingerprint_scope: "
+                f"{response_fingerprint_scope!r}"
+            )
+        result = _require_dict(downstream_body.get("result"), "execution downstream result")
+        business_completion = _require_str(downstream_body, "business_completion")
+        if business_completion != "not_verified":
+            raise AllowlyProtocolError(
+                f"invalid execution downstream business_completion: {business_completion!r}"
+            )
+        downstream = ExecutionDownstream(
+            source=source,
+            http_status=http_status,
+            response_fingerprint=response_fingerprint,
+            response_fingerprint_scope=response_fingerprint_scope,
+            result=result,
+            business_completion="not_verified",
+        )
+    evidence_raw = body.get("outcome_evidence")
+    evidence = _parse_outcome_evidence(evidence_raw) if evidence_raw is not None else None
+    fingerprint_profile = _require_str(body, "request_fingerprint_profile")
+    if fingerprint_profile != "allowly.execution.request.v1":
+        raise AllowlyProtocolError(
+            f"invalid execution request fingerprint profile: {fingerprint_profile!r}"
+        )
+    descriptor_body = _require_dict(body.get("request_descriptor"), "execution request descriptor")
+    descriptor_method = _require_str(descriptor_body, "method")
+    if descriptor_method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+        raise AllowlyProtocolError(
+            f"invalid execution request descriptor method: {descriptor_method!r}"
+        )
+    raw_headers = descriptor_body.get("headers")
+    if not isinstance(raw_headers, list):
+        raise AllowlyProtocolError("execution request descriptor headers must be an array")
+    headers = []
+    for item in raw_headers:
+        header = _require_dict(item, "execution request header")
+        headers.append({
+            "name": _require_str(header, "name"),
+            "value_sha256": _require_str(header, "value_sha256"),
+        })
+    request_descriptor = ExecutionRequestDescriptor(
+        operation_id=_require_str(descriptor_body, "operation_id"),
+        authorization_id=_require_str(descriptor_body, "authorization_id"),
+        destination_id=_require_str(descriptor_body, "destination_id"),
+        action=_require_str(descriptor_body, "action"),
+        method=descriptor_method,
+        origin=_require_str(descriptor_body, "origin"),
+        path=_require_str(descriptor_body, "path"),
+        query=_require_str(descriptor_body, "query"),
+        headers=headers,
+        body_sha256=_require_str(descriptor_body, "body_sha256"),
+        body_size=_require_int(descriptor_body, "body_size"),
+        content_type=_optional_str(descriptor_body, "content_type"),
+    )
+    if (
+        request_descriptor.operation_id != operation_id
+        or request_descriptor.destination_id != destination_id
+        or request_descriptor.action != action
+    ):
+        raise AllowlyProtocolError(
+            "execution request descriptor does not match the response"
+        )
+    return ExecutionResponse(
+        operation_id=operation_id,
+        status=status,
+        decision=decision,
+        reason=_require_str(body, "reason"),
+        destination_id=destination_id,
+        action=action,
+        request_fingerprint_profile="allowly.execution.request.v1",
+        request_fingerprint=_require_str(body, "request_fingerprint"),
+        request_descriptor=request_descriptor,
+        decision_receipt=_parse_receipt_envelope(body.get("decision_receipt")),
+        downstream=downstream,
+        outcome_evidence=evidence,
+        confirm_nonce=_optional_str(body, "confirm_nonce"),
+        confirm_expires_at=_optional_str(body, "confirm_expires_at"),
+        confirm_prompt_hint=_optional_str(body, "confirm_prompt_hint"),
+        escalation_id=_optional_str(body, "escalation_id"),
+        escalation_expires_at=_optional_str(body, "escalation_expires_at"),
+        escalation_to=_optional_str(body, "escalation_to"),
+        escalation=_parse_escalation_info(body.get("escalation")),
+        effective_evidence_mode=_optional_str(body, "effective_evidence_mode"),
+        approval=body.get("approval"),
+        approval_sha256=_optional_str(body, "approval_sha256"),
+        approval_expires_at=_optional_str(body, "approval_expires_at"),
+        decision_state=_optional_str(body, "decision_state"),
+        target_state=_optional_str(body, "target_state"),
+        evidence_state=_optional_str(body, "evidence_state"),
+        witness_session=body.get("witness_session"),
+    )
+
+
+def _parse_outcome_evidence(raw: Any) -> OutcomeEvidence:
+    body = _require_dict(raw, "outcome evidence")
+    profile = _require_str(body, "profile")
+    if profile != "allowly.seal.jcs-sha256.v1":
+        raise AllowlyProtocolError(f"invalid outcome evidence profile: {profile!r}")
+    receipt_raw = body.get("receipt")
+    evidence_error = body.get("evidence_error")
+    if evidence_error not in {None, "unavailable"}:
+        raise AllowlyProtocolError(
+            f"invalid outcome evidence error: {evidence_error!r}"
+        )
+    return OutcomeEvidence(
+        profile="allowly.seal.jcs-sha256.v1",
+        record=_require_dict(body.get("record"), "outcome evidence record"),
+        record_sha256=_require_str(body, "record_sha256"),
+        receipt=(
+            _parse_receipt_envelope(receipt_raw)
+            if receipt_raw is not None
+            else None
+        ),
+        evidence_error=evidence_error,
+    )
+
+
+def _parse_receipt_acknowledgment_response(raw: Any) -> ReceiptAcknowledgmentResponse:
+    body = _require_dict(raw, "receipt acknowledgment response")
+    caller_body = _require_dict(body.get("caller"), "receipt acknowledgment caller")
+    caller_kind = _require_str(caller_body, "kind")
+    if caller_kind != "workspace_runtime_key":
+        raise AllowlyProtocolError(f"invalid receipt acknowledgment caller kind: {caller_kind!r}")
+    agent_identity_raw = caller_body.get("agent_identity")
+    return ReceiptAcknowledgmentResponse(
+        acknowledgment_id=_require_str(body, "acknowledgment_id"),
+        receipt_id=_require_str(body, "receipt_id"),
+        receipt_sha256=_require_str(body, "receipt_sha256"),
+        client_timestamp=_require_str(body, "client_timestamp"),
+        received_at=_require_str(body, "received_at"),
+        caller=ReceiptAcknowledgmentCaller(
+            kind="workspace_runtime_key",
+            api_key_id=_require_str(caller_body, "api_key_id"),
+            agent_identity=(
+                _require_dict(agent_identity_raw, "receipt acknowledgment agent identity")
+                if agent_identity_raw is not None
+                else None
+            ),
+        ),
+        evidence=_parse_outcome_evidence(body.get("evidence")),
+    )
 
 
 def _parse_budget_info(raw: Any) -> BudgetInfo | None:

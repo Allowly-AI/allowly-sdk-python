@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 import json
+from datetime import datetime, timezone
 
 import pytest
 import httpx
@@ -300,6 +301,19 @@ def test_interactive_results_are_keyword_only_and_require_decision_fields(
             reason=reason,
             receipt=None,
         )
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("status", "code"), [(404, "agent_not_found"), (503, "agent_registration_unavailable")])
+async def test_setup_error_envelope_preserves_registration_code(client, status, code):
+    respx.post(f"{BASE}/v1/setup/agent-credentials").mock(
+        return_value=httpx.Response(status, json={"error": {"code": code, "message": "Registration failed"}}),
+    )
+    with pytest.raises(AllowlyAPIError) as caught:
+        await client._request("POST", "/v1/setup/agent-credentials", json={})
+    assert caught.value.status == status
+    assert caught.value.code == code
 
 
 @respx.mock
@@ -1685,3 +1699,411 @@ async def test_fetch_signed_default_timeout_covers_one_signer_tick(client, monke
     fake_now = 0.0
     with pytest.raises(TimeoutError):
         await client.receipts.fetch_signed("rcp_abc", timeout=30.0)
+
+
+CUSTOMER_EXECUTION_RESPONSE = {
+    "operation_id": "op_1",
+    "status": "succeeded",
+    "decision": "allow",
+    "reason": "authorization_granted_action_active",
+    "destination_id": "exe_1",
+    "action": "order.submit",
+    "request_fingerprint_profile": "allowly.execution.request.v1",
+    "request_fingerprint": "sha256:request",
+    "request_descriptor": {
+        "operation_id": "op_1",
+        "authorization_id": "auth_1",
+        "destination_id": "exe_1",
+        "action": "order.submit",
+        "method": "POST",
+        "origin": "https://provider.example",
+        "path": "/orders",
+        "query": "",
+        "headers": [{"name": "authorization", "value_sha256": "sha256:secret"}],
+        "body_sha256": "sha256:body",
+        "body_size": 4,
+        "content_type": "application/json",
+    },
+    "decision_receipt": PENDING_RECEIPT,
+    "downstream": {
+        "source": "customer_runtime",
+        "http_status": 202,
+        "response_fingerprint": "sha256:response",
+        "response_fingerprint_scope": "complete",
+        "result": {"provider_operation_id": "downstream_1", "response_size": 32},
+        "business_completion": "not_verified",
+    },
+    "outcome_evidence": {
+        "profile": "allowly.seal.jcs-sha256.v1",
+        "record": {"operation_id": "op_1"},
+        "record_sha256": "sha256:outcome",
+        "receipt": PENDING_RECEIPT,
+    },
+}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_agent_token_supplier_and_per_call_override_are_header_only():
+    calls = 0
+
+    async def supply() -> str:
+        nonlocal calls
+        calls += 1
+        return "supplier-token"
+
+    supplied = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        agent_token="static-token",
+        agent_token_supplier=supply,
+    )
+    route = respx.post(f"{BASE}/v1/check").mock(
+        return_value=httpx.Response(200, json=_check_payload())
+    )
+    await supplied.check(
+        authorization_id="auth_1",
+        actions=["x"],
+        client_timestamp="2026-09-24T20:01:02.123Z",
+    )
+    assert route.calls[-1].request.headers["x-allowly-agent-token"] == "supplier-token"
+    body = json.loads(route.calls[-1].request.content)
+    assert body["client_timestamp"] == "2026-09-24T20:01:02.123Z"
+    assert "supplier-token" not in route.calls[-1].request.content.decode()
+
+    await supplied.check(
+        authorization_id="auth_1",
+        actions=["x"],
+        agent_token="per-call-token",
+    )
+    assert route.calls[-1].request.headers["x-allowly-agent-token"] == "per-call-token"
+    assert calls == 1
+    await supplied.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_identity_verification_unavailable_never_uses_fail_open_fallback():
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(503, json={
+        "error": {
+            "code": "identity_verification_unavailable",
+            "message": "Identity verification is unavailable",
+        }
+    }))
+    identity_client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"payments.send": "fail_open"},
+    )
+    with pytest.raises(AllowlyAPIError, match="Identity verification is unavailable"):
+        await identity_client.check(
+            authorization_id="auth_1",
+            actions=["payments.send"],
+            agent_token="jwt",
+        )
+    await identity_client.aclose()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_agent_token_is_redacted_from_api_error_fields(client):
+    token = "sensitive-agent-token"
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(401, json={
+        "error": {
+            "code": "agent_token_invalid",
+            "message": f"invalid {token} for test-key",
+            "fields": [{"field": token, "message": f"bad {token}"}],
+        }
+    }))
+    with pytest.raises(AllowlyAPIError) as caught:
+        await client.check(
+            authorization_id="auth_1",
+            actions=["x"],
+            agent_token=token,
+        )
+    assert token not in str(caught.value)
+    assert token not in repr(caught.value.fields)
+    assert "test-key" not in str(caught.value)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_identity_enabled_transport_failure_forces_fail_closed():
+    respx.post(f"{BASE}/v1/check").mock(side_effect=httpx.ConnectError("offline"))
+    identity_client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"payments.send": "fail_open"},
+        agent_token="jwt",
+    )
+    response = await identity_client.check(
+        authorization_id="auth_1",
+        actions=["payments.send"],
+    )
+    assert response.results["payments.send"].decision == "deny"
+    assert response.results["payments.send"].fallback_mode == "fail_closed"
+    await identity_client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_agent_token_supplier_timeout_is_not_converted_to_fail_open():
+    async def timed_out() -> str:
+        raise asyncio.TimeoutError
+
+    identity_client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"payments.send": "fail_open"},
+        agent_token_supplier=timed_out,
+    )
+    with pytest.raises(asyncio.TimeoutError):
+        await identity_client.check(
+            authorization_id="auth_1",
+            actions=["payments.send"],
+        )
+    await identity_client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("supplied", [None, "", "   "])
+async def test_invalid_agent_token_supplier_result_cannot_downgrade_identity(supplied):
+    identity_client = Allowly(
+        api_key="test-key",
+        base_url=BASE,
+        fallback_by_action={"payments.send": "fail_open"},
+        agent_token="static-token",
+        agent_token_supplier=lambda: supplied,
+    )
+    with pytest.raises(ValueError, match="supplier must return a non-empty string"):
+        await identity_client.check(
+            authorization_id="auth_1",
+            actions=["payments.send"],
+        )
+    await identity_client.aclose()
+
+
+def test_hosted_execute_is_not_public(client):
+    assert not hasattr(client, "execute")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_execution_parses_customer_outcome_and_evidence(client):
+    route = respx.get(f"{BASE}/v1/executions/op_1").mock(
+        return_value=httpx.Response(200, json=CUSTOMER_EXECUTION_RESPONSE)
+    )
+    result = await client.get_execution("op_1", agent_token="jwt")
+    assert result.status == "succeeded"
+    assert result.request_fingerprint_profile == "allowly.execution.request.v1"
+    assert result.request_descriptor.authorization_id == "auth_1"
+    assert result.request_descriptor.origin == "https://provider.example"
+    assert result.request_descriptor.headers[0]["name"] == "authorization"
+    assert result.request_descriptor.body_sha256 == "sha256:body"
+    assert result.downstream is not None
+    assert result.downstream.source == "customer_runtime"
+    assert result.downstream.result == {"provider_operation_id": "downstream_1", "response_size": 32}
+    assert result.downstream.business_completion == "not_verified"
+    assert result.outcome_evidence is not None
+    assert result.outcome_evidence.record == {"operation_id": "op_1"}
+    request = route.calls[0].request
+    assert request.headers["x-allowly-agent-token"] == "jwt"
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("business_completion", [None, "complete"])
+async def test_get_execution_rejects_missing_or_invalid_business_completion(client, business_completion):
+    response = {
+        **CUSTOMER_EXECUTION_RESPONSE,
+        "downstream": {
+            **CUSTOMER_EXECUTION_RESPONSE["downstream"],
+            "business_completion": business_completion,
+        },
+    }
+    respx.get(f"{BASE}/v1/executions/op_1").mock(
+        return_value=httpx.Response(200, json=response)
+    )
+    with pytest.raises(AllowlyProtocolError, match="business_completion"):
+        await client.get_execution("op_1")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_execution_keeps_explicit_unavailable_evidence_state(client):
+    response = {
+        **CUSTOMER_EXECUTION_RESPONSE,
+        "downstream": {
+            **CUSTOMER_EXECUTION_RESPONSE["downstream"],
+            "http_status": None,
+            "response_fingerprint": None,
+            "response_fingerprint_scope": "unavailable",
+            "result": {},
+        },
+        "outcome_evidence": {
+            **CUSTOMER_EXECUTION_RESPONSE["outcome_evidence"],
+            "receipt": None,
+            "evidence_error": "unavailable",
+        },
+    }
+    respx.get(f"{BASE}/v1/executions/op_1").mock(
+        return_value=httpx.Response(200, json=response)
+    )
+    result = await client.get_execution("op_1")
+    assert result.downstream is not None
+    assert result.downstream.response_fingerprint_scope == "unavailable"
+    assert result.outcome_evidence is not None
+    assert result.outcome_evidence.receipt is None
+    assert result.outcome_evidence.evidence_error == "unavailable"
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "decision", "review_fields"),
+    [
+        (
+            "confirmation_required",
+            "confirm",
+            {
+                "confirm_nonce": "nonce_1",
+                "confirm_expires_at": "2026-09-24T20:06:02Z",
+                "confirm_prompt_hint": "Approve the order",
+            },
+        ),
+        (
+            "escalation_required",
+            "escalate",
+            {
+                "escalation_id": "esc_1",
+                "escalation_expires_at": "2026-09-24T21:01:02Z",
+                "escalation_to": "ops",
+                "escalation": {
+                    "escalation_id": "esc_1",
+                    "status": "pending",
+                    "escalation_to": "ops",
+                    "expires_at": "2026-09-24T21:01:02Z",
+                },
+            },
+        ),
+    ],
+)
+async def test_get_execution_parses_paused_review_fields(client, status, decision, review_fields):
+    response = {
+        **CUSTOMER_EXECUTION_RESPONSE,
+        "status": status,
+        "decision": decision,
+        "downstream": None,
+        "outcome_evidence": None,
+        **review_fields,
+    }
+    respx.get(f"{BASE}/v1/executions/op_1").mock(
+        return_value=httpx.Response(200, json=response)
+    )
+    result = await client.get_execution("op_1")
+    assert result.status == status
+    if decision == "confirm":
+        assert result.confirm_nonce == "nonce_1"
+        assert result.confirm_prompt_hint == "Approve the order"
+    else:
+        assert result.escalation_id == "esc_1"
+        assert result.escalation is not None
+        assert result.escalation.status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_prepare_execution_rejects_naive_client_timestamp_before_request(client):
+    with pytest.raises(ValueError, match="timezone"):
+        await client.prepare_execution(
+            operation_id="op_1",
+            authorization_id="auth_1",
+            enabled_executable_id="exe_1",
+            catalog_operation_id="provider.orders.create",
+            action="order.submit",
+            http_request={},
+            policy_input={},
+            client_timestamp=datetime(2026, 9, 24, 20, 1, 2),
+            idempotency_key="idem_1",
+        )
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_execution_surfaces_expired_result_without_retry_or_fallback(client):
+    route = respx.get(f"{BASE}/v1/executions/op_expired").mock(
+        return_value=httpx.Response(
+            410,
+            json={
+                "error": {
+                    "code": "execution_result_expired",
+                    "message": "The retained execution result has expired.",
+                }
+            },
+        )
+    )
+    with pytest.raises(AllowlyAPIError) as caught:
+        await client.get_execution("op_expired")
+    assert caught.value.status == 410
+    assert caught.value.code == "execution_result_expired"
+    assert route.call_count == 1
+
+
+ACKNOWLEDGMENT_RESPONSE = {
+    "acknowledgment_id": "ack_1",
+    "receipt_id": "rcp_abc",
+    "receipt_sha256": "0" * 64,
+    "client_timestamp": "2026-09-24T20:02:03.456Z",
+    "received_at": "2026-09-24T20:02:04.000Z",
+    "caller": {
+        "kind": "workspace_runtime_key",
+        "api_key_id": "key_1",
+        "agent_identity": {"status": "verified", "subject": "agent|123"},
+    },
+    "evidence": {
+        "profile": "allowly.seal.jcs-sha256.v1",
+        "record": {"receipt_id": "rcp_abc"},
+        "record_sha256": "sha256:ack",
+        "receipt": PENDING_RECEIPT,
+    },
+}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_acknowledge_receipt_accepts_created_or_replayed_response(client):
+    route = respx.post(f"{BASE}/v1/receipts/rcp_abc/acknowledgments").mock(
+        return_value=httpx.Response(200, json=ACKNOWLEDGMENT_RESPONSE)
+    )
+    result = await client.acknowledge_receipt(
+        receipt_id="rcp_abc",
+        receipt_sha256="0" * 64,
+        client_timestamp="2026-09-24T20:02:03.456Z",
+        idempotency_key="ack-idem",
+        agent_token="jwt",
+    )
+    assert result.caller.api_key_id == "key_1"
+    assert result.caller.agent_identity == {
+        "status": "verified",
+        "subject": "agent|123",
+    }
+    assert result.evidence.record == {"receipt_id": "rcp_abc"}
+    assert route.calls[0].request.headers["idempotency-key"] == "ack-idem"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_receipt_acknowledgment_uses_exact_route_and_identity(client):
+    response = {
+        **ACKNOWLEDGMENT_RESPONSE,
+        "receipt_id": "rcp/abc",
+        "acknowledgment_id": "ack/1",
+    }
+    route = respx.get(
+        f"{BASE}/v1/receipts/rcp%2Fabc/acknowledgments/ack%2F1"
+    ).mock(return_value=httpx.Response(200, json=response))
+    result = await client.get_receipt_acknowledgment(
+        "rcp/abc",
+        "ack/1",
+        agent_token="jwt",
+    )
+    assert result.acknowledgment_id == "ack/1"
+    assert route.calls[0].request.headers["x-allowly-agent-token"] == "jwt"

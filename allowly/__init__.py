@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from .client import Allowly
+from .agent_identity import NativeAgentCredential
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .seal_webhook import SealWebhookClient
+from .execution import LocalExecutionResult, ExecutionRecoveryRequired, complete_execution_evidence
 from .types import (
     ActionCheckResult,
     ActionCheckResultAllow,
@@ -10,6 +12,11 @@ from .types import (
     ActionCheckResultDeny,
     ActionCheckResultEscalate,
     ActionEntry,
+    CustomExecutableCreateRequest,
+    EnabledExecutableResponse,
+    ExecutableOperation,
+    ExecutableCapabilities,
+    ExecutableEvidenceCapability,
     CheckResponse,
     ConfirmationApproveResponse,
     AuthorizationCreateResponse,
@@ -19,12 +26,20 @@ from .types import (
     Decision,
     EscalationInfo,
     EscalationResolveResponse,
+    ExecutionDownstream,
+    ExecutionRequestDescriptor,
+    ExecutionResponse,
+    ExecutionStatus,
+    ExecutableOperationGrant,
     FallbackMode,
     PolicyConditionEvidence,
     PolicyEvalInfo,
     ReceiptEnvelope,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
+    ReceiptAcknowledgmentCaller,
+    ReceiptAcknowledgmentResponse,
+    OutcomeEvidence,
     SealResponse,
     SealWebhookDelivery,
     SealWebhookStatus,
@@ -32,7 +47,16 @@ from .types import (
 
 __all__ = [
     "Allowly",
+    "NativeAgentCredential",
+    "CustomExecutableCreateRequest",
+    "EnabledExecutableResponse",
+    "ExecutableOperation",
+    "ExecutableCapabilities",
+    "ExecutableEvidenceCapability",
     "SealWebhookClient",
+    "LocalExecutionResult",
+    "ExecutionRecoveryRequired",
+    "complete_execution_evidence",
     "AllowlyAPIError",
     "AllowlyProtocolError",
     "FieldError",
@@ -47,6 +71,11 @@ __all__ = [
     "BudgetSettlementResponse",
     "EscalationInfo",
     "EscalationResolveResponse",
+    "ExecutionDownstream",
+    "ExecutionRequestDescriptor",
+    "ExecutionResponse",
+    "ExecutionStatus",
+    "ExecutableOperationGrant",
     "AuthorizationCreateResponse",
     "AuthorizationRevokeResponse",
     "ConfirmationApproveResponse",
@@ -55,6 +84,9 @@ __all__ = [
     "ReceiptEnvelope",
     "ReceiptEnvelopePending",
     "ReceiptEnvelopeSigned",
+    "ReceiptAcknowledgmentCaller",
+    "ReceiptAcknowledgmentResponse",
+    "OutcomeEvidence",
     "SealResponse",
     "SealWebhookDelivery",
     "SealWebhookStatus",

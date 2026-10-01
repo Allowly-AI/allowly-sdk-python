@@ -9,6 +9,79 @@ SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed
 
 
 @dataclass
+class CustomExecutableCreateRequest:
+    """One public HTTPS operation. Headers contain names, never credential values."""
+
+    name: str
+    url: str
+    method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
+    request_content_type: Literal["application/json", "application/x-www-form-urlencoded"] | None = None
+    required_headers: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ExecutableEvidenceCapability:
+    available: bool
+    evidence_source: Literal["customer_reported", "independent_allowly_witness"]
+    profile: str | None
+    reason: str | None
+    api_request_match_verification: str | None
+
+
+@dataclass
+class ExecutableCapabilities:
+    customer_reported_receipt: ExecutableEvidenceCapability
+    tls_witness: ExecutableEvidenceCapability
+
+
+@dataclass
+class ExecutableOperation:
+    provider_id: str
+    operation_id: str
+    label: str
+    method: str
+    path: str
+    effect: str
+    request_content_type: str | None
+    required_headers: list[str]
+    status: str
+    definition_fingerprint: str
+    capabilities: ExecutableCapabilities
+    allowly_live_tested: bool
+    tls_witness_tested: bool
+
+
+@dataclass
+class EnabledExecutableResponse:
+    enabled_executable_id: str
+    provider_id: str
+    provider_name: str
+    category: str
+    origin: str
+    catalog_revision: str
+    status: str
+    credential_location: Literal["customer_runtime"]
+    connection_status: Literal["not_verified"]
+    allowly_live_tested: bool
+    tls_witness_tested: bool
+    operations: list[ExecutableOperation]
+    operation_count: int
+    enabled_at: str
+    disabled_at: str | None
+
+
+ExecutionStatus = Literal[
+    "approved",
+    "denied",
+    "confirmation_required",
+    "escalation_required",
+    "succeeded",
+    "failed",
+    "unknown",
+]
+
+
+@dataclass
 class ReceiptEnvelopePending:
     status: Literal["pending"]
     receipt_id: str
@@ -72,6 +145,90 @@ class BudgetSettlementResponse:
     spent_before_micros: int
     spent_after_micros: int
     receipt: ReceiptEnvelope
+
+
+@dataclass
+class ExecutionDownstream:
+    source: Literal["customer_runtime"]
+    http_status: int | None
+    response_fingerprint: str | None
+    response_fingerprint_scope: Literal["complete", "unavailable"]
+    result: dict[str, Any]
+    business_completion: Literal["not_verified"]
+
+
+@dataclass
+class OutcomeEvidence:
+    profile: Literal["allowly.seal.jcs-sha256.v1"]
+    record: dict[str, Any]
+    record_sha256: str
+    receipt: ReceiptEnvelope | None
+    evidence_error: Literal["unavailable"] | None = None
+
+
+@dataclass
+class ExecutionRequestDescriptor:
+    operation_id: str
+    authorization_id: str
+    destination_id: str
+    action: str
+    method: str
+    origin: str
+    path: str
+    query: str
+    headers: list[dict[str, str]]
+    body_sha256: str
+    body_size: int
+    content_type: str | None
+
+
+@dataclass
+class ExecutionResponse:
+    operation_id: str
+    status: ExecutionStatus
+    decision: Decision
+    reason: str
+    destination_id: str
+    action: str
+    request_fingerprint_profile: Literal["allowly.execution.request.v1"]
+    request_fingerprint: str
+    request_descriptor: ExecutionRequestDescriptor
+    decision_receipt: ReceiptEnvelope
+    downstream: ExecutionDownstream | None = None
+    outcome_evidence: OutcomeEvidence | None = None
+    confirm_nonce: str | None = None
+    confirm_expires_at: str | None = None
+    confirm_prompt_hint: str | None = None
+    escalation_id: str | None = None
+    escalation_expires_at: str | None = None
+    escalation_to: str | None = None
+    escalation: EscalationInfo | None = None
+    effective_evidence_mode: Literal["receipt", "witnessed"] | None = None
+    approval: dict[str, Any] | None = None
+    approval_sha256: str | None = None
+    approval_expires_at: str | None = None
+    decision_state: Literal["allowed", "not_allowed"] | None = None
+    target_state: Literal["not_started", "response_observed", "unknown"] | None = None
+    evidence_state: str | None = None
+    witness_session: dict[str, Any] | None = None
+
+
+@dataclass
+class ReceiptAcknowledgmentCaller:
+    kind: Literal["workspace_runtime_key"]
+    api_key_id: str
+    agent_identity: dict[str, Any] | None = None
+
+
+@dataclass
+class ReceiptAcknowledgmentResponse:
+    acknowledgment_id: str
+    receipt_id: str
+    receipt_sha256: str
+    client_timestamp: str
+    received_at: str
+    caller: ReceiptAcknowledgmentCaller
+    evidence: OutcomeEvidence
 
 
 @dataclass
@@ -156,9 +313,20 @@ class CheckResponse:
 
 
 @dataclass
+class ExecutableOperationGrant:
+    enabled_executable_id: str
+    provider_id: str
+    operation_id: str
+    catalog_revision: str
+    definition_fingerprint: str
+    minimum_evidence_mode: Literal["receipt", "witnessed"] = "receipt"
+
+
+@dataclass
 class ActionEntry:
     name: str
     constraints: dict[str, Any] = field(default_factory=dict)
+    executable_operations: list[ExecutableOperationGrant] = field(default_factory=list)
 
 
 @dataclass
@@ -176,6 +344,7 @@ class AuthorizationCreateResponse:
     budget_spent_micros: int | None = None
     replaced_authorization_id: str | None = None
     revocation_receipt: ReceiptEnvelopePending | None = None
+    authorization_provenance: dict[str, Any] | None = None
     #: X-Allowly-Billing-Warning response header, when present.
     billing_warning: str | None = None
 

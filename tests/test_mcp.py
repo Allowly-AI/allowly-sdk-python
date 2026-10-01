@@ -8,7 +8,7 @@ import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
 
-from allowly.mcp import AllowlyMCPMiddleware
+from allowly.mcp import AllowlyMCPMiddleware, MCPCheckInput
 
 
 def _response(decision: str):
@@ -121,3 +121,126 @@ async def test_fastmcp_confirm_payload_carries_expiry():
     payload = json.loads(str(err.value))
     assert payload["confirm_nonce"] == "cnf_1"
     assert payload["confirm_expires_at"] == "2026-07-29T12:00:00.000Z"
+
+
+@pytest.mark.asyncio
+async def test_fastmcp_maps_only_explicit_policy_input_and_agent_token():
+    mcp = FastMCP("test")
+
+    @mcp.tool()
+    def send_email(thread_id: str, recipient_domain: str, secret_body: str) -> str:
+        return "sent"
+
+    async def trusted_token(context):
+        assert context.request is not None
+        assert context.fastmcp_context is not None
+        return "trusted-jwt"
+
+    async def check_input(context):
+        return MCPCheckInput(
+            action="email.send",
+            resource=f"gmail:thread:{context.arguments['thread_id']}",
+            context={"recipient_domain": context.arguments["recipient_domain"]},
+            client_timestamp="2026-09-24T20:01:02.123Z",
+            estimated_cost_micros=0,
+            idempotency_key="send-123",
+        )
+
+    middleware = AllowlyMCPMiddleware(
+        api_key="test-key",
+        authorization_id_fn=lambda user_id: "auth_1" if user_id == "u1" else None,
+        user_id_fn=lambda context: "u1",
+        agent_token_fn=trusted_token,
+        check_input_fn=check_input,
+    )
+    mcp.add_middleware(middleware)
+    check = AsyncMock(
+        return_value=SimpleNamespace(results={"email.send": _response("allow").results["read_email"]})
+    )
+
+    try:
+        with patch.object(middleware.client, "check", check):
+            async with Client(mcp) as client:
+                result = await client.call_tool(
+                    "send_email",
+                    {
+                        "thread_id": "abc",
+                        "recipient_domain": "example.com",
+                        "secret_body": "not policy context",
+                    },
+                )
+                assert result.content[0].text == "sent"
+    finally:
+        await middleware.aclose()
+
+    check.assert_awaited_once_with(
+        authorization_id="auth_1",
+        actions=["email.send"],
+        resource="gmail:thread:abc",
+        context={"recipient_domain": "example.com"},
+        client_timestamp="2026-09-24T20:01:02.123Z",
+        estimated_cost_micros=0,
+        idempotency_key="send-123",
+        agent_token="trusted-jwt",
+    )
+    assert "secret_body" not in repr(check.await_args.kwargs)
+    assert "not policy context" not in repr(check.await_args.kwargs)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("supplied", [None, "", "   "])
+async def test_fastmcp_invalid_configured_agent_token_fails_closed(supplied):
+    mcp = FastMCP("test")
+
+    @mcp.tool()
+    def read_email() -> str:
+        return "email content"
+
+    middleware = AllowlyMCPMiddleware(
+        api_key="test-key",
+        authorization_id_fn=lambda user_id: "auth_1",
+        user_id_fn=lambda context: "u1",
+        agent_token_fn=lambda context: supplied,
+    )
+    mcp.add_middleware(middleware)
+    check = AsyncMock(return_value=_response("allow"))
+
+    try:
+        with patch.object(middleware.client, "check", check):
+            async with Client(mcp) as client:
+                with pytest.raises(ToolError, match="agent_token_not_found"):
+                    await client.call_tool("read_email", {})
+    finally:
+        await middleware.aclose()
+
+    check.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_fastmcp_agent_token_callback_error_is_safe_and_fails_closed():
+    mcp = FastMCP("test")
+
+    @mcp.tool()
+    def read_email() -> str:
+        return "email content"
+
+    def broken_token(context):
+        raise RuntimeError("leaked-secret")
+
+    middleware = AllowlyMCPMiddleware(
+        api_key="test-key",
+        authorization_id_fn=lambda user_id: "auth_1",
+        user_id_fn=lambda context: "u1",
+        agent_token_fn=broken_token,
+    )
+    mcp.add_middleware(middleware)
+
+    try:
+        async with Client(mcp) as client:
+            with pytest.raises(ToolError) as caught:
+                await client.call_tool("read_email", {})
+    finally:
+        await middleware.aclose()
+
+    assert "agent_token_unavailable" in str(caught.value)
+    assert "leaked-secret" not in str(caught.value)

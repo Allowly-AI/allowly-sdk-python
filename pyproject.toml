@@ -4,12 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "allowly"
-version = "0.5.1"
+version = "0.6.0"
 description = "Python SDK for the Allowly API"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
+    "cryptography>=42",
     "httpx>=0.27.0",
 ]
 
@@ -22,10 +23,10 @@ fastmcp = [
     "mcp>=1.28.1,<2",
 ]
 verifier = [
-    "allowly-receipt-format>=4.1.0,<5.0.0",
+    "allowly-receipt-format>=4.2.0,<5.0.0",
 ]
 dev = [
-    "allowly-receipt-format>=4.1.0,<5.0.0",
+    "allowly-receipt-format>=4.2.0,<5.0.0",
     "cryptography>=42",
     "fastmcp>=3.4.7,<4",
     "mcp>=1.28.1,<2",
