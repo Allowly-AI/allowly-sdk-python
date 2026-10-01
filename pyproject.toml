@@ -35,9 +35,6 @@ dev = [
     "respx>=0.21",
 ]
 
-[tool.uv.sources]
-allowly-receipt-format = { path = "../allowly-receipt-format/verifiers/python" }
-
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 

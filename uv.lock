@@ -5,8 +5,8 @@ resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.14' and sys_platform != 'win32'",
     "python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform == 'win32'",
-    "python_full_version < '3.11' and sys_platform == 'win32'",
     "python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform != 'win32'",
+    "python_full_version < '3.11' and sys_platform == 'win32'",
     "python_full_version < '3.11' and sys_platform != 'win32'",
 ]
 
@@ -73,8 +73,8 @@ verifier = [
 
 [package.metadata]
 requires-dist = [
-    { name = "allowly-receipt-format", marker = "extra == 'dev'", directory = "../allowly-receipt-format/verifiers/python" },
-    { name = "allowly-receipt-format", marker = "extra == 'verifier'", directory = "../allowly-receipt-format/verifiers/python" },
+    { name = "allowly-receipt-format", marker = "extra == 'dev'", specifier = ">=4.2.0,<5.0.0" },
+    { name = "allowly-receipt-format", marker = "extra == 'verifier'", specifier = ">=4.2.0,<5.0.0" },
     { name = "cryptography", specifier = ">=42" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=42" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=3.4.7,<4" },
@@ -91,16 +91,14 @@ provides-extras = ["fastmcp", "verifier", "dev"]
 [[package]]
 name = "allowly-receipt-format"
 version = "4.2.0"
-source = { directory = "../allowly-receipt-format/verifiers/python" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "rfc8785" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "cryptography", specifier = ">=42.0" },
-    { name = "rfc8785", specifier = ">=0.1.4,<1" },
+sdist = { url = "https://files.pythonhosted.org/packages/d5/90/521d6ac5908b1cf14b4aed8f5840741c01ffd55fd9fab344311e13407b74/allowly_receipt_format-4.2.0.tar.gz", hash = "sha256:dcab2aa878d943d5b34b061d4005bc523f49bef89300e40d69083abc9dad1190", size = 32602, upload-time = "2026-10-01T14:29:18.01Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/24/dddd560eaf72b83757c726a60a0c5865ce6d7789f27ef877d46ad141fdd9/allowly_receipt_format-4.2.0-py3-none-any.whl", hash = "sha256:34a3eee93de5ff896a6ff9611ee2b05cb725eaa835154efa9b1c94553b62ba01", size = 31893, upload-time = "2026-10-01T14:29:16.607Z" },
 ]
 
 [[package]]
