@@ -1349,25 +1349,60 @@ async def test_confirmations_approve(client):
     )
     assert res.decision == "approved"
     assert res.authorization_id == "auth_xyz"
+    assert res.receipt is None
     assert route.calls[0].request.headers["idempotency-key"] == "confirm-1"
 
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_confirmations_denied(client):
+@pytest.mark.parametrize("decision", ["not_approved", "denied_by_user"])
+async def test_confirmations_denied(client, decision):
     respx.post(f"{BASE}/v1/confirmations/nonce123").mock(return_value=httpx.Response(200, json={
-        "decision": "denied_by_user",
+        "decision": decision,
         "authorization_id": None,
         "expires_at": None,
+        "receipt": None,
     }))
     res = await client.confirmations.approve("nonce123", approved=False)
-    assert res.decision == "denied_by_user"
+    assert res.decision == decision
+    assert res.receipt is None
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("decision", ["approved", "not_approved"])
+async def test_confirmations_resolution_receipt(client, decision):
+    respx.post(f"{BASE}/v1/confirmations/nonce123").mock(return_value=httpx.Response(200, json={
+        "decision": decision,
+        "authorization_id": "auth_xyz" if decision == "approved" else None,
+        "expires_at": "2026-04-20T00:01:00Z" if decision == "approved" else None,
+        "receipt": {**PENDING_RECEIPT, "ready_at_estimate": None},
+    }))
+    res = await client.confirmations.approve("nonce123", approved=decision == "approved")
+    assert res.receipt is not None
+    assert res.receipt.receipt_id == "rcp_abc"
+    assert res.receipt.ready_at_estimate is None
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("receipt", [{"status": "signed"}, {}, False])
+async def test_confirmations_reject_malformed_resolution_receipt(client, receipt):
+    respx.post(f"{BASE}/v1/confirmations/nonce123").mock(return_value=httpx.Response(200, json={
+        "decision": "not_approved", "authorization_id": None, "expires_at": None,
+        "receipt": receipt,
+    }))
+    with pytest.raises(AllowlyProtocolError):
+        await client.confirmations.approve("nonce123", approved=False)
 
 
 @pytest.mark.parametrize(
     "payload",
     [
         {"decision": "approved", "authorization_id": "auth_xyz"},
+        {"decision": "unknown", "authorization_id": None, "expires_at": None},
+        {"decision": "not_approved", "authorization_id": None},
+        {"decision": "not_approved", "authorization_id": "auth_xyz", "expires_at": None},
         {"decision": "denied_by_user", "authorization_id": None},
         {
             "decision": "denied_by_user",

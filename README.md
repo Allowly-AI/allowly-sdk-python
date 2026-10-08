@@ -2,6 +2,21 @@
 
 Async Python client for the Allowly runtime API.
 
+## Confirmation receipts
+
+Confirmation responses expose `receipt`, a pending resolution envelope or
+`None` for an older runtime/replay. The decision is `approved` or
+`not_approved`; `denied_by_user` remains accepted for older runtimes. Poll
+`client.receipts.fetch_signed(response.receipt.receipt_id)` when a receipt is
+present, then verify it with your configured workspace and trusted keys.
+The signature authenticates the recorded client report, not a named human's
+identity or approval. Resolution does not dispatch an action; re-check with
+the original authorization before executing.
+
+SDK 0.6.1 uses `allowly-receipt-format>=4.3.0,<5.0.0` from PyPI through
+the `verifier` extra to verify `confirmation.resolve` receipts on wire
+format 4. Install `allowly[verifier]` when you need local verification.
+
 MCP middleware ships inside this SDK: `pip install 'allowly[fastmcp]'`, then `from allowly.mcp import AllowlyMCPMiddleware`. In TypeScript, it lives in the separate `@allowly/mcp` package.
 
 ## Subject authorization pattern
@@ -395,7 +410,7 @@ integration examples honest and makes SDK gaps visible early.
 ## Offline receipt verification
 
 Install `allowly[verifier]` to hash SEAL records and verify signed receipts
-locally. The extra uses `allowly-receipt-format>=4.2.0,<5.0.0`, which verifies
+locally. The extra uses `allowly-receipt-format>=4.3.0,<5.0.0`, which verifies
 receipt wire format 4 (the package major equals the wire format). `alg` and
 `key_id` are signed top-level fields, and `signature` is the base64url string.
 

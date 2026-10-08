@@ -812,7 +812,7 @@ class _ConfirmationsResource:
             headers=headers,
         )
         decision = _require_str(raw, "decision")
-        if decision not in {"approved", "denied_by_user"}:
+        if decision not in {"approved", "not_approved", "denied_by_user"}:
             raise AllowlyProtocolError(f"unknown confirmation decision: {decision!r}")
         if decision == "approved":
             authorization_id = _require_str(raw, "authorization_id")
@@ -824,6 +824,11 @@ class _ConfirmationsResource:
             decision=decision,
             authorization_id=authorization_id,
             expires_at=expires_at,
+            receipt=(
+                _parse_pending_envelope(raw["receipt"])
+                if raw.get("receipt") is not None
+                else None
+            ),
         )
 
 
