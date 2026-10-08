@@ -19,7 +19,7 @@ resolution-markers = [
     "python_full_version < '3.11' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "caio", version = "0.9.25", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "caio", version = "0.9.25", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/41/6d/e03ef9694346a55da965538f3e28461bd9fc71e21f997269d03b3cfc8755/aiofile-3.8.8.tar.gz", hash = "sha256:41f3dc40bd730459d58610476e82e5efb2f84ae6e9fa088a9545385d838b8a43", size = 19456, upload-time = "2023-08-22T12:48:38.88Z" }
 wheels = [
@@ -37,7 +37,7 @@ resolution-markers = [
     "python_full_version >= '3.11' and python_full_version < '3.14' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "caio", version = "0.12.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "caio", version = "0.12.9", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/14/31/edb06aabd8f8f0b56d659f30800795f40b93cba96be946ce179f6931e3a5/aiofile-3.12.3.tar.gz", hash = "sha256:caa6aa746b5e47e2165f7abd741b6415e49cf4d44fddc0f61844612cc3924d41", size = 21600, upload-time = "2026-08-04T22:59:27.171Z" }
 wheels = [
@@ -46,7 +46,7 @@ wheels = [
 
 [[package]]
 name = "allowly"
-version = "0.6.0"
+version = "0.6.1"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
@@ -73,8 +73,8 @@ verifier = [
 
 [package.metadata]
 requires-dist = [
-    { name = "allowly-receipt-format", marker = "extra == 'dev'", directory = "../allowly-receipt-format/verifiers/python" },
-    { name = "allowly-receipt-format", marker = "extra == 'verifier'", directory = "../allowly-receipt-format/verifiers/python" },
+    { name = "allowly-receipt-format", marker = "extra == 'dev'", specifier = ">=4.3.0,<5.0.0" },
+    { name = "allowly-receipt-format", marker = "extra == 'verifier'", specifier = ">=4.3.0,<5.0.0" },
     { name = "cryptography", specifier = ">=42" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=42" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=3.4.7,<4" },
@@ -91,16 +91,14 @@ provides-extras = ["fastmcp", "verifier", "dev"]
 [[package]]
 name = "allowly-receipt-format"
 version = "4.3.0"
-source = { directory = "../allowly-receipt-format/verifiers/python" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "rfc8785" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "cryptography", specifier = ">=42.0" },
-    { name = "rfc8785", specifier = ">=0.1.4,<1" },
+sdist = { url = "https://files.pythonhosted.org/packages/e6/b6/4aeb254b4f0a4c7492598441262f26ca3f48bc50003e9d0375709b84c785/allowly_receipt_format-4.3.0.tar.gz", hash = "sha256:899bbff57bc7e2aad8100cbf696ec629728dad80c8621b7e0dfb3fb8f96e1a78", size = 32704, upload-time = "2026-10-08T20:39:22.617Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/9b/2607d491b68cee6a9bb2c5d76c21ddfda8cb278a21b813864ff7d27f7a60/allowly_receipt_format-4.3.0-py3-none-any.whl", hash = "sha256:e7fa7dd298e7c09b2fd44052548bd12c5243e57e2abbe2e7e4e9a3b1cb83880b", size = 31966, upload-time = "2026-10-08T20:39:21.368Z" },
 ]
 
 [[package]]
@@ -637,7 +635,7 @@ name = "importlib-metadata"
 version = "9.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "zipp", marker = "python_full_version < '3.14'" },
+    { name = "zipp" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a9/01/15bb152d77b21318514a96f43af312635eb2500c96b55398d020c93d86ea/importlib_metadata-9.0.0.tar.gz", hash = "sha256:a4f57ab599e6a2e3016d7595cfd72eb4661a5106e787a95bcc90c7105b831efc", size = 56405, upload-time = "2026-03-20T06:42:56.999Z" }
 wheels = [
@@ -1447,8 +1445,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography", marker = "sys_platform != 'win32'" },
-    { name = "jeepney", marker = "sys_platform != 'win32'" },
+    { name = "cryptography" },
+    { name = "jeepney" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [

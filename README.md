@@ -2,7 +2,7 @@
 
 Async Python client for the Allowly runtime API.
 
-## Confirmation receipts on this feature branch
+## Confirmation receipts
 
 Confirmation responses expose `receipt`, a pending resolution envelope or
 `None` for an older runtime/replay. The decision is `approved` or
@@ -13,11 +13,9 @@ The signature authenticates the recorded client report, not a named human's
 identity or approval. Resolution does not dispatch an action; re-check with
 the original authorization before executing.
 
-This branch requires verifier 4.3.0 and uses a sibling source override in
-`[tool.uv.sources]` for local tests. SDK version remains 0.6.0 here. Before a
-package or standalone production build, publish both verifier packages,
-remove that override, and regenerate `uv.lock` against the registry. The
-local-source lock is not a production release.
+SDK 0.6.1 uses `allowly-receipt-format>=4.3.0,<5.0.0` from PyPI through
+the `verifier` extra to verify `confirmation.resolve` receipts on wire
+format 4. Install `allowly[verifier]` when you need local verification.
 
 MCP middleware ships inside this SDK: `pip install 'allowly[fastmcp]'`, then `from allowly.mcp import AllowlyMCPMiddleware`. In TypeScript, it lives in the separate `@allowly/mcp` package.
 
