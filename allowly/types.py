@@ -359,9 +359,10 @@ class AuthorizationRevokeResponse:
 
 @dataclass
 class ConfirmationApproveResponse:
-    decision: Literal["approved", "denied_by_user"]
+    decision: Literal["approved", "not_approved", "denied_by_user"]
     authorization_id: str | None = None
     expires_at: str | None = None
+    receipt: ReceiptEnvelopePending | None = None
 
 
 @dataclass

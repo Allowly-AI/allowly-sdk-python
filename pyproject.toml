@@ -23,10 +23,10 @@ fastmcp = [
     "mcp>=1.28.1,<2",
 ]
 verifier = [
-    "allowly-receipt-format>=4.2.0,<5.0.0",
+    "allowly-receipt-format>=4.3.0,<5.0.0",
 ]
 dev = [
-    "allowly-receipt-format>=4.2.0,<5.0.0",
+    "allowly-receipt-format>=4.3.0,<5.0.0",
     "cryptography>=42",
     "fastmcp>=3.4.7,<4",
     "mcp>=1.28.1,<2",
@@ -37,6 +37,9 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.uv.sources]
+allowly-receipt-format = { path = "../allowly-receipt-format/verifiers/python" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["allowly"]
