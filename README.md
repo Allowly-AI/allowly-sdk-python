@@ -14,12 +14,12 @@ identity or approval. Resolution does not dispatch an action. A standalone
 Check integration re-checks with its original authorization; native Execute
 continues its saved operation as described below.
 
-This SDK0.7.0 source requires `allowly-receipt-format>=4.3.1,<5.0.0` through
+SDK 0.7.0 requires `allowly-receipt-format>=4.3.1,<5.0.0` from PyPI through
 the `verifier` extra to verify `confirmation.resolve` receipts on wire
 format 4. Install `allowly[verifier]` when you need local verification.
-The release is staged, not published. The temporary sibling-source uv lock
-must become a real registry lock after verifier4.3.1 publication and before
-publishing SDK0.7.0. Earlier published packages do not gain these methods.
+Native continuation requires a runtime that supports
+`/v1/executions/{operation_id}/continue`; upgrading this SDK does not deploy
+that runtime. Earlier SDK packages do not gain these methods.
 
 ## Resolution webhook setup and verification
 
@@ -533,7 +533,7 @@ integration examples honest and makes SDK gaps visible early.
 ## Offline receipt verification
 
 Install `allowly[verifier]` to hash SEAL records and verify signed receipts
-locally. The staged 0.7.0 extra uses `allowly-receipt-format>=4.3.1,<5.0.0`, which verifies
+locally. The 0.7.0 extra uses `allowly-receipt-format>=4.3.1,<5.0.0`, which verifies
 receipt wire format 4 (the package major equals the wire format). `alg` and
 `key_id` are signed top-level fields, and `signature` is the base64url string.
 
