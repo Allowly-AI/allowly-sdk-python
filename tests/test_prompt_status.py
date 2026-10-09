@@ -2,9 +2,20 @@ import httpx
 import pytest
 import respx
 
-from allowly import Allowly, AllowlyProtocolError, ConfirmationStatusResponse, EscalationStatusResponse
+from allowly import (
+    Allowly, AllowlyProtocolError, ConfirmationStatus, ConfirmationStatusResponse,
+    EscalationStatus, EscalationStatusResponse,
+)
 
 BASE = "https://api.example.com"
+
+
+def test_released_names_alias_the_same_implementation():
+    assert ConfirmationStatus is ConfirmationStatusResponse
+    assert EscalationStatus is EscalationStatusResponse
+    client = Allowly("key", base_url=BASE)
+    for resource in (client.confirmations, client.escalations):
+        assert resource.get.__func__ is resource.get_status.__func__
 
 
 def payload(kind):

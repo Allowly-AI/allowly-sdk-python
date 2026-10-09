@@ -6,6 +6,9 @@ from typing import Any, Literal, Union
 Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
 SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed"]
+PromptStatus = Literal["pending", "approved", "rejected", "expired", "unknown"]
+ConfirmationAuthorityStatus = Literal["none", "available", "expired", "revoked", "unknown"]
+EscalationAuthorityStatus = Literal["none", "available", "expired", "revoked", "consumed", "unknown"]
 ResolutionWebhookEventType = Literal["confirmation.resolved", "escalation.resolved"]
 ResolutionWebhookDeliveryStatus = Literal["pending", "delivered", "failed", "cancelled"]
 
@@ -343,6 +346,7 @@ class ActionCheckResultConfirm(ActionCheckResultBase):
     confirm_nonce: str
     confirm_expires_at: str
     confirm_prompt_hint: str
+    confirmation_id: str | None = None
 
 
 @dataclass(kw_only=True)
@@ -427,11 +431,6 @@ class ConfirmationApproveResponse:
     receipt: ReceiptEnvelopePending | None = None
 
 
-PromptStatus = Literal["pending", "approved", "rejected", "expired", "unknown"]
-ConfirmationAuthorityStatus = Literal["none", "available", "expired", "revoked", "unknown"]
-EscalationAuthorityStatus = Literal["none", "available", "expired", "revoked", "consumed", "unknown"]
-
-
 @dataclass
 class PromptStatusResponse:
     authorization_id: str
@@ -445,7 +444,9 @@ class PromptStatusResponse:
 
 
 @dataclass
-class ConfirmationStatusResponse(PromptStatusResponse):
+class ConfirmationStatus(PromptStatusResponse):
+    """Recorded choice and grant lifecycle, not permission to dispatch."""
+
     confirmation_id: str
     child_authorization_id: str | None
     authority_status: ConfirmationAuthorityStatus
@@ -453,10 +454,16 @@ class ConfirmationStatusResponse(PromptStatusResponse):
 
 
 @dataclass
-class EscalationStatusResponse(PromptStatusResponse):
+class EscalationStatus(PromptStatusResponse):
+    """Recorded choice and one-use grant lifecycle, never permission to execute."""
+
     escalation_id: str
     authority_status: EscalationAuthorityStatus
     consumed_at: str | None
+
+
+ConfirmationStatusResponse = ConfirmationStatus
+EscalationStatusResponse = EscalationStatus
 
 
 @dataclass

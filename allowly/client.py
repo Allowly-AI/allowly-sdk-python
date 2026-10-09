@@ -23,12 +23,14 @@ from .types import (
     ConfirmationApproveResponse,
     ConfirmationStatusResponse,
     EscalationStatusResponse,
+    ConfirmationStatus,
     AuthorizationCreateResponse,
     AuthorizationRevokeResponse,
     BudgetInfo,
     BudgetSettlementResponse,
     EscalationInfo,
     EscalationResolveResponse,
+    EscalationStatus,
     ExecutionDownstream,
     ExecutionRequestDescriptor,
     ExecutionReview,
@@ -855,7 +857,9 @@ class _ConfirmationsResource:
         """Read an opaque confirmation monitor ID, never its bearer nonce."""
         _validate_prompt_id(confirmation_id, "cnf_")
         raw = await self._client._request("GET", f"/v1/confirmations/{quote(confirmation_id, safe='')}/status")
-        return _parse_prompt_status(raw, "confirm", confirmation_id)
+        return _parse_confirmation_status(raw, confirmation_id)
+
+    get = get_status
 
     async def approve(
         self,
@@ -904,7 +908,9 @@ class _EscalationsResource:
         """Read the recorded choice and current grant lifecycle without a Check."""
         _validate_prompt_id(escalation_id, "esc_")
         raw = await self._client._request("GET", f"/v1/escalations/{quote(escalation_id, safe='')}")
-        return _parse_prompt_status(raw, "escalate", escalation_id)
+        return _parse_escalation_status(raw, escalation_id)
+
+    get = get_status
 
     async def resolve(
         self,
@@ -1026,34 +1032,6 @@ class _ReceiptsResource:
 def _validate_prompt_id(value: str, prefix: str) -> None:
     if not isinstance(value, str) or not re.fullmatch(re.escape(prefix) + r"[A-Za-z0-9_-]{1,256}", value):
         raise ValueError(f"prompt ID must be an opaque {prefix} monitor ID")
-
-
-def _parse_prompt_status(value: Any, kind: str, expected_id: str) -> ConfirmationStatusResponse | EscalationStatusResponse:
-    raw = _require_dict(value, "prompt status")
-    id_field = "confirmation_id" if kind == "confirm" else "escalation_id"
-    if _require_str(raw, id_field) != expected_id:
-        raise AllowlyProtocolError("prompt status ID differs from requested monitor ID")
-    status, authority = _require_str(raw, "status"), _require_str(raw, "authority_status")
-    if status not in {"pending", "approved", "rejected", "expired", "unknown"}:
-        raise AllowlyProtocolError("unknown prompt status")
-    authorities = {"none", "available", "expired", "revoked", "unknown"}
-    if kind == "escalate":
-        authorities.add("consumed")
-    if authority not in authorities:
-        raise AllowlyProtocolError("unknown prompt authority status")
-    def nullable(key: str) -> str | None:
-        if key not in raw:
-            raise AllowlyProtocolError(f"prompt status is missing {key}")
-        return _optional_str(raw, key)
-    common = dict(authorization_id=_require_str(raw, "authorization_id"), action=_require_str(raw, "action"),
-                  resource=nullable("resource"), status=status, expires_at=_require_str(raw, "expires_at"),
-                  resolved_at=nullable("resolved_at"), source_receipt_id=nullable("source_receipt_id"),
-                  resolution_receipt_id=nullable("resolution_receipt_id"), authority_status=authority)
-    if kind == "confirm":
-        return ConfirmationStatusResponse(**common, confirmation_id=expected_id,
-                                          child_authorization_id=nullable("child_authorization_id"),
-                                          authority_expires_at=nullable("authority_expires_at"))
-    return EscalationStatusResponse(**common, escalation_id=expected_id, consumed_at=nullable("consumed_at"))
 
 
 def _parse_custom_executable_response(value: Any) -> EnabledExecutableResponse:
@@ -1232,6 +1210,7 @@ def _parse_check_response(
                 confirm_nonce=_require_str(item, "confirm_nonce"),
                 confirm_expires_at=_require_str(item, "confirm_expires_at"),
                 confirm_prompt_hint=_require_str(item, "confirm_prompt_hint"),
+                confirmation_id=_optional_confirmation_id(item),
             )
         else:
             results[action] = ActionCheckResultEscalate(
@@ -1254,6 +1233,102 @@ def _require_dict(value: Any, name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise AllowlyProtocolError(f"{name} must be an object")
     return value
+
+
+def _optional_confirmation_id(raw: dict[str, Any]) -> str | None:
+    value = _optional_str(raw, "confirmation_id")
+    if value is not None and not re.fullmatch(r"cnf_[A-Za-z0-9_-]+", value):
+        raise AllowlyProtocolError("confirmation_id must be an opaque cnf_ ID")
+    return value
+
+
+def _status_nullable_str(raw: dict[str, Any], key: str) -> str | None:
+    if key not in raw:
+        raise AllowlyProtocolError(f"{key} must be present as a string or null")
+    value = _optional_str(raw, key)
+    if value == "" and key != "resource":
+        raise AllowlyProtocolError(f"{key} must be non-empty or null")
+    return value
+
+
+def _status_timestamp(raw: dict[str, Any], key: str, *, nullable: bool = False) -> str | None:
+    value = _status_nullable_str(raw, key) if nullable else _require_str(raw, key)
+    if value is None:
+        return None
+    match = re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))", value
+    )
+    if match is None or (match[1] is not None and (int(match[1]) > 23 or int(match[2]) > 59)):
+        raise AllowlyProtocolError(f"{key} must be a valid timezone-aware timestamp")
+    try:
+        return _client_timestamp(value)
+    except ValueError as exc:
+        raise AllowlyProtocolError(f"{key} must be a valid timezone-aware timestamp") from exc
+
+
+def _parse_prompt_status(raw: dict[str, Any]) -> dict[str, Any]:
+    status = _require_str(raw, "status")
+    if status not in {"pending", "approved", "rejected", "expired", "unknown"}:
+        raise AllowlyProtocolError(f"unknown prompt status: {status!r}")
+    authorization_id = _require_str(raw, "authorization_id")
+    action = _require_str(raw, "action")
+    if not authorization_id or not action:
+        raise AllowlyProtocolError("status authorization_id and action must be non-empty")
+    resolved_at = _status_timestamp(raw, "resolved_at", nullable=True)
+    if status in {"pending", "expired"} and resolved_at is not None:
+        raise AllowlyProtocolError("unresolved prompt resolved_at must be null")
+    return dict(
+        authorization_id=authorization_id,
+        action=action,
+        resource=_status_nullable_str(raw, "resource"),
+        status=status,
+        expires_at=_status_timestamp(raw, "expires_at"),
+        resolved_at=resolved_at,
+        source_receipt_id=_status_nullable_str(raw, "source_receipt_id"),
+        resolution_receipt_id=_status_nullable_str(raw, "resolution_receipt_id"),
+    )
+
+
+def _parse_confirmation_status(value: Any, expected_id: str) -> ConfirmationStatus:
+    raw = _require_dict(value, "confirmation status")
+    confirmation_id = _require_str(raw, "confirmation_id")
+    if confirmation_id != expected_id:
+        raise AllowlyProtocolError("confirmation_id does not match the request")
+    base = _parse_prompt_status(raw)
+    authority = _require_str(raw, "authority_status")
+    if authority not in {"none", "available", "expired", "revoked", "unknown"}:
+        raise AllowlyProtocolError(f"unknown confirmation authority_status: {authority!r}")
+    child_id = _status_nullable_str(raw, "child_authorization_id")
+    authority_expiry = _status_timestamp(raw, "authority_expires_at", nullable=True)
+    if authority == "available" and (
+        base["status"] != "approved" or child_id is None or authority_expiry is None
+    ):
+        raise AllowlyProtocolError("available confirmation authority requires an approved choice and child grant")
+    if base["status"] == "rejected" and authority != "none":
+        raise AllowlyProtocolError("rejected confirmation authority_status must be none")
+    return ConfirmationStatus(
+        **base, confirmation_id=confirmation_id, child_authorization_id=child_id,
+        authority_status=authority, authority_expires_at=authority_expiry,
+    )
+
+
+def _parse_escalation_status(value: Any, expected_id: str) -> EscalationStatus:
+    raw = _require_dict(value, "escalation status")
+    escalation_id = _require_str(raw, "escalation_id")
+    if escalation_id != expected_id:
+        raise AllowlyProtocolError("escalation_id does not match the request")
+    base = _parse_prompt_status(raw)
+    authority = _require_str(raw, "authority_status")
+    if authority not in {"none", "available", "expired", "revoked", "consumed", "unknown"}:
+        raise AllowlyProtocolError(f"unknown escalation authority_status: {authority!r}")
+    if authority == "available" and base["status"] != "approved":
+        raise AllowlyProtocolError("available escalation authority requires an approved choice")
+    if base["status"] == "rejected" and authority != "none":
+        raise AllowlyProtocolError("rejected escalation authority_status must be none")
+    return EscalationStatus(
+        **base, escalation_id=escalation_id, authority_status=authority,
+        consumed_at=_status_timestamp(raw, "consumed_at", nullable=True),
+    )
 
 
 def _validate_seal_receipt(

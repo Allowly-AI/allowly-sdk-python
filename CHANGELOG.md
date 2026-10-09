@@ -7,7 +7,8 @@
   recovery-only, including across restart and concurrent calls.
 - Add typed, read-only confirmation/escalation `get_status` helpers and
   `readiness`. Monitor responses bind the returned opaque ID; status is not
-  execution permission.
+  execution permission. Preserve the existing `get` methods, status type and
+  enum exports, strict lifecycle parsing, and Check's optional confirmation ID.
 - Include the existing workspace resolution-webhook setup resource, typed
   events, and strict raw-byte verification helper. Verified callbacks only wake
   saved jobs; they do not grant permission or dispatch a provider request.

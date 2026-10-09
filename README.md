@@ -10,8 +10,9 @@ Confirmation responses expose `receipt`, a pending resolution envelope or
 `client.receipts.fetch_signed(response.receipt.receipt_id)` when a receipt is
 present, then verify it with your configured workspace and trusted keys.
 The signature authenticates the recorded client report, not a named human's
-identity or approval. Resolution does not dispatch an action; re-check with
-the original authorization before executing.
+identity or approval. Resolution does not dispatch an action. A standalone
+Check integration re-checks with its original authorization; native Execute
+continues its saved operation as described below.
 
 This SDK0.7.0 source requires `allowly-receipt-format>=4.3.1,<5.0.0` through
 the `verifier` extra to verify `confirmation.resolve` receipts on wire
@@ -53,7 +54,8 @@ or secrets. These methods use the existing API contract; no new endpoint is adde
 
 Preserve the exact raw request bytes before JSON parsing and reject duplicate
 signature headers at your HTTP boundary. Verification authenticates the fixed
-HMAC-SHA256 profile with a 300-second attempt-timestamp tolerance and validates
+HMAC-SHA256 [Standard Webhooks profile](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md)
+with a 300-second attempt-timestamp tolerance and validates
 the configured workspace and bounded event fields. It does not prove a human's
 identity or verify the referenced receipts. Store event IDs durably before
 acknowledging; duplicate deliveries must not become duplicate business jobs.
@@ -490,6 +492,31 @@ agent policy, create the authorization from that `policy_id`, and then resolve
 returned escalation results with
 `await allowly.escalations.approve(escalation_id, resolved_by="manager:123")`
 or `reject(...)`, then re-check before running the action.
+
+Read a confirmation or escalation without resolving it:
+
+```python
+# confirmation_id comes from a confirm check result. It is not confirm_nonce.
+confirmation = await allowly.confirmations.get(confirmation_id)
+escalation = await allowly.escalations.get(escalation_id)
+print(confirmation.status, confirmation.authority_status)
+print(escalation.status, escalation.authority_status)
+```
+
+The released `get` names remain aliases of `get_status`; both return the same
+typed status object. `ConfirmationStatusResponse` and `EscalationStatusResponse`
+are aliases of the existing `ConfirmationStatus` and `EscalationStatus` types.
+Each read makes one authenticated request. Repeat it in your application's own
+bounded polling loop if needed. The prompt `status` is `pending`, `approved`,
+`rejected`, `expired`, or `unknown`; `unknown` means a legacy record does not
+show the choice. An approved choice stays approved after its grant expires,
+is revoked, or (for escalations) is consumed. `authority_status="available"`
+is a lifecycle snapshot, not permission. For standalone Check integrations,
+make a fresh `allowly.check(...)` with the original authorization and execute
+only an `allow`. For native Execute, continue the saved original operation;
+do not insert an extra enforcing Check. These reads never execute actions,
+consume approval, or create receipts. Nullable receipt IDs refer to existing
+records. Older check responses may omit `confirmation_id`.
 
 If you need lookup by email later, import `from_email` from
 `allowly.identifiers` and store `from_email(email, pepper=APP_PII_PEPPER)`.
