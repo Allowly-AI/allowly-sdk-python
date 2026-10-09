@@ -6,6 +6,57 @@ from typing import Any, Literal, Union
 Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
 SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed"]
+ResolutionWebhookEventType = Literal["confirmation.resolved", "escalation.resolved"]
+ResolutionWebhookDeliveryStatus = Literal["pending", "delivered", "failed", "cancelled"]
+
+
+@dataclass
+class ResolutionWebhookData:
+    prompt_id: str
+    status: Literal["approved", "rejected"]
+    source_receipt_id: str | None
+    resolution_receipt_id: str
+
+
+@dataclass
+class ResolutionWebhookEvent:
+    id: str
+    type: ResolutionWebhookEventType
+    timestamp: str
+    workspace_id: str
+    data: ResolutionWebhookData
+
+
+@dataclass
+class ResolutionWebhookConfig:
+    workspace_id: str
+    endpoint_id: str | None
+    url: str | None
+    enabled: bool
+    credential_version: int | None
+    created_at: str | None
+    updated_at: str | None
+
+
+@dataclass
+class ResolutionWebhookSecret(ResolutionWebhookConfig):
+    signing_secret: str = field(repr=False)
+
+
+@dataclass
+class ResolutionWebhookDelivery:
+    event_id: str
+    event_type: ResolutionWebhookEventType
+    status: ResolutionWebhookDeliveryStatus
+    attempts: int
+    created_at: str
+    delivered_at: str | None
+    last_error: str | None
+
+
+@dataclass
+class ResolutionWebhookDeliveries:
+    items: list[ResolutionWebhookDelivery]
 
 
 @dataclass
@@ -75,6 +126,7 @@ ExecutionStatus = Literal[
     "denied",
     "confirmation_required",
     "escalation_required",
+    "waiting_for_review",
     "succeeded",
     "failed",
     "unknown",
@@ -183,6 +235,14 @@ class ExecutionRequestDescriptor:
 
 
 @dataclass
+class ExecutionReview:
+    kind: Literal["confirm", "escalate"]
+    id: str
+    source_receipt_id: str
+    expires_at: str
+
+
+@dataclass
 class ExecutionResponse:
     operation_id: str
     status: ExecutionStatus
@@ -211,6 +271,8 @@ class ExecutionResponse:
     target_state: Literal["not_started", "response_observed", "unknown"] | None = None
     evidence_state: str | None = None
     witness_session: dict[str, Any] | None = None
+    confirmation_id: str | None = None
+    review: ExecutionReview | None = None
 
 
 @dataclass
@@ -363,6 +425,38 @@ class ConfirmationApproveResponse:
     authorization_id: str | None = None
     expires_at: str | None = None
     receipt: ReceiptEnvelopePending | None = None
+
+
+PromptStatus = Literal["pending", "approved", "rejected", "expired", "unknown"]
+ConfirmationAuthorityStatus = Literal["none", "available", "expired", "revoked", "unknown"]
+EscalationAuthorityStatus = Literal["none", "available", "expired", "revoked", "consumed", "unknown"]
+
+
+@dataclass
+class PromptStatusResponse:
+    authorization_id: str
+    action: str
+    resource: str | None
+    status: PromptStatus
+    expires_at: str
+    resolved_at: str | None
+    source_receipt_id: str | None
+    resolution_receipt_id: str | None
+
+
+@dataclass
+class ConfirmationStatusResponse(PromptStatusResponse):
+    confirmation_id: str
+    child_authorization_id: str | None
+    authority_status: ConfirmationAuthorityStatus
+    authority_expires_at: str | None
+
+
+@dataclass
+class EscalationStatusResponse(PromptStatusResponse):
+    escalation_id: str
+    authority_status: EscalationAuthorityStatus
+    consumed_at: str | None
 
 
 @dataclass

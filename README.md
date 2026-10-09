@@ -13,9 +13,59 @@ The signature authenticates the recorded client report, not a named human's
 identity or approval. Resolution does not dispatch an action; re-check with
 the original authorization before executing.
 
-SDK 0.6.1 uses `allowly-receipt-format>=4.3.0,<5.0.0` from PyPI through
+This SDK0.7.0 source requires `allowly-receipt-format>=4.3.1,<5.0.0` through
 the `verifier` extra to verify `confirmation.resolve` receipts on wire
 format 4. Install `allowly[verifier]` when you need local verification.
+The release is staged, not published. The temporary sibling-source uv lock
+must become a real registry lock after verifier4.3.1 publication and before
+publishing SDK0.7.0. Earlier published packages do not gain these methods.
+
+## Resolution webhook setup and verification
+
+Use a setup/CLI credential to manage the workspace's one existing callback:
+
+```python
+import os
+from allowly import Allowly, verify_resolution_webhook
+
+async with Allowly(api_key=os.environ["ALLOWLY_SETUP_KEY"]) as setup:
+    configured = await setup.resolution_webhook.configure(
+        "https://customer.example/allowly-resolution"
+    )
+    signing_secret = configured.signing_secret  # Store privately for the receiver.
+    configuration = await setup.resolution_webhook.get()
+    deliveries = await setup.resolution_webhook.deliveries()
+    # rotated = await setup.resolution_webhook.rotate()
+    # await setup.resolution_webhook.disable()
+
+event = verify_resolution_webhook(
+    raw_body, request_headers,
+    signing_secret=os.environ["ALLOWLY_RESOLUTION_SIGNING_SECRET"],
+    expected_workspace_id=os.environ["ALLOWLY_WORKSPACE_ID"],
+)
+```
+
+Runtime keys cannot manage callbacks. Only configure/rotate return the signing
+secret; configuration reads omit it. Coordinate changes with the existing
+receiver: URL changes, re-enabling, and rotation cancel queued older-version
+events. The delivery list contains at most 20 summaries, without raw payloads
+or secrets. These methods use the existing API contract; no new endpoint is added.
+
+Preserve the exact raw request bytes before JSON parsing and reject duplicate
+signature headers at your HTTP boundary. Verification authenticates the fixed
+HMAC-SHA256 profile with a 300-second attempt-timestamp tolerance and validates
+the configured workspace and bounded event fields. It does not prove a human's
+identity or verify the referenced receipts. Store event IDs durably before
+acknowledging; duplicate deliveries must not become duplicate business jobs.
+
+Select the saved job by its trusted workspace, review kind/ID, and original
+source receipt ID. A null or mismatched source cannot select a native Execute
+job. Read current prompt status, then wake `continue_http_execution` with the
+unchanged original operation and arguments. A verified callback or an approved
+status is not dispatch permission; Continue validates current permission before
+one claim. Do not run an extra enforcing Check before native continuation.
+For standalone Check integrations, perform the existing fresh Check instead.
+Rejected, invalid, mismatched, or unavailable review never permits dispatch.
 
 MCP middleware ships inside this SDK: `pip install 'allowly[fastmcp]'`, then `from allowly.mcp import AllowlyMCPMiddleware`. In TypeScript, it lives in the separate `@allowly/mcp` package.
 
@@ -177,16 +227,57 @@ that those inputs match the meaning of the provider body.
 
 The helper calls remote `/v1/execute`, validates the approval, and claims dispatch
 once before sending locally. It fails closed on unavailable checks and stops on
-deny, confirmation, or escalation. Low-level customer methods are `prepare_execution`,
-`claim_execution_dispatch`, `get_execution_witness_token`,
+deny. Confirmation and escalation return `status="waiting_for_review"` with a
+typed `review` containing its kind, opaque ID, source receipt ID, and expiry.
+No provider request is sent while review is pending. Low-level customer methods are `prepare_execution`,
+`continue_execution`, `claim_execution_dispatch`, `get_execution_witness_token`,
 `report_execution_outcome`, and `get_execution`.
+
+Read the review without running another Check or creating a receipt:
+
+```python
+if result.execution.review.kind == "confirm":
+    status = await allowly.confirmations.get_status(result.execution.review.id)
+else:
+    status = await allowly.escalations.get_status(result.execution.review.id)
+```
+
+These typed responses return the recorded choice, source/resolution receipt IDs,
+and current grant lifecycle. Use the opaque `cnf_` monitor ID for confirmation,
+never its bearer nonce. `status="approved"` is only a wake-up signal: continue
+the saved operation so Allowly validates current permission. Null or unknown
+evidence is not an allow. `await allowly.readiness()` reads `/readyz`; readiness
+is not permission, and network/protocol errors raise rather than returning an allow.
 
 Allowly receives the origin, path, query string and policy inputs. Header values
 and body bytes are committed by hash. Keep provider credentials in local headers,
 not in the URL, query string or policy context.
 
+Keep the original URL, method, headers, body, and policy inputs in your own
+durable job store. A verified approval webhook can wake that job; polling the
+approval resource is another option. A webhook is not permission to send.
+Continue with the **same arguments and operation ID**:
+
+```python
+result = await allowly.continue_http_execution(original_url, **original_arguments)
+```
+
+`original_arguments` must include the original `operation_id`, authorization,
+executable, action, headers, body, policy inputs, evidence mode, and journal
+directory. Restore credentials from your local credential store. The SDK checks
+the saved request hash and sends only the original request commitments and review
+binding to `/v1/executions/{operation_id}/continue`. The runtime validates the
+review and current permission before the SDK claims dispatch. Still-pending
+review remains waiting; rejected, expired, or revoked permission never sends.
+Do not call a separate enforcing Check before continuation: continuation itself
+performs the fresh evaluation, including any one-use escalation grant.
+
 The private journal defaults to `.allowly/executions`; put it on persistent
-storage and use a separate directory per workspace. A repeated operation raises
+storage and use a separate directory per workspace. It retains the original
+prepare timestamp, request hash, review binding, and outcome, not raw provider
+headers, request body, or confirmation bearer nonce. The initial response can
+carry that nonce for your confirmation flow; do not log it. Version-1 journals and incomplete initial prepare
+attempts cannot be reopened through continuation. A repeated Execute raises
 `ExecutionRecoveryRequired` with its directory. Reconcile with `get_execution`
 or call `flush_execution_outcome(operation_dir)` to retry a saved report. Neither
 repeats the provider action. An interrupted or timed-out send may already have
@@ -194,6 +285,11 @@ acted; never generate a replacement operation ID automatically. There is no
 exactly-once guarantee for arbitrary providers. If `result.outcome_pending` is
 true, its API response still describes approval; `result.response` contains the
 locally observed response and the journal retains the report for upload.
+The Python helper also raises `ExecutionRecoveryRequired` for a duplicate
+completed continuation instead of returning a cached local response. Use
+`get_execution` to read the outcome; do not turn that error into another send.
+Install witness setup before a witnessed Execute. A missing or invalid setup
+leaves a durable pre-dispatch journal, but never claims dispatch or sends.
 
 Run `allowly setup witness` in the Allowly CLI for each workspace that will use
 witnessed execution. The default path downloads a verified precompiled Rust
@@ -410,7 +506,7 @@ integration examples honest and makes SDK gaps visible early.
 ## Offline receipt verification
 
 Install `allowly[verifier]` to hash SEAL records and verify signed receipts
-locally. The extra uses `allowly-receipt-format>=4.3.0,<5.0.0`, which verifies
+locally. The staged 0.7.0 extra uses `allowly-receipt-format>=4.3.1,<5.0.0`, which verifies
 receipt wire format 4 (the package major equals the wire format). `alg` and
 `key_id` are signed top-level fields, and `signature` is the base64url string.
 

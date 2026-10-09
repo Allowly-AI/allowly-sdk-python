@@ -12,6 +12,7 @@ from urllib.parse import quote, urlparse
 import httpx
 
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
+from .resolution_webhook import _ResolutionWebhookResource
 from .types import (
     CheckResponse,
     CustomExecutableCreateRequest,
@@ -20,6 +21,8 @@ from .types import (
     ExecutableCapabilities,
     ExecutableEvidenceCapability,
     ConfirmationApproveResponse,
+    ConfirmationStatusResponse,
+    EscalationStatusResponse,
     AuthorizationCreateResponse,
     AuthorizationRevokeResponse,
     BudgetInfo,
@@ -28,6 +31,7 @@ from .types import (
     EscalationResolveResponse,
     ExecutionDownstream,
     ExecutionRequestDescriptor,
+    ExecutionReview,
     ExecutionResponse,
     ExecutionStatus,
     OutcomeEvidence,
@@ -107,6 +111,7 @@ class Allowly:
         self.confirmations = _ConfirmationsResource(self)
         self.escalations = _EscalationsResource(self)
         self.receipts = _ReceiptsResource(self)
+        self.resolution_webhook = _ResolutionWebhookResource(self)
 
     async def create_custom_executable(
         self, request: CustomExecutableCreateRequest,
@@ -120,6 +125,11 @@ class Allowly:
 
     async def aclose(self) -> None:
         await self._http.aclose()
+
+    async def readiness(self) -> bool:
+        """Read runtime readiness. This is not an authorization decision."""
+        raw = _require_dict(await self._request("GET", "/readyz"), "readiness response")
+        return _require_str(raw, "status") == "ready"
 
     async def __aenter__(self) -> Allowly:
         return self
@@ -412,6 +422,33 @@ class Allowly:
             raise AllowlyProtocolError("execution approval does not match the requested operation")
         return result
 
+    async def continue_execution(
+        self, operation_id: str, *, execution_request: dict[str, Any],
+        review_id: str, source_receipt_id: str, idempotency_key: str,
+        agent_token: str | None = None,
+    ) -> ExecutionResponse:
+        """Continue the original waiting operation; never send provider bytes here."""
+        if (not isinstance(execution_request, dict)
+                or execution_request.get("operation_id") != operation_id
+                or not review_id or not source_receipt_id or not idempotency_key):
+            raise ValueError("continuation requires the original operation and review binding")
+        request = {**execution_request,
+                   "client_timestamp": _client_timestamp(execution_request.get("client_timestamp"))}
+        raw = await self._request(
+            "POST", f"/v1/executions/{quote(operation_id, safe='')}/continue",
+            json={"execution_request": request, "review_id": review_id,
+                  "source_receipt_id": source_receipt_id},
+            headers=await self._identity_headers(agent_token, idempotency_key=idempotency_key),
+            expected_success_status=(200, 201),
+        )
+        result = _parse_execution_response(raw)
+        if (result.operation_id != operation_id
+                or result.destination_id != request.get("enabled_executable_id")
+                or result.action != request.get("action")
+                or result.request_descriptor.authorization_id != request.get("authorization_id")):
+            raise AllowlyProtocolError("execution continuation does not match the requested operation")
+        return result
+
     async def claim_execution_dispatch(
         self, operation_id: str, *, approval_sha256: str, agent_token: str | None = None,
     ) -> dict[str, Any]:
@@ -465,6 +502,27 @@ class Allowly:
         """Remotely authorize, then execute locally. See allowly.execution.execute_http."""
         from .execution import execute_http
         return await execute_http(
+            self, url, operation_id=operation_id, authorization_id=authorization_id,
+            enabled_executable_id=enabled_executable_id, catalog_operation_id=catalog_operation_id,
+            action=action, method=method, headers=headers, body=body,
+            evidence_mode=evidence_mode, policy_input=policy_input, storage_dir=storage_dir,
+            agent_token=agent_token, native_binary=native_binary,
+            trusted_notary_key=trusted_notary_key, timeout=timeout,
+        )
+
+    async def continue_http_execution(
+        self, url: str, *, operation_id: str, authorization_id: str,
+        enabled_executable_id: str, catalog_operation_id: str, action: str,
+        method: str = "GET", headers: dict[str, str] | None = None, body: str = "",
+        evidence_mode: Literal["receipt", "witnessed"] = "receipt",
+        policy_input: dict[str, Any] | None = None,
+        storage_dir: str = ".allowly/executions", agent_token: str | None = None,
+        native_binary: str | None = None, trusted_notary_key: str | None = None,
+        timeout: float = 30.0,
+    ) -> LocalExecutionResult:
+        """Continue a saved review with the same private request and operation ID."""
+        from .execution import continue_http_execution
+        return await continue_http_execution(
             self, url, operation_id=operation_id, authorization_id=authorization_id,
             enabled_executable_id=enabled_executable_id, catalog_operation_id=catalog_operation_id,
             action=action, method=method, headers=headers, body=body,
@@ -793,6 +851,12 @@ class _ConfirmationsResource:
     def __init__(self, client: Allowly) -> None:
         self._client = client
 
+    async def get_status(self, confirmation_id: str) -> ConfirmationStatusResponse:
+        """Read an opaque confirmation monitor ID, never its bearer nonce."""
+        _validate_prompt_id(confirmation_id, "cnf_")
+        raw = await self._client._request("GET", f"/v1/confirmations/{quote(confirmation_id, safe='')}/status")
+        return _parse_prompt_status(raw, "confirm", confirmation_id)
+
     async def approve(
         self,
         nonce: str,
@@ -835,6 +899,12 @@ class _ConfirmationsResource:
 class _EscalationsResource:
     def __init__(self, client: Allowly) -> None:
         self._client = client
+
+    async def get_status(self, escalation_id: str) -> EscalationStatusResponse:
+        """Read the recorded choice and current grant lifecycle without a Check."""
+        _validate_prompt_id(escalation_id, "esc_")
+        raw = await self._client._request("GET", f"/v1/escalations/{quote(escalation_id, safe='')}")
+        return _parse_prompt_status(raw, "escalate", escalation_id)
 
     async def resolve(
         self,
@@ -951,6 +1021,39 @@ class _ReceiptsResource:
                 min(retry_delay, max(0, deadline - loop.time()))
             )
         raise TimeoutError(f"Receipt {receipt_id} not signed after {timeout}s")
+
+
+def _validate_prompt_id(value: str, prefix: str) -> None:
+    if not isinstance(value, str) or not re.fullmatch(re.escape(prefix) + r"[A-Za-z0-9_-]{1,256}", value):
+        raise ValueError(f"prompt ID must be an opaque {prefix} monitor ID")
+
+
+def _parse_prompt_status(value: Any, kind: str, expected_id: str) -> ConfirmationStatusResponse | EscalationStatusResponse:
+    raw = _require_dict(value, "prompt status")
+    id_field = "confirmation_id" if kind == "confirm" else "escalation_id"
+    if _require_str(raw, id_field) != expected_id:
+        raise AllowlyProtocolError("prompt status ID differs from requested monitor ID")
+    status, authority = _require_str(raw, "status"), _require_str(raw, "authority_status")
+    if status not in {"pending", "approved", "rejected", "expired", "unknown"}:
+        raise AllowlyProtocolError("unknown prompt status")
+    authorities = {"none", "available", "expired", "revoked", "unknown"}
+    if kind == "escalate":
+        authorities.add("consumed")
+    if authority not in authorities:
+        raise AllowlyProtocolError("unknown prompt authority status")
+    def nullable(key: str) -> str | None:
+        if key not in raw:
+            raise AllowlyProtocolError(f"prompt status is missing {key}")
+        return _optional_str(raw, key)
+    common = dict(authorization_id=_require_str(raw, "authorization_id"), action=_require_str(raw, "action"),
+                  resource=nullable("resource"), status=status, expires_at=_require_str(raw, "expires_at"),
+                  resolved_at=nullable("resolved_at"), source_receipt_id=nullable("source_receipt_id"),
+                  resolution_receipt_id=nullable("resolution_receipt_id"), authority_status=authority)
+    if kind == "confirm":
+        return ConfirmationStatusResponse(**common, confirmation_id=expected_id,
+                                          child_authorization_id=nullable("child_authorization_id"),
+                                          authority_expires_at=nullable("authority_expires_at"))
+    return EscalationStatusResponse(**common, escalation_id=expected_id, consumed_at=nullable("consumed_at"))
 
 
 def _parse_custom_executable_response(value: Any) -> EnabledExecutableResponse:
@@ -1262,6 +1365,7 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
         "denied",
         "confirmation_required",
         "escalation_required",
+        "waiting_for_review",
         "succeeded",
         "failed",
         "unknown",
@@ -1271,6 +1375,29 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
     decision = _require_str(body, "decision")
     if decision not in {"allow", "deny", "confirm", "escalate"}:
         raise AllowlyProtocolError(f"invalid execution decision: {decision!r}")
+    review_raw = body.get("review")
+    review = None
+    if review_raw is not None:
+        review_body = _require_dict(review_raw, "execution review")
+        kind = _require_str(review_body, "kind")
+        if kind not in {"confirm", "escalate"}:
+            raise AllowlyProtocolError("invalid execution review kind")
+        review = ExecutionReview(
+            kind=kind, id=_require_str(review_body, "id"),
+            source_receipt_id=_require_str(review_body, "source_receipt_id"),
+            expires_at=_require_str(review_body, "expires_at"),
+        )
+        if (not review.id.startswith("cnf_" if kind == "confirm" else "esc_")
+                or not review.source_receipt_id):
+            raise AllowlyProtocolError("invalid execution review binding")
+    if status == "waiting_for_review":
+        envelope = _parse_receipt_envelope(body.get("decision_receipt"))
+        receipt_id = envelope.receipt_id if isinstance(envelope, ReceiptEnvelopePending) else envelope.receipt.get("receipt_id")
+        if (review is None or decision != review.kind or review.source_receipt_id != receipt_id
+                or body.get("approval") is not None or body.get("approval_sha256") is not None
+                or body.get("downstream") is not None or body.get("decision_state") != "not_allowed"
+                or body.get("target_state") != "not_started" or body.get("evidence_state") != "pending"):
+            raise AllowlyProtocolError("waiting execution has an invalid review binding")
     downstream_raw = body.get("downstream")
     downstream = None
     if downstream_raw is not None:
@@ -1366,6 +1493,8 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
         decision_receipt=_parse_receipt_envelope(body.get("decision_receipt")),
         downstream=downstream,
         outcome_evidence=evidence,
+        confirmation_id=_optional_str(body, "confirmation_id"),
+        review=review,
         confirm_nonce=_optional_str(body, "confirm_nonce"),
         confirm_expires_at=_optional_str(body, "confirm_expires_at"),
         confirm_prompt_hint=_optional_str(body, "confirm_prompt_hint"),

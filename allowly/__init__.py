@@ -4,6 +4,7 @@ from .client import Allowly
 from .agent_identity import NativeAgentCredential
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .seal_webhook import SealWebhookClient
+from .resolution_webhook import verify_resolution_webhook
 from .execution import LocalExecutionResult, ExecutionRecoveryRequired, complete_execution_evidence
 from .types import (
     ActionCheckResult,
@@ -19,6 +20,9 @@ from .types import (
     ExecutableEvidenceCapability,
     CheckResponse,
     ConfirmationApproveResponse,
+    ConfirmationStatusResponse,
+    EscalationStatusResponse,
+    PromptStatusResponse,
     AuthorizationCreateResponse,
     AuthorizationRevokeResponse,
     BudgetInfo,
@@ -28,6 +32,7 @@ from .types import (
     EscalationResolveResponse,
     ExecutionDownstream,
     ExecutionRequestDescriptor,
+    ExecutionReview,
     ExecutionResponse,
     ExecutionStatus,
     ExecutableOperationGrant,
@@ -43,6 +48,14 @@ from .types import (
     SealResponse,
     SealWebhookDelivery,
     SealWebhookStatus,
+    ResolutionWebhookConfig,
+    ResolutionWebhookSecret,
+    ResolutionWebhookDeliveries,
+    ResolutionWebhookDelivery,
+    ResolutionWebhookDeliveryStatus,
+    ResolutionWebhookEvent,
+    ResolutionWebhookEventType,
+    ResolutionWebhookData,
 )
 
 __all__ = [
@@ -54,6 +67,15 @@ __all__ = [
     "ExecutableCapabilities",
     "ExecutableEvidenceCapability",
     "SealWebhookClient",
+    "verify_resolution_webhook",
+    "ResolutionWebhookConfig",
+    "ResolutionWebhookSecret",
+    "ResolutionWebhookDeliveries",
+    "ResolutionWebhookDelivery",
+    "ResolutionWebhookDeliveryStatus",
+    "ResolutionWebhookEvent",
+    "ResolutionWebhookEventType",
+    "ResolutionWebhookData",
     "LocalExecutionResult",
     "ExecutionRecoveryRequired",
     "complete_execution_evidence",
@@ -73,12 +95,16 @@ __all__ = [
     "EscalationResolveResponse",
     "ExecutionDownstream",
     "ExecutionRequestDescriptor",
+    "ExecutionReview",
     "ExecutionResponse",
     "ExecutionStatus",
     "ExecutableOperationGrant",
     "AuthorizationCreateResponse",
     "AuthorizationRevokeResponse",
     "ConfirmationApproveResponse",
+    "ConfirmationStatusResponse",
+    "EscalationStatusResponse",
+    "PromptStatusResponse",
     "PolicyConditionEvidence",
     "PolicyEvalInfo",
     "ReceiptEnvelope",
