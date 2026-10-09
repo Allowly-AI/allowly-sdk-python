@@ -395,6 +395,68 @@ returned escalation results with
 `await allowly.escalations.approve(escalation_id, resolved_by="manager:123")`
 or `reject(...)`, then re-check before running the action.
 
+Read a confirmation or escalation without resolving it:
+
+```python
+# confirmation_id comes from a confirm check result. It is not confirm_nonce.
+confirmation = await allowly.confirmations.get(confirmation_id)
+escalation = await allowly.escalations.get(escalation_id)
+print(confirmation.status, confirmation.authority_status)
+print(escalation.status, escalation.authority_status)
+```
+
+Each `get` makes one authenticated read. Repeat it in your application's own
+bounded polling loop if needed. The prompt `status` is `pending`, `approved`,
+`rejected`, `expired`, or `unknown`; `unknown` means a legacy record does not
+show the choice. An approved choice stays approved after its grant expires,
+is revoked, or (for escalations) is consumed. `authority_status="available"`
+is a lifecycle snapshot. Make a fresh `allowly.check(...)` with the original
+authorization and execute only an `allow`. These reads never execute actions,
+consume approval, or create receipts. Nullable receipt IDs refer to existing
+records. Older check responses may omit `confirmation_id`.
+
+Configure one resolution webhook using a setup/CLI credential:
+
+```python
+import os
+from allowly import Allowly, verify_resolution_webhook
+
+async with Allowly(api_key=os.environ["ALLOWLY_SETUP_KEY"]) as setup:
+    configured = await setup.resolution_webhook.configure(
+        "https://customer.example/allowly-resolution"
+    )
+    signing_secret = configured.signing_secret  # Store securely for the receiver.
+    current = await setup.resolution_webhook.get()
+    recent = await setup.resolution_webhook.deliveries()
+    # await setup.resolution_webhook.rotate()
+    # await setup.resolution_webhook.disable()
+```
+
+Runtime API keys cannot manage webhooks. `configure` and `rotate` return the
+current `signing_secret`; `get` and `disable` omit it. Changing the URL,
+re-enabling, or rotating cancels queued events for the old credential version.
+Repeating the same enabled URL returns its current secret. `deliveries` returns
+at most 20 recent summaries with stable error codes.
+
+At your receiver, preserve the raw body bytes before parsing JSON:
+
+```python
+event = verify_resolution_webhook(
+    raw_body,
+    request_headers,
+    signing_secret=os.environ["ALLOWLY_RESOLUTION_SIGNING_SECRET"],
+    expected_workspace_id=os.environ["ALLOWLY_WORKSPACE_ID"],
+)
+```
+
+Verification uses the [Standard Webhooks HMAC-SHA256 profile](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md)
+and a fixed 300-second attempt timestamp tolerance. Each retry preserves the
+event ID and body, with a fresh signed attempt timestamp. Store `event.id`
+durably and process it once. The shared-secret signature authenticates this
+notification for your receiver; it is not a portable audit receipt or permission
+to execute. Read the current prompt status, then make a fresh check before
+running an action. The helper raises `AllowlyProtocolError` for invalid messages.
+
 If you need lookup by email later, import `from_email` from
 `allowly.identifiers` and store `from_email(email, pepper=APP_PII_PEPPER)`.
 The helper trims and lowercases only, prefixes the result with `email_hmac:v1`,

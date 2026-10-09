@@ -4,6 +4,7 @@ from .client import Allowly
 from .agent_identity import NativeAgentCredential
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .seal_webhook import SealWebhookClient
+from .resolution_webhook import verify_resolution_webhook
 from .execution import LocalExecutionResult, ExecutionRecoveryRequired, complete_execution_evidence
 from .types import (
     ActionCheckResult,
@@ -19,6 +20,8 @@ from .types import (
     ExecutableEvidenceCapability,
     CheckResponse,
     ConfirmationApproveResponse,
+    ConfirmationStatus,
+    ConfirmationAuthorityStatus,
     AuthorizationCreateResponse,
     AuthorizationRevokeResponse,
     BudgetInfo,
@@ -26,6 +29,8 @@ from .types import (
     Decision,
     EscalationInfo,
     EscalationResolveResponse,
+    EscalationStatus,
+    EscalationAuthorityStatus,
     ExecutionDownstream,
     ExecutionRequestDescriptor,
     ExecutionResponse,
@@ -34,6 +39,7 @@ from .types import (
     FallbackMode,
     PolicyConditionEvidence,
     PolicyEvalInfo,
+    PromptStatus,
     ReceiptEnvelope,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
@@ -43,6 +49,14 @@ from .types import (
     SealResponse,
     SealWebhookDelivery,
     SealWebhookStatus,
+    ResolutionWebhookConfig,
+    ResolutionWebhookSecret,
+    ResolutionWebhookDeliveries,
+    ResolutionWebhookDelivery,
+    ResolutionWebhookDeliveryStatus,
+    ResolutionWebhookEvent,
+    ResolutionWebhookEventType,
+    ResolutionWebhookData,
 )
 
 __all__ = [
@@ -54,6 +68,15 @@ __all__ = [
     "ExecutableCapabilities",
     "ExecutableEvidenceCapability",
     "SealWebhookClient",
+    "verify_resolution_webhook",
+    "ResolutionWebhookConfig",
+    "ResolutionWebhookSecret",
+    "ResolutionWebhookDeliveries",
+    "ResolutionWebhookDelivery",
+    "ResolutionWebhookDeliveryStatus",
+    "ResolutionWebhookEvent",
+    "ResolutionWebhookEventType",
+    "ResolutionWebhookData",
     "LocalExecutionResult",
     "ExecutionRecoveryRequired",
     "complete_execution_evidence",
@@ -79,6 +102,11 @@ __all__ = [
     "AuthorizationCreateResponse",
     "AuthorizationRevokeResponse",
     "ConfirmationApproveResponse",
+    "ConfirmationStatus",
+    "ConfirmationAuthorityStatus",
+    "EscalationStatus",
+    "EscalationAuthorityStatus",
+    "PromptStatus",
     "PolicyConditionEvidence",
     "PolicyEvalInfo",
     "ReceiptEnvelope",
