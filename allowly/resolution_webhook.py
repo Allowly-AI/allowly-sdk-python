@@ -57,7 +57,9 @@ def verify_resolution_webhook(
     """Authenticate exact UTF-8 bytes, then validate the event. `now` is Unix seconds.
 
     Persist event IDs to prevent duplicate processing. This notification is not
-    execution permission or a portable signed receipt; run a fresh GET and check.
+    execution permission or a portable signed receipt. Read the matching prompt
+    status, then wake native Execute's saved continuation or run a fresh standalone
+    Check. Never add an enforcing Check before native continuation.
     """
     if not isinstance(raw_body, bytes) or not 0 < len(raw_body) <= 16 * 1024:
         raise AllowlyProtocolError("raw_body must be bytes of at most 16 KiB")

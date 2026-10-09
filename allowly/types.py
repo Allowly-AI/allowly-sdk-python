@@ -129,6 +129,7 @@ ExecutionStatus = Literal[
     "denied",
     "confirmation_required",
     "escalation_required",
+    "waiting_for_review",
     "succeeded",
     "failed",
     "unknown",
@@ -237,6 +238,14 @@ class ExecutionRequestDescriptor:
 
 
 @dataclass
+class ExecutionReview:
+    kind: Literal["confirm", "escalate"]
+    id: str
+    source_receipt_id: str
+    expires_at: str
+
+
+@dataclass
 class ExecutionResponse:
     operation_id: str
     status: ExecutionStatus
@@ -265,6 +274,8 @@ class ExecutionResponse:
     target_state: Literal["not_started", "response_observed", "unknown"] | None = None
     evidence_state: str | None = None
     witness_session: dict[str, Any] | None = None
+    confirmation_id: str | None = None
+    review: ExecutionReview | None = None
 
 
 @dataclass
@@ -421,7 +432,7 @@ class ConfirmationApproveResponse:
 
 
 @dataclass
-class _PromptStatusResponse:
+class PromptStatusResponse:
     authorization_id: str
     action: str
     resource: str | None
@@ -433,8 +444,8 @@ class _PromptStatusResponse:
 
 
 @dataclass
-class ConfirmationStatus(_PromptStatusResponse):
-    """Recorded choice and grant lifecycle. Run a fresh check before acting."""
+class ConfirmationStatus(PromptStatusResponse):
+    """Recorded choice and grant lifecycle, not permission to dispatch."""
 
     confirmation_id: str
     child_authorization_id: str | None
@@ -443,12 +454,16 @@ class ConfirmationStatus(_PromptStatusResponse):
 
 
 @dataclass
-class EscalationStatus(_PromptStatusResponse):
+class EscalationStatus(PromptStatusResponse):
     """Recorded choice and one-use grant lifecycle, never permission to execute."""
 
     escalation_id: str
     authority_status: EscalationAuthorityStatus
     consumed_at: str | None
+
+
+ConfirmationStatusResponse = ConfirmationStatus
+EscalationStatusResponse = EscalationStatus
 
 
 @dataclass

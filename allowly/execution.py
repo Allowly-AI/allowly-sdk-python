@@ -15,6 +15,7 @@ import re
 import socket
 import ssl
 import tempfile
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -91,6 +92,48 @@ def _read_bytes(path: Path, maximum: int = 2 * 1024 * 1024) -> bytes:
 
 def _read(path: Path, maximum: int = 2 * 1024 * 1024) -> Any:
     return json.loads(_read_bytes(path, maximum))
+
+
+def _journal_authorization(result: ExecutionResponse) -> dict[str, Any]:
+    authorization = asdict(result)
+    if result.status == "waiting_for_review":
+        authorization["confirm_nonce"] = None
+    return authorization
+
+
+@contextmanager
+def _operation_lock(folder: Path):
+    """Do not let concurrent continuations claim the same local send."""
+    fd = os.open(folder / "operation.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        try:
+            if os.name == "posix":
+                import fcntl
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            else:
+                import msvcrt
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError:
+            raise ExecutionRecoveryRequired(folder) from None
+        yield
+    finally:
+        os.close(fd)
+
+
+def _http_execution_request(
+    url: str, *, operation_id: str, authorization_id: str,
+    enabled_executable_id: str, catalog_operation_id: str, action: str,
+    method: str, headers: dict[str, str] | None, body: str,
+    evidence_mode: str, policy_input: dict[str, Any] | None, timeout: float,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    if not operation_id or evidence_mode not in {"receipt", "witnessed"} or not 0 < timeout <= 150:
+        raise ValueError("operation ID, evidence mode, or timeout is invalid")
+    descriptor, private_headers = _request(url, method, headers or {}, body)
+    return {"operation_id": operation_id, "authorization_id": authorization_id,
+            "enabled_executable_id": enabled_executable_id, "catalog_operation_id": catalog_operation_id,
+            "action": action, "http_request": descriptor,
+            "policy_input": {"resource": None, "context": {}, "estimated_cost_micros": None, **(policy_input or {})},
+            "evidence_mode": evidence_mode}, private_headers
 
 
 def _request(url: str, method: str, headers: dict[str, str], body: str) -> tuple[dict[str, Any], dict[str, str]]:
@@ -320,40 +363,113 @@ async def execute_http(
     witness setup unless both file paths are supplied explicitly.
     """
     from .verify import hash_seal_value
-    if not operation_id or evidence_mode not in {"receipt", "witnessed"} or not 0 < timeout <= 150:
-        raise ValueError("operation ID, evidence mode, or timeout is invalid")
-    descriptor, private_headers = _request(url, method, headers or {}, body)
-    policy = {"resource": None, "context": {}, "estimated_cost_micros": None, **(policy_input or {})}
-    requested = {"operation_id": operation_id, "authorization_id": authorization_id,
-                 "enabled_executable_id": enabled_executable_id, "catalog_operation_id": catalog_operation_id,
-                 "action": action, "http_request": descriptor, "policy_input": policy,
-                 "evidence_mode": evidence_mode}
+    requested, private_headers = _http_execution_request(
+        url, operation_id=operation_id, authorization_id=authorization_id,
+        enabled_executable_id=enabled_executable_id, catalog_operation_id=catalog_operation_id,
+        action=action, method=method, headers=headers, body=body, evidence_mode=evidence_mode,
+        policy_input=policy_input, timeout=timeout,
+    )
+    requested["client_timestamp"] = _now()
     parent = Path(storage_dir).expanduser().resolve()
     folder = parent / hashlib.sha256(operation_id.encode()).hexdigest()
     if folder.exists():
         raise ExecutionRecoveryRequired(folder)
-    result = await client.prepare_execution(**requested, client_timestamp=_now(),
-                                            idempotency_key=operation_id, agent_token=agent_token)
-    approved = result.decision == "allow" and result.status == "approved"
-    approval = _validate_approval(result, requested) if approved else None
-    witness_files: tuple[str, Path, str, Path | None] | None = None
-    if approved and result.effective_evidence_mode == "witnessed":
-        assert approval is not None
-        witness_files = _witness_files(approval["workspace_id"], native_binary, trusted_notary_key)
-        if witness_files[2] != (result.witness_session or {}).get("trusted_notary_key_fingerprint_sha256"):
-            raise AllowlyProtocolError("configured notary key differs from admitted witness")
     parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     try:
         folder.mkdir(mode=0o700)
     except FileExistsError:
         raise ExecutionRecoveryRequired(folder) from None
-    state: dict[str, Any] = {"version": 1, "operation_id": operation_id,
+    state: dict[str, Any] = {"version": 2, "operation_id": operation_id,
                              "request_sha256": "sha256:" + hash_seal_value(requested),
-                             "phase": "authorized", "authorization": asdict(result)}
+                             "client_timestamp": requested["client_timestamp"], "phase": "prepared"}
     journal = folder / "journal.json"
     _save(journal, state)
-    if not approved:
-        return LocalExecutionResult(result, str(folder))
+    with _operation_lock(folder):
+        result = await client.prepare_execution(**requested, idempotency_key=operation_id, agent_token=agent_token)
+        approved = result.decision == "allow" and result.status == "approved"
+        state.update(phase="waiting_for_review" if result.status == "waiting_for_review" else "authorized" if approved else "complete",
+                     authorization=_journal_authorization(result))
+        _save(journal, state)
+        if not approved:
+            return LocalExecutionResult(result, str(folder))
+        return await _dispatch_approved(client, requested, private_headers, body, folder, state, result,
+                                        agent_token, native_binary, trusted_notary_key, timeout)
+
+
+async def continue_http_execution(
+    client: Allowly, url: str, *, operation_id: str, authorization_id: str,
+    enabled_executable_id: str, catalog_operation_id: str, action: str,
+    method: str = "GET", headers: dict[str, str] | None = None, body: str = "",
+    evidence_mode: str = "receipt", policy_input: dict[str, Any] | None = None,
+    storage_dir: str = ".allowly/executions", agent_token: str | None = None,
+    native_binary: str | None = None, trusted_notary_key: str | None = None,
+    timeout: float = 30.0,
+) -> LocalExecutionResult:
+    """Continue a durable review; supply the unchanged private request yourself.
+
+    Webhooks only wake this call. The runtime verifies review authority and
+    current policy before dispatch. An attempted send can only be reconciled.
+    """
+    from .verify import hash_seal_value
+    from .client import _parse_execution_response
+    requested, private_headers = _http_execution_request(
+        url, operation_id=operation_id, authorization_id=authorization_id,
+        enabled_executable_id=enabled_executable_id, catalog_operation_id=catalog_operation_id,
+        action=action, method=method, headers=headers, body=body, evidence_mode=evidence_mode,
+        policy_input=policy_input, timeout=timeout,
+    )
+    folder = Path(storage_dir).expanduser().resolve() / hashlib.sha256(operation_id.encode()).hexdigest()
+    if not folder.is_dir():
+        raise ExecutionRecoveryRequired(folder)
+    with _operation_lock(folder):
+        state = _read(folder / "journal.json")
+        if (state.get("version") != 2 or state.get("operation_id") != operation_id
+                or state.get("phase") not in {"waiting_for_review", "continuing"}
+                or not isinstance(state.get("client_timestamp"), str)):
+            raise ExecutionRecoveryRequired(folder)
+        requested["client_timestamp"] = state["client_timestamp"]
+        if "sha256:" + hash_seal_value(requested) != state.get("request_sha256"):
+            raise AllowlyProtocolError("continuation request differs from the original execution")
+        if state["phase"] == "waiting_for_review":
+            previous = _parse_execution_response(state.get("authorization"))
+            if previous.status != "waiting_for_review" or previous.review is None:
+                raise AllowlyProtocolError("saved execution is missing its review binding")
+            review = previous.review
+            state["continuation"] = {
+                "review_id": review.id, "source_receipt_id": review.source_receipt_id,
+                "idempotency_key": "continue:" + hashlib.sha256(_json([operation_id, review.id, review.source_receipt_id])).hexdigest(),
+            }
+        intent = state.get("continuation")
+        if (not isinstance(intent, dict) or set(intent) != {"review_id", "source_receipt_id", "idempotency_key"}
+                or any(not isinstance(value, str) or not value for value in intent.values())):
+            raise AllowlyProtocolError("saved execution is missing its continuation intent")
+        state["phase"] = "continuing"
+        _save(folder / "journal.json", state)
+        result = await client.continue_execution(operation_id, execution_request=requested,
+                                                  **intent, agent_token=agent_token)
+        approved = result.decision == "allow" and result.status == "approved"
+        state.update(phase="continuing" if approved else "waiting_for_review" if result.status == "waiting_for_review" else "complete",
+                     authorization=_journal_authorization(result))
+        _save(folder / "journal.json", state)
+        if not approved:
+            return LocalExecutionResult(result, str(folder))
+        return await _dispatch_approved(client, requested, private_headers, body, folder, state, result,
+                                        agent_token, native_binary, trusted_notary_key, timeout)
+
+
+async def _dispatch_approved(
+    client: Allowly, requested: dict[str, Any], private_headers: dict[str, str], body: str,
+    folder: Path, state: dict[str, Any], result: ExecutionResponse,
+    agent_token: str | None, native_binary: str | None, trusted_notary_key: str | None, timeout: float,
+) -> LocalExecutionResult:
+    operation_id, descriptor = requested["operation_id"], requested["http_request"]
+    journal = folder / "journal.json"
+    approval = _validate_approval(result, requested)
+    witness_files: tuple[str, Path, str, Path | None] | None = None
+    if result.effective_evidence_mode == "witnessed":
+        witness_files = _witness_files(approval["workspace_id"], native_binary, trusted_notary_key)
+        if witness_files[2] != (result.witness_session or {}).get("trusted_notary_key_fingerprint_sha256"):
+            raise AllowlyProtocolError("configured notary key differs from admitted witness")
     binding = {"approval_sha256": result.approval_sha256, "approval": approval}
     _save(folder / "approval.json", binding)
     response: dict[str, Any] | None = None
@@ -477,7 +593,7 @@ async def execute_http(
 async def flush_execution_outcome(client: Allowly, operation_dir: str, *, agent_token: str | None = None) -> ExecutionResponse:
     folder = Path(operation_dir).expanduser().resolve()
     state = _read(folder / "journal.json")
-    if state.get("version") != 1 or not isinstance(state.get("outcome"), dict):
+    if state.get("version") not in {1, 2} or not isinstance(state.get("outcome"), dict):
         raise ExecutionRecoveryRequired(folder)
     report = state["outcome"]
     result = await client.report_execution_outcome(state["operation_id"], outcome=report["body"],
