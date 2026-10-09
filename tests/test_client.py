@@ -13,6 +13,8 @@ from allowly import (
     Allowly,
     AllowlyAPIError,
     AllowlyProtocolError,
+    ConfirmationStatus,
+    EscalationStatus,
 )
 
 BASE = "https://api.example.com"
@@ -57,6 +59,31 @@ def _authorization_payload(**overrides) -> dict:
     }
     payload.update(overrides)
     return payload
+
+
+def _prompt_status_payload(kind="confirmation", **overrides) -> dict:
+    payload = {
+        f"{kind}_id": "cnf_abc" if kind == "confirmation" else "esc_abc",
+        "authorization_id": "auth_parent",
+        "action": "email.send",
+        "resource": None,
+        "status": "pending",
+        "expires_at": "2026-04-20T00:15:00Z",
+        "resolved_at": None,
+        "source_receipt_id": "rcp_source",
+        "resolution_receipt_id": None,
+        "authority_status": "none",
+    }
+    if kind == "confirmation":
+        payload.update(child_authorization_id=None, authority_expires_at=None)
+    else:
+        payload["consumed_at"] = None
+    payload.update(overrides)
+    return payload
+
+
+def _prompt_status_url(kind, prompt_id):
+    return f"{BASE}/v1/{kind}s/{prompt_id}" + ("/status" if kind == "confirmation" else "")
 
 
 SIGNED_RECEIPT = {
@@ -1351,6 +1378,230 @@ async def test_confirmations_approve(client):
     assert res.authorization_id == "auth_xyz"
     assert res.receipt is None
     assert route.calls[0].request.headers["idempotency-key"] == "confirm-1"
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status,authority", [
+    ("pending", "none"), ("pending", "revoked"), ("expired", "expired"),
+    ("unknown", "unknown"), ("rejected", "none"),
+    ("approved", "available"), ("approved", "expired"),
+    ("approved", "revoked"), ("approved", "unknown"),
+])
+async def test_confirmations_get_status(client, status, authority):
+    payload = _prompt_status_payload(
+        status=status, authority_status=authority,
+        resolved_at="2026-04-20T00:01:00Z" if status in {"approved", "rejected"} else None,
+        child_authorization_id="auth_child" if status == "approved" else None,
+        authority_expires_at="2026-04-20T00:02:00Z" if status == "approved" else None,
+        source_receipt_id=None, resolution_receipt_id=None,
+    )
+    route = respx.get(f"{BASE}/v1/confirmations/cnf_abc/status").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    result = await client.confirmations.get("cnf_abc")
+    assert isinstance(result, ConfirmationStatus)
+    assert result.status == status
+    assert result.authority_status == authority
+    assert result.authorization_id == "auth_parent"
+    assert result.child_authorization_id == payload["child_authorization_id"]
+    assert result.resource is None
+    assert result.source_receipt_id is None
+    assert result.resolution_receipt_id is None
+    assert route.call_count == 1
+    assert route.calls[0].request.headers["authorization"] == "Bearer test-key"
+    assert not route.calls[0].request.content
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_confirmations_get_preserves_unknown_historical_child(client):
+    respx.get(f"{BASE}/v1/confirmations/cnf_abc/status").mock(return_value=httpx.Response(
+        200, json=_prompt_status_payload(status="unknown", authority_status="unknown", child_authorization_id="auth_child")
+    ))
+    result = await client.confirmations.get("cnf_abc")
+    assert result.status == "unknown"
+    assert result.child_authorization_id == "auth_child"
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing_key", ["child_authorization_id", "authority_expires_at"])
+async def test_confirmations_available_requires_child_grant(client, missing_key):
+    payload = _prompt_status_payload(
+        status="approved", authority_status="available",
+        child_authorization_id="auth_child", authority_expires_at="2026-04-20T00:02:00Z",
+    )
+    payload[missing_key] = None
+    respx.get(f"{BASE}/v1/confirmations/cnf_abc/status").mock(return_value=httpx.Response(200, json=payload))
+    with pytest.raises(AllowlyProtocolError, match="child grant"):
+        await client.confirmations.get("cnf_abc")
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirmation_id", ["approval-nonce", "", "cnf_", "cnf_a/b"])
+async def test_confirmations_get_rejects_nonce_before_request(client, confirmation_id):
+    with pytest.raises(ValueError, match="opaque cnf_"):
+        await client.confirmations.get(confirmation_id)
+    assert respx.calls.call_count == 0
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status,authority", [
+    ("pending", "none"), ("pending", "revoked"), ("expired", "expired"),
+    ("unknown", "unknown"), ("unknown", "consumed"), ("rejected", "none"),
+    ("approved", "available"), ("approved", "expired"),
+    ("approved", "revoked"), ("approved", "consumed"),
+])
+async def test_escalations_get_status(client, status, authority):
+    payload = _prompt_status_payload(
+        "escalation", status=status, authority_status=authority,
+        resolved_at="2026-04-20T00:01:00Z" if status in {"approved", "rejected"} else None,
+        consumed_at="2026-04-20T00:02:00Z" if authority == "consumed" else None,
+        source_receipt_id=None, resolution_receipt_id=None,
+    )
+    route = respx.get(f"{BASE}/v1/escalations/esc_abc").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    result = await client.escalations.get("esc_abc")
+    assert isinstance(result, EscalationStatus)
+    assert result.status == status
+    assert result.authority_status == authority
+    assert result.consumed_at == payload["consumed_at"]
+    assert result.source_receipt_id is None
+    assert result.resolution_receipt_id is None
+    assert route.call_count == 1
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_escalations_legacy_consumed_timestamp_can_be_null(client):
+    respx.get(f"{BASE}/v1/escalations/esc_abc").mock(return_value=httpx.Response(
+        200, json=_prompt_status_payload("escalation", status="unknown", authority_status="consumed")
+    ))
+    result = await client.escalations.get("esc_abc")
+    assert result.status == "unknown"
+    assert result.authority_status == "consumed"
+    assert result.consumed_at is None
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["confirmation", "escalation"])
+@pytest.mark.parametrize("key", [
+    "authorization_id", "action", "resource", "status", "expires_at", "resolved_at",
+    "source_receipt_id", "resolution_receipt_id", "authority_status",
+])
+async def test_prompt_status_requires_fields(client, kind, key):
+    payload = _prompt_status_payload(kind)
+    del payload[key]
+    resource = client.confirmations if kind == "confirmation" else client.escalations
+    prompt_id = payload[f"{kind}_id"]
+    respx.get(_prompt_status_url(kind, prompt_id)).mock(return_value=httpx.Response(200, json=payload))
+    with pytest.raises(AllowlyProtocolError):
+        await resource.get(prompt_id)
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["confirmation", "escalation"])
+@pytest.mark.parametrize("overrides", [
+    {"authorization_id": ""}, {"action": False}, {"resource": {}},
+    {"status": "allowed"}, {"expires_at": "not-a-date"},
+    {"expires_at": "2026-02-30T00:15:00Z"}, {"expires_at": "2026-04-20T00:15:00+00:60"},
+    {"expires_at": "2026-04-20T00:15:00"}, {"resolved_at": False},
+    {"source_receipt_id": 1}, {"resolution_receipt_id": []},
+    {"authority_status": "allow"}, {"authority_status": "available"},
+    {"status": "rejected", "authority_status": "revoked"},
+    {"resolved_at": "2026-04-20T00:01:00Z"},
+])
+async def test_prompt_status_rejects_malformed_fields(client, kind, overrides):
+    payload = _prompt_status_payload(kind, **overrides)
+    resource = client.confirmations if kind == "confirmation" else client.escalations
+    prompt_id = payload[f"{kind}_id"]
+    respx.get(_prompt_status_url(kind, prompt_id)).mock(return_value=httpx.Response(200, json=payload))
+    with pytest.raises(AllowlyProtocolError):
+        await resource.get(prompt_id)
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind,key", [
+    ("confirmation", "confirmation_id"), ("confirmation", "child_authorization_id"),
+    ("confirmation", "authority_expires_at"), ("escalation", "escalation_id"),
+    ("escalation", "consumed_at"),
+])
+@pytest.mark.parametrize("mutation", ["missing", "wrong_type"])
+async def test_prompt_status_requires_specific_fields(client, kind, key, mutation):
+    payload = _prompt_status_payload(kind)
+    prompt_id = payload[f"{kind}_id"]
+    if mutation == "missing":
+        del payload[key]
+    else:
+        payload[key] = False
+    resource = client.confirmations if kind == "confirmation" else client.escalations
+    respx.get(_prompt_status_url(kind, prompt_id)).mock(return_value=httpx.Response(200, json=payload))
+    with pytest.raises(AllowlyProtocolError):
+        await resource.get(prompt_id)
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["confirmation", "escalation"])
+@pytest.mark.parametrize("body", [None, [], {"confirmation_id": "cnf_other", "escalation_id": "esc_other"}])
+async def test_prompt_status_rejects_wrong_identity_or_body(client, kind, body):
+    resource = client.confirmations if kind == "confirmation" else client.escalations
+    prompt_id = "cnf_abc" if kind == "confirmation" else "esc_abc"
+    respx.get(_prompt_status_url(kind, prompt_id)).mock(return_value=httpx.Response(200, json=body))
+    with pytest.raises(AllowlyProtocolError):
+        await resource.get(prompt_id)
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["confirmation", "escalation"])
+@pytest.mark.parametrize("http_status", [403, 404, 429, 503])
+async def test_prompt_status_does_not_retry_or_fallback(client, kind, http_status):
+    resource = client.confirmations if kind == "confirmation" else client.escalations
+    prompt_id = "cnf_abc" if kind == "confirmation" else "esc_abc"
+    route = respx.get(_prompt_status_url(kind, prompt_id)).mock(return_value=httpx.Response(
+        http_status, json={"error": {"code": "unavailable", "message": "Unavailable"}}
+    ))
+    with pytest.raises(AllowlyAPIError) as exc:
+        await resource.get(prompt_id)
+    assert exc.value.status == http_status
+    assert route.call_count == 1
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirmation_id", ["cnf_abc", None])
+async def test_check_exposes_optional_confirmation_id(client, confirmation_id):
+    payload = _check_payload()
+    payload["results"]["x"].update(
+        decision="confirm", confirm_nonce="bearer-nonce", confirm_expires_at="2026-04-20T00:15:00Z",
+        confirm_prompt_hint="Approve?", confirmation_id=confirmation_id,
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json=payload))
+    result = (await client.check(authorization_id="auth_1", actions=["x"])).results["x"]
+    assert result.confirmation_id == confirmation_id
+    assert result.confirm_nonce == "bearer-nonce"
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirmation_id", [False, "bearer-nonce", "cnf_"])
+async def test_check_rejects_malformed_confirmation_id(client, confirmation_id):
+    payload = _check_payload()
+    payload["results"]["x"].update(
+        decision="confirm", confirm_nonce="bearer-nonce", confirm_expires_at="2026-04-20T00:15:00Z",
+        confirm_prompt_hint="Approve?", confirmation_id=confirmation_id,
+    )
+    respx.post(f"{BASE}/v1/check").mock(return_value=httpx.Response(200, json=payload))
+    with pytest.raises(AllowlyProtocolError, match="confirmation_id"):
+        await client.check(authorization_id="auth_1", actions=["x"])
 
 
 @respx.mock

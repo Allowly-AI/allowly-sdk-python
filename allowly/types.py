@@ -6,6 +6,60 @@ from typing import Any, Literal, Union
 Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
 SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed"]
+PromptStatus = Literal["pending", "approved", "rejected", "expired", "unknown"]
+ConfirmationAuthorityStatus = Literal["none", "available", "expired", "revoked", "unknown"]
+EscalationAuthorityStatus = Literal["none", "available", "expired", "revoked", "consumed", "unknown"]
+ResolutionWebhookEventType = Literal["confirmation.resolved", "escalation.resolved"]
+ResolutionWebhookDeliveryStatus = Literal["pending", "delivered", "failed", "cancelled"]
+
+
+@dataclass
+class ResolutionWebhookData:
+    prompt_id: str
+    status: Literal["approved", "rejected"]
+    source_receipt_id: str | None
+    resolution_receipt_id: str
+
+
+@dataclass
+class ResolutionWebhookEvent:
+    id: str
+    type: ResolutionWebhookEventType
+    timestamp: str
+    workspace_id: str
+    data: ResolutionWebhookData
+
+
+@dataclass
+class ResolutionWebhookConfig:
+    workspace_id: str
+    endpoint_id: str | None
+    url: str | None
+    enabled: bool
+    credential_version: int | None
+    created_at: str | None
+    updated_at: str | None
+
+
+@dataclass
+class ResolutionWebhookSecret(ResolutionWebhookConfig):
+    signing_secret: str = field(repr=False)
+
+
+@dataclass
+class ResolutionWebhookDelivery:
+    event_id: str
+    event_type: ResolutionWebhookEventType
+    status: ResolutionWebhookDeliveryStatus
+    attempts: int
+    created_at: str
+    delivered_at: str | None
+    last_error: str | None
+
+
+@dataclass
+class ResolutionWebhookDeliveries:
+    items: list[ResolutionWebhookDelivery]
 
 
 @dataclass
@@ -281,6 +335,7 @@ class ActionCheckResultConfirm(ActionCheckResultBase):
     confirm_nonce: str
     confirm_expires_at: str
     confirm_prompt_hint: str
+    confirmation_id: str | None = None
 
 
 @dataclass(kw_only=True)
@@ -363,6 +418,37 @@ class ConfirmationApproveResponse:
     authorization_id: str | None = None
     expires_at: str | None = None
     receipt: ReceiptEnvelopePending | None = None
+
+
+@dataclass
+class _PromptStatusResponse:
+    authorization_id: str
+    action: str
+    resource: str | None
+    status: PromptStatus
+    expires_at: str
+    resolved_at: str | None
+    source_receipt_id: str | None
+    resolution_receipt_id: str | None
+
+
+@dataclass
+class ConfirmationStatus(_PromptStatusResponse):
+    """Recorded choice and grant lifecycle. Run a fresh check before acting."""
+
+    confirmation_id: str
+    child_authorization_id: str | None
+    authority_status: ConfirmationAuthorityStatus
+    authority_expires_at: str | None
+
+
+@dataclass
+class EscalationStatus(_PromptStatusResponse):
+    """Recorded choice and one-use grant lifecycle, never permission to execute."""
+
+    escalation_id: str
+    authority_status: EscalationAuthorityStatus
+    consumed_at: str | None
 
 
 @dataclass
