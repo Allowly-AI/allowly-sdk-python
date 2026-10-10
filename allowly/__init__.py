@@ -48,6 +48,7 @@ from .types import (
     ReceiptEnvelope,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
+    JwsReceipt,
     ReceiptAcknowledgmentCaller,
     ReceiptAcknowledgmentResponse,
     OutcomeEvidence,
@@ -66,6 +67,7 @@ from .types import (
 
 __all__ = [
     "Allowly",
+    "JwsReceipt",
     "NativeAgentCredential",
     "CustomExecutableCreateRequest",
     "EnabledExecutableResponse",

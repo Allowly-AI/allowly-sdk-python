@@ -236,18 +236,20 @@ After fetching the complete signed receipt, the included verifier can calculate
 the canonical receipt hash for an acknowledgment:
 
 ```python
-from allowly.verify import hash_seal_value
+from allowly.verify import hash_seal_value, verify_receipt
+
+claims = verify_receipt(signed_receipt, keys, expected_workspace_id=workspace_id)
 
 ack = await allowly.acknowledge_receipt(
-    receipt_id=signed_receipt["receipt_id"],
+    receipt_id=claims["receipt_id"],
     receipt_sha256=hash_seal_value(signed_receipt),
     client_timestamp=datetime.now(timezone.utc),
-    idempotency_key=f"ack:{signed_receipt['receipt_id']}",
+    idempotency_key=f"ack:{claims['receipt_id']}",
 )
 
 # Retrieve the same acknowledgment later by its returned ID.
 ack = await allowly.get_receipt_acknowledgment(
-    signed_receipt["receipt_id"],
+    claims["receipt_id"],
     ack.acknowledgment_id,
 )
 ```
@@ -599,7 +601,11 @@ integration examples honest and makes SDK gaps visible early.
 Use the required local verifier to hash SEAL records and verify signed receipts.
 This worktree pins the sibling `allowly-receipt-format==5.0.0`, which verifies
 receipt wire format 5 (the package major equals the wire format). `alg` and
-`key_id` are signed top-level fields, and `signature` is the base64url string.
+the key ID are in the signed JWS protected header. The receipt has only
+`protected`, `payload`, and `signature` fields, all base64url strings. Store and
+share that original envelope. `verify_receipt` returns verified claims for
+decisions and request binding. `decode_receipt` only reads claims for display;
+it does not prove their signature or grant permission.
 
 Wire format 5 preserves daily `receipt.checkpoint` commitments. For an
 untrusted receipt bundle, pass caller-trusted key fingerprints to

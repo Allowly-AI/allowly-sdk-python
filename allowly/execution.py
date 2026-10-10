@@ -615,13 +615,13 @@ async def complete_execution_evidence(client: Allowly, operation_dir: str, *, pu
     binding = _read(folder / "approval.json")
     envelope = state["authorization"]["decision_receipt"]
     receipt = envelope["receipt"] if envelope["status"] == "signed" else await client.receipts.fetch_signed(envelope["receipt_id"])
-    verify_receipt(receipt, public_keys, expected_workspace_id=expected_workspace_id)
+    claims = verify_receipt(receipt, public_keys, expected_workspace_id=expected_workspace_id)
     approval = binding["approval"]
     if ("sha256:" + hash_seal_value(approval) != binding["approval_sha256"]
             or approval.get("workspace_id") != expected_workspace_id
-            or receipt.get("context", {}).get("execution", {}).get("approval_sha256") != binding["approval_sha256"]
-            or receipt.get("decision") != "allow" or receipt.get("action") != approval.get("action")
-            or receipt.get("authorization_id") != approval.get("authorization_id")):
+            or claims.get("context", {}).get("execution", {}).get("approval_sha256") != binding["approval_sha256"]
+            or claims.get("decision") != "allow" or claims.get("action") != approval.get("action")
+            or claims.get("authorization_id") != approval.get("authorization_id")):
         raise AllowlyProtocolError("signed decision receipt does not bind this approval")
     package = {"profile": "allowly.execution.customer_bundle.v1", **binding,
                "decision_receipt": receipt, "decision_receipt_verified": True,

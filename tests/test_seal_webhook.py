@@ -5,6 +5,7 @@ import pytest
 import respx
 
 from allowly import AllowlyAPIError, AllowlyProtocolError, SealWebhookClient
+from jws_fixture import signed_receipt as wrap_receipt
 
 BASE = "https://api.example.com"
 TOKEN = "seal_w1_s001_test-token"
@@ -29,6 +30,8 @@ def _delivery(**overrides):
         "receipt": None,
     }
     body.update(overrides)
+    if isinstance(body["receipt"], dict) and "schema_version" in body["receipt"]:
+        body["receipt"] = wrap_receipt(body["receipt"])
     return body
 
 
@@ -82,11 +85,11 @@ async def test_send_rejects_invalid_detail_header_values(value: str) -> None:
 @respx.mock
 @pytest.mark.asyncio
 async def test_private_url_fetches_scoped_status_receipt_and_keys() -> None:
-    signed_receipt = {
+    signed_receipt = wrap_receipt({
         "schema_version": "5",
         "receipt_id": "rcp_test",
         "workspace_id": "ws_test",
-    }
+    })
     respx.get(f"{BASE}/v1/seal/webhooks/deliveries/swd_attempt?token={TOKEN}").mock(
         return_value=httpx.Response(200, json=_delivery())
     )

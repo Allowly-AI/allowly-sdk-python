@@ -13,6 +13,14 @@ ResolutionWebhookEventType = Literal["confirmation.resolved", "escalation.resolv
 ResolutionWebhookDeliveryStatus = Literal["pending", "delivered", "failed", "cancelled"]
 
 
+class JwsReceipt(TypedDict):
+    """Original signed envelope. Decode claims separately; verify before use."""
+
+    protected: str
+    payload: str
+    signature: str
+
+
 @dataclass
 class ResolutionWebhookData:
     prompt_id: str
@@ -147,7 +155,7 @@ class ReceiptEnvelopePending:
 @dataclass
 class ReceiptEnvelopeSigned:
     status: Literal["signed"]
-    receipt: dict[str, Any]
+    receipt: JwsReceipt
 
 
 ReceiptEnvelope = Union[ReceiptEnvelopePending, ReceiptEnvelopeSigned]
@@ -161,7 +169,7 @@ class SealResponse:
     record_sha256: str
     decision: Literal["allow"]
     reason: str
-    receipt: dict[str, Any]
+    receipt: JwsReceipt
 
 
 @dataclass
@@ -179,7 +187,7 @@ class SealWebhookDelivery:
     status_url: str
     receipt_url: str | None
     keys_url: str
-    receipt: dict[str, Any] | None
+    receipt: JwsReceipt | None
 
 
 @dataclass

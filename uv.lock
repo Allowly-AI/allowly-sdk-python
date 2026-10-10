@@ -91,12 +91,14 @@ version = "5.0.0"
 source = { editable = "../allowly-receipt-format/verifiers/python" }
 dependencies = [
     { name = "cryptography" },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "rfc8785" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=50.0.2" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15.1,<3" },
     { name = "rfc8785", specifier = ">=0.1.4,<1" },
 ]
 

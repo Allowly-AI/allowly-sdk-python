@@ -8,6 +8,7 @@ import pytest
 import respx
 
 from allowly import Allowly, AllowlyAPIError, AllowlyProtocolError
+from allowly.verify import decode_receipt
 from allowly.policies import validate_policy_definition, parse_policy_reference, parse_policy_evaluation, definition_digest
 
 BASE = "https://api.example.com"
@@ -27,9 +28,9 @@ def policy_response(value=None, policy_id="review", version=1):
 @pytest.mark.parametrize("case", VECTORS["signature_cases"], ids=lambda case: case["name"])
 def test_shared_opa_shapes_are_retained_without_renaming_or_recalculation(case):
     assert validate_policy_definition(case["definition"]) == case["definition"]
-    evaluation = parse_policy_evaluation(case["receipt"]["policy_eval"])
-    assert asdict(evaluation) == case["receipt"]["policy_eval"]
-    assert parse_policy_reference(case["receipt"]["policy_ref"]) == case["receipt"]["policy_ref"]
+    evaluation = parse_policy_evaluation(decode_receipt(case["receipt"])["policy_eval"])
+    assert asdict(evaluation) == decode_receipt(case["receipt"])["policy_eval"]
+    assert parse_policy_reference(decode_receipt(case["receipt"])["policy_ref"]) == decode_receipt(case["receipt"])["policy_ref"]
 
 
 def invalid_definitions():
@@ -107,14 +108,14 @@ def test_rule_order_unicode_and_safe_bounds_are_preserved_by_original_canonicali
     lambda e: e["result"].update(evaluated_fields={"risk": 1.5}),
 ])
 def test_provisional_evidence_is_exact_not_an_old_condition_summary(edit):
-    value = copy.deepcopy(VECTORS["signature_cases"][1]["receipt"]["policy_eval"])
+    value = copy.deepcopy(decode_receipt(VECTORS["signature_cases"][1]["receipt"])["policy_eval"])
     edit(value)
     with pytest.raises(AllowlyProtocolError):
         parse_policy_evaluation(value)
 
 
 def test_exists_evidence_keeps_arbitrary_canonical_json_without_a_scalar_only_translator():
-    value = copy.deepcopy(VECTORS["signature_cases"][1]["receipt"]["policy_eval"])
+    value = copy.deepcopy(decode_receipt(VECTORS["signature_cases"][1]["receipt"])["policy_eval"])
     value["result"]["evaluated_fields"] = {"value": {"present": [None, True, 0, "nested"]}}
     assert asdict(parse_policy_evaluation(value)) == value
 
@@ -125,7 +126,7 @@ async def test_setup_resource_round_trip_create_get_list_archive_and_provisional
     retained = definition()
     response = policy_response(retained)
     action = retained["actions"][0]["policy"]["action"]
-    evaluation = VECTORS["signature_cases"][1]["receipt"]["policy_eval"]
+    evaluation = decode_receipt(VECTORS["signature_cases"][1]["receipt"])["policy_eval"]
     create = respx.post(BASE + "/v1/policies").mock(return_value=httpx.Response(201, json=response))
     get = respx.get(BASE + "/v1/policies/review").mock(return_value=httpx.Response(200, json=response))
     listing = respx.get(BASE + "/v1/policies").mock(return_value=httpx.Response(200, json={"items": [response], "has_more": False, "next_cursor": None}))
@@ -172,7 +173,7 @@ async def test_publish_names_previous_exact_edition_and_preserves_receipt_witnes
 async def test_preview_rejects_a_response_for_another_request(changed):
     value = definition()
     action = value["actions"][0]["policy"]["action"]
-    response = {"provisional": True, "action": action, "definition_sha256": definition_digest(value), "policy_eval": VECTORS["signature_cases"][1]["receipt"]["policy_eval"]}
+    response = {"provisional": True, "action": action, "definition_sha256": definition_digest(value), "policy_eval": decode_receipt(VECTORS["signature_cases"][1]["receipt"])["policy_eval"]}
     response[changed] = False if changed == "provisional" else "other"
     respx.post(BASE + "/v1/setup/policies/preview").mock(return_value=httpx.Response(200, json=response))
     async with Allowly("setup-key", base_url=BASE) as client:
@@ -187,7 +188,7 @@ async def test_preview_binds_input_commitment_without_recalculating_opa_rules():
     action = value["actions"][0]["policy"]["action"]
     respx.post(BASE + "/v1/setup/policies/preview").mock(return_value=httpx.Response(200, json={
         "provisional": True, "action": action, "definition_sha256": definition_digest(value),
-        "policy_eval": VECTORS["signature_cases"][1]["receipt"]["policy_eval"],
+        "policy_eval": decode_receipt(VECTORS["signature_cases"][1]["receipt"])["policy_eval"],
     }))
     async with Allowly("setup-key", base_url=BASE) as client:
         with pytest.raises(AllowlyProtocolError, match="input commitment"):

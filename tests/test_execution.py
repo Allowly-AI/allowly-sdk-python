@@ -355,17 +355,21 @@ async def test_witness_setup_is_bound_to_workspace_and_confirmed_key(tmp_path, m
 @pytest.mark.asyncio
 async def test_receipt_finalization_checks_hash_linkage_without_provider(tmp_path, monkeypatch):
     monkeypatch.setattr("allowly.execution._provider_send", lambda *a: OBSERVED)
-    monkeypatch.setattr("allowly.verify.verify_receipt", lambda *a, **k: None)
+    from jws_fixture import signed_receipt
+    from allowly.verify import decode_receipt
+    monkeypatch.setattr("allowly.verify.verify_receipt", lambda receipt, *a, **k: decode_receipt(receipt))
     with respx.mock as mock:
         seen, _ = runtime(mock)
         async with Allowly("key", base_url=BASE) as client:
             result = await client.execute_http(URL, **PARAMS, storage_dir=str(tmp_path))
-            receipt = {"receipt_id": "rcp_1", "decision": "allow", "action": "billing.refund", "authorization_id": "auth_1",
+            claims = {"receipt_id": "rcp_1", "decision": "allow", "action": "billing.refund", "authorization_id": "auth_1",
                        "context": {"execution": {"approval_sha256": seen["approved"]["approval_sha256"]}}}
+            receipt = signed_receipt(claims)
             route = mock.get(BASE + "/v1/receipts/rcp_1").mock(return_value=httpx.Response(200, json={"status": "signed", "receipt": receipt}))
             package = await complete_execution_evidence(client, result.operation_dir, public_keys=[], expected_workspace_id="ws_1")
             assert package["decision_receipt_verified"] is True
-            receipt["context"]["execution"]["approval_sha256"] = "sha256:" + "0" * 64
+            claims["context"]["execution"]["approval_sha256"] = "sha256:" + "0" * 64
+            receipt = signed_receipt(claims)
             route.mock(return_value=httpx.Response(200, json={"status": "signed", "receipt": receipt}))
             with pytest.raises(AllowlyProtocolError):
                 await complete_execution_evidence(client, result.operation_dir, public_keys=[], expected_workspace_id="ws_1")

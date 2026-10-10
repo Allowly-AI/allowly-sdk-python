@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import pytest
 import httpx
 import respx
+from jws_fixture import signed_receipt as wrap_receipt
 
 from allowly import (
     ActionCheckResultConfirm,
@@ -85,14 +86,14 @@ def _prompt_status_url(kind, prompt_id):
     return f"{BASE}/v1/{kind}s/{prompt_id}" + ("/status" if kind == "confirmation" else "")
 
 
-SIGNED_RECEIPT = {
+SIGNED_RECEIPT = wrap_receipt({
     "schema_version": "5",
     "receipt_id": "rcp_abc",
     "decision": "allow",
     "alg": "Ed25519",
     "key_id": "key_1",
     "signature": "signature",
-}
+})
 
 
 SIGNED_ENVELOPE = {"status": "signed", "receipt": SIGNED_RECEIPT}
@@ -1532,10 +1533,10 @@ async def test_receipts_get_pending(client):
 @respx.mock
 @pytest.mark.asyncio
 async def test_receipts_get_signed(client):
-    signed = {
+    signed = wrap_receipt({
         "schema_version": "5", "receipt_id": "rcp_abc", "decision": "allow",
         "alg": "Ed25519", "key_id": "k", "signature": "sig",
-    }
+    })
     respx.get(f"{BASE}/v1/receipts/rcp_abc").mock(return_value=httpx.Response(200, json={
         "status": "signed",
         "receipt": signed,
@@ -1776,7 +1777,7 @@ async def test_fetch_signed_default_timeout_covers_one_signer_tick(client, monke
 
     monkeypatch.setattr("allowly.client.asyncio.sleep", fake_sleep)
 
-    signed = {"schema_version": "5", "receipt_id": "rcp_abc"}
+    signed = wrap_receipt({"schema_version": "5", "receipt_id": "rcp_abc"})
 
     async def fake_get(receipt_id):
         if fake_now >= 61.0:

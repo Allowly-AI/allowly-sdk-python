@@ -7,6 +7,7 @@ import httpx
 import pytest
 from allowly_receipt_format import canonicalize
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from jws_fixture import signed_receipt
 
 from allowly.verify import (
     VerificationError,
@@ -70,7 +71,7 @@ V5_RECEIPT = {
     "alg": "Ed25519",
     "key_id": "test-key/v1",
 }
-V5_RECEIPT["signature"] = _b64u(_TEST_PRIVATE_KEY.sign(canonicalize(V5_RECEIPT)))
+V5_RECEIPT = signed_receipt(V5_RECEIPT, _TEST_PRIVATE_KEY)
 
 
 @pytest.fixture(autouse=True)

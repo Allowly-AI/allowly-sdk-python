@@ -9,6 +9,7 @@ import pytest
 import respx
 from allowly_receipt_format import canonicalize
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from jws_fixture import signed_receipt
 
 from allowly import Allowly, AllowlyProtocolError
 from allowly.verify import (
@@ -28,7 +29,7 @@ PENDING_RECEIPT = {
     "ready_at_estimate": "2026-04-21T14:32:18.482Z",
     "url": f"{BASE}/v1/receipts/rcp_abc",
 }
-SIGNED_RECEIPT = {
+SIGNED_CLAIMS = {
     "schema_version": "5",
     "receipt_id": "rcp_abc",
     "workspace_id": "ws_test",
@@ -50,6 +51,7 @@ SIGNED_RECEIPT = {
     "key_id": "test-key/v1",
     "signature": "signature",
 }
+SIGNED_RECEIPT = signed_receipt(SIGNED_CLAIMS)
 
 
 @respx.mock
@@ -194,7 +196,7 @@ async def test_seal_rejects_unrelated_signed_receipt() -> None:
                 "reason": "authorization_granted_action_active",
                 "receipt": {
                     "status": "signed",
-                    "receipt": {**SIGNED_RECEIPT, "action": "record.publish"},
+                    "receipt": signed_receipt({**SIGNED_CLAIMS, "action": "record.publish"}),
                 },
             },
         )
@@ -226,7 +228,7 @@ async def test_seal_poll_rejects_swapped_receipt_id() -> None:
             200,
             json={
                 "status": "signed",
-                "receipt": {**SIGNED_RECEIPT, "receipt_id": "rcp_other"},
+                "receipt": signed_receipt({**SIGNED_CLAIMS, "receipt_id": "rcp_other"}),
             },
         )
     )
@@ -268,7 +270,7 @@ def test_verify_seal_reports_signature_and_record_match_separately() -> None:
         "alg": "Ed25519",
         "key_id": "seal-key/v1",
     }
-    receipt = {**payload, "signature": _b64url(private_key.sign(canonicalize(payload)))}
+    receipt = signed_receipt(payload, private_key)
     keys = load_keys_from_json(
         {
             "workspace_id": "ws_test",

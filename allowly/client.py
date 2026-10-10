@@ -6,7 +6,7 @@ from datetime import datetime
 import inspect
 import re
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 from urllib.parse import quote, urlparse
 
 import httpx
@@ -43,6 +43,7 @@ from .types import (
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
     ReceiptEnvelope,
+    JwsReceipt,
     ReceiptAcknowledgmentCaller,
     ReceiptAcknowledgmentResponse,
     SealResponse,
@@ -945,7 +946,7 @@ class _ReceiptsResource:
         *,
         poll_interval: float = 1.0,
         timeout: float = 120.0,
-    ) -> dict[str, Any]:
+    ) -> JwsReceipt:
         """Poll until the receipt is signed, then return the full signed receipt dict.
 
         The default timeout covers the signer's once-per-minute batch tick plus
@@ -975,7 +976,8 @@ class _ReceiptsResource:
                     retry_delay = exc.retry_after_seconds
             else:
                 if isinstance(envelope, ReceiptEnvelopeSigned):
-                    if _require_str(envelope.receipt, "receipt_id") != receipt_id:
+                    from .verify import decode_receipt
+                    if decode_receipt(envelope.receipt)["receipt_id"] != receipt_id:
                         raise AllowlyProtocolError(
                             "signed receipt_id does not match the requested receipt"
                         )
@@ -1070,9 +1072,15 @@ def _parse_receipt_envelope(raw: Any) -> ReceiptEnvelope:
     if raw.get("status") == "pending":
         return _parse_pending_envelope(raw)
     if raw.get("status") == "signed":
+        from .verify import decode_receipt, VerificationError
+        receipt = _require_dict(raw.get("receipt"), "signed receipt")
+        try:
+            decode_receipt(receipt)
+        except VerificationError as exc:
+            raise AllowlyProtocolError(f"invalid signed receipt: {exc}") from exc
         return ReceiptEnvelopeSigned(
             status="signed",
-            receipt=_require_dict(raw.get("receipt"), "signed receipt"),
+            receipt=cast(JwsReceipt, receipt),
         )
     raise AllowlyProtocolError("receipt status must be 'pending' or 'signed'")
 
@@ -1298,7 +1306,12 @@ def _validate_seal_receipt(
     expected_workspace_id: str,
     expected_receipt_id: str | None,
 ) -> None:
-    from .verify import SEAL_ACTION, SEAL_AGENT_ID, SEAL_PROFILE, SEAL_USER_ID
+    from .verify import SEAL_ACTION, SEAL_AGENT_ID, SEAL_PROFILE, SEAL_USER_ID, decode_receipt, VerificationError
+
+    try:
+        receipt = decode_receipt(receipt)
+    except VerificationError as exc:
+        raise AllowlyProtocolError(f"invalid SEAL receipt: {exc}") from exc
 
     receipt_id = _require_str(receipt, "receipt_id")
     if not receipt_id:
@@ -1311,16 +1324,12 @@ def _validate_seal_receipt(
         "decision": "allow",
         "agent_id": SEAL_AGENT_ID,
         "user_id": SEAL_USER_ID,
-        "alg": "Ed25519",
     }
     for key, expected in expected_fields.items():
         if _require_str(receipt, key) != expected:
             raise AllowlyProtocolError(f"seal receipt {key} does not match the request")
     if _require_str(receipt, "workspace_id") != expected_workspace_id:
         raise AllowlyProtocolError("seal receipt workspace_id does not match the response")
-    for key in ("key_id", "signature"):
-        if not _require_str(receipt, key):
-            raise AllowlyProtocolError(f"seal receipt {key} must be non-empty")
     context = _require_dict(receipt.get("context"), "seal receipt context")
     if _require_str(context, "seal_profile") != SEAL_PROFILE:
         raise AllowlyProtocolError("seal receipt profile does not match the request")
@@ -1417,7 +1426,8 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
             raise AllowlyProtocolError("invalid execution review binding")
     if status == "waiting_for_review":
         envelope = _parse_receipt_envelope(body.get("decision_receipt"))
-        receipt_id = envelope.receipt_id if isinstance(envelope, ReceiptEnvelopePending) else envelope.receipt.get("receipt_id")
+        from .verify import decode_receipt
+        receipt_id = envelope.receipt_id if isinstance(envelope, ReceiptEnvelopePending) else decode_receipt(envelope.receipt).get("receipt_id")
         if (review is None or decision != review.kind or review.source_receipt_id != receipt_id
                 or body.get("approval") is not None or body.get("approval_sha256") is not None
                 or body.get("downstream") is not None or body.get("decision_state") != "not_allowed"
