@@ -359,7 +359,7 @@ async def execute_http(
 
     Use a business-stable operation ID (for example the refund ID), not a fresh
     UUID per retry. Repeating this call never repeats an existing local run.
-    Install ``allowly[verifier]``; witnessed calls use the CLI's confirmed
+    The receipt verifier is a required SDK dependency; witnessed calls use the CLI's confirmed
     witness setup unless both file paths are supplied explicitly.
     """
     from .verify import hash_seal_value

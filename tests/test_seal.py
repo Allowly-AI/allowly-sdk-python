@@ -29,7 +29,7 @@ PENDING_RECEIPT = {
     "url": f"{BASE}/v1/receipts/rcp_abc",
 }
 SIGNED_RECEIPT = {
-    "schema_version": "4",
+    "schema_version": "5",
     "receipt_id": "rcp_abc",
     "workspace_id": "ws_test",
     "issued_at": "2026-04-21T14:32:17.482Z",
@@ -44,7 +44,8 @@ SIGNED_RECEIPT = {
         "record_sha256": RECORD_SHA256,
     },
     "authorization_id": "auth_seal",
-    "engine_version": "2026-04-17.1",
+    "engine_version": "sha256:" + "a" * 64,
+    "policy_ref": {"policy_id": "pol_fixture", "policy_version": 1, "definition_sha256": "b" * 64},
     "alg": "Ed25519",
     "key_id": "test-key/v1",
     "signature": "signature",
@@ -247,7 +248,7 @@ def test_verify_seal_reports_signature_and_record_match_separately() -> None:
     private_key = Ed25519PrivateKey.from_private_bytes(bytes(32))
     public_key = private_key.public_key().public_bytes_raw()
     payload = {
-        "schema_version": "4",
+        "schema_version": "5",
         "receipt_id": "rcp_seal",
         "workspace_id": "ws_test",
         "issued_at": "2026-04-21T14:32:17.482Z",
@@ -262,7 +263,8 @@ def test_verify_seal_reports_signature_and_record_match_separately() -> None:
             "record_sha256": hash_seal_json(raw_json),
         },
         "authorization_id": "auth_seal",
-        "engine_version": "2026-04-17.1",
+        "engine_version": "sha256:" + "a" * 64,
+    "policy_ref": {"policy_id": "pol_fixture", "policy_version": 1, "definition_sha256": "b" * 64},
         "alg": "Ed25519",
         "key_id": "seal-key/v1",
     }

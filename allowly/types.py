@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal, Union
+from typing import Any, Literal, TypedDict, Union
 
 Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
@@ -304,17 +304,112 @@ class EscalationInfo:
     expires_at: str | None = None
 
 
-@dataclass
-class PolicyConditionEvidence:
+class PolicyReference(TypedDict):
+    policy_id: str
+    policy_version: int
+    definition_sha256: str
+
+
+class BasicCondition(TypedDict):
     field: str
-    op: str
+    op: Literal["eq", "ne", "gt", "gte", "lt", "lte", "in", "not_in", "exists"]
     value: str | int | bool | None | list[str | int | bool | None]
+
+
+class BasicRule(TypedDict):
+    id: str
+    decision: Decision
+    target: str | None
+    conditions: list[BasicCondition]
+
+
+class BasicPolicy(TypedDict):
+    profile: Literal["allowly.basic.v1"]
+    action: str
+    default_decision: Decision
+    default_target: str | None
+    fields: dict[str, Literal["string", "integer", "boolean", "null"]]
+    rules: list[BasicRule]
+
+
+class ActionGuards(TypedDict, total=False):
+    resource_pattern: str
+    allowed_initiators: list[str]
+    max_per_day: int
+
+
+class PolicyExecutableOperationGrant(TypedDict):
+    enabled_executable_id: str
+    provider_id: str
+    operation_id: str
+    catalog_revision: str
+    definition_fingerprint: str
+    minimum_evidence_mode: Literal["receipt", "witnessed"]
+
+
+class PolicyActionEntry(TypedDict):
+    policy: BasicPolicy
+    guards: ActionGuards
+    executable_operations: list[PolicyExecutableOperationGrant]
+
+
+class PolicyDefinition(TypedDict):
+    profile: Literal["allowly.policy.v1"]
+    agent_id: str
+    actions: list[PolicyActionEntry]
+    default_expiry_days: int | None
+
+
+@dataclass
+class ProvisionalPolicyResult:
+    profile: Literal["allowly.basic.v1"]
+    status: Literal["ok"]
+    decision: Decision
+    target: str | None
+    matched_rule_id: str | None
+    evaluated_fields: dict[str, Any]
 
 
 @dataclass
 class PolicyEvalInfo:
-    matched_condition: PolicyConditionEvidence | None
-    field_value: str | int | bool | None
+    input_sha256: str
+    result: ProvisionalPolicyResult
+
+
+@dataclass
+class PolicyResponse:
+    policy_ref: PolicyReference
+    definition: PolicyDefinition
+    description: str | None
+    created_by: str | None
+    created_at: str | None
+    deleted_at: str | None
+
+
+@dataclass
+class PolicyListResponse:
+    items: list[PolicyResponse]
+    has_more: bool
+    next_cursor: str | None
+
+
+@dataclass
+class PolicyPreviewResponse:
+    provisional: Literal[True]
+    definition_sha256: str
+    action: str
+    policy_eval: PolicyEvalInfo
+
+
+@dataclass
+class PolicyPublishResponse:
+    policy_ref: PolicyReference
+    agent_id: str
+    created_by: str
+    created_at: str
+    authorization_migrations: list[dict[str, str]]
+    archived_policy_ids: list[str]
+    revoked_confirmation_count: int
 
 
 @dataclass(kw_only=True)
@@ -379,38 +474,18 @@ class CheckResponse:
 
 
 @dataclass
-class ExecutableOperationGrant:
-    enabled_executable_id: str
-    provider_id: str
-    operation_id: str
-    catalog_revision: str
-    definition_fingerprint: str
-    minimum_evidence_mode: Literal["receipt", "witnessed"] = "receipt"
-
-
-@dataclass
-class ActionEntry:
-    name: str
-    constraints: dict[str, Any] = field(default_factory=dict)
-    executable_operations: list[ExecutableOperationGrant] = field(default_factory=list)
-
-
-@dataclass
 class AuthorizationCreateResponse:
     authorization_id: str
+    policy_ref: PolicyReference
+    actions: list[str]
     created_at: str
     expires_at: str
     receipt: ReceiptEnvelopePending
-    requires_confirm_for: list[str]
-    requires_escalation_for: list[str]
-    requires_deny_for: list[str]
-    escalation_targets: dict[str, str]
-    policy_id: str | None = None
+    authorization_provenance: dict[str, Any]
     budget_limit_micros: int | None = None
     budget_spent_micros: int | None = None
     replaced_authorization_id: str | None = None
     revocation_receipt: ReceiptEnvelopePending | None = None
-    authorization_provenance: dict[str, Any] | None = None
     #: X-Allowly-Billing-Warning response header, when present.
     billing_warning: str | None = None
 
@@ -425,7 +500,7 @@ class AuthorizationRevokeResponse:
 
 @dataclass
 class ConfirmationApproveResponse:
-    decision: Literal["approved", "not_approved", "denied_by_user"]
+    decision: Literal["approved", "not_approved"]
     authorization_id: str | None = None
     expires_at: str | None = None
     receipt: ReceiptEnvelopePending | None = None

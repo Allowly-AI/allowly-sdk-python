@@ -83,7 +83,7 @@ async def test_send_rejects_invalid_detail_header_values(value: str) -> None:
 @pytest.mark.asyncio
 async def test_private_url_fetches_scoped_status_receipt_and_keys() -> None:
     signed_receipt = {
-        "schema_version": "4",
+        "schema_version": "5",
         "receipt_id": "rcp_test",
         "workspace_id": "ws_test",
     }
@@ -158,7 +158,7 @@ async def test_webhook_rejects_mismatched_receipt_binding() -> None:
             json=_delivery(
                 status="sealed",
                 receipt={
-                    "schema_version": "4",
+                    "schema_version": "5",
                     "receipt_id": "rcp_other",
                     "workspace_id": "ws_test",
                 },
@@ -205,7 +205,7 @@ async def test_webhook_recovers_signed_metadata_when_top_level_is_missing() -> N
     body = _delivery(
         status="sealed",
         receipt={
-            "schema_version": "4",
+            "schema_version": "5",
             "receipt_id": "rcp_test",
             "workspace_id": "ws_test",
             "context": {"seal_metadata": signed_metadata},
@@ -232,7 +232,7 @@ async def test_webhook_rejects_metadata_conflicting_with_signed_receipt() -> Non
                 status="sealed",
                 metadata={"reference": "UNSIGNED"},
                 receipt={
-                    "schema_version": "4",
+                    "schema_version": "5",
                     "receipt_id": "rcp_test",
                     "workspace_id": "ws_test",
                     "context": {"seal_metadata": {"reference": "SIGNED"}},
@@ -259,7 +259,7 @@ async def test_webhook_rejects_malformed_signed_metadata(metadata: object) -> No
             json=_delivery(
                 status="sealed",
                 receipt={
-                    "schema_version": "4",
+                    "schema_version": "5",
                     "receipt_id": "rcp_test",
                     "workspace_id": "ws_test",
                     "context": {"seal_metadata": metadata},

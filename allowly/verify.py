@@ -20,10 +20,9 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import quote, urlparse
 
-# Offline verification is powered by the published reference verifier,
-# allowly-receipt-format 4.x (import path allowly_receipt_format). It ships as an
-# optional extra so the core SDK stays dependency-light:
-#     pip install 'allowly[verifier]'
+# Offline verification is powered by the local wire-5 reference verifier,
+# allowly-receipt-format 5.x (import path allowly_receipt_format). It ships as an
+# required dependency so transport and authoring reuse the maintained canonicalizer.
 try:
     from allowly_receipt_format import (
         SEAL_ACTION,
@@ -43,8 +42,8 @@ try:
     )
 except ImportError as exc:
     raise ImportError(
-        "SEAL and receipt verification require allowly-receipt-format>=4.3.1. "
-        "Install the verifier extra: pip install 'allowly[verifier]'"
+        "SEAL and receipt verification require allowly-receipt-format==5.0.0. "
+        "Install this SDK with its required local verifier dependency."
     ) from exc
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"

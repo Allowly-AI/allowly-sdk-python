@@ -6,7 +6,7 @@ Async Python client for the Allowly runtime API.
 
 Confirmation responses expose `receipt`, a pending resolution envelope or
 `None` for an older runtime/replay. The decision is `approved` or
-`not_approved`; `denied_by_user` remains accepted for older runtimes. Poll
+`not_approved`; legacy outcomes are rejected by this fresh rebuild. Poll
 `client.receipts.fetch_signed(response.receipt.receipt_id)` when a receipt is
 present, then verify it with your configured workspace and trusted keys.
 The signature authenticates the recorded client report, not a named human's
@@ -14,9 +14,10 @@ identity or approval. Resolution does not dispatch an action. A standalone
 Check integration re-checks with its original authorization; native Execute
 continues its saved operation as described below.
 
-SDK 0.7.0 requires `allowly-receipt-format>=4.3.1,<5.0.0` from PyPI through
-the `verifier` extra to verify `confirmation.resolve` receipts on wire
-format 4. Install `allowly[verifier]` when you need local verification.
+This unpublished local OPA worktree uses the sibling
+`allowly-receipt-format==5.0.0` as a required dependency and accepts only
+receipt wire 5. Run `uv sync` in this multi-repo workspace;
+the source mapping selects the local verifier, not an unpublished PyPI release.
 Native continuation requires a runtime that supports
 `/v1/executions/{operation_id}/continue`; upgrading this SDK does not deploy
 that runtime. Earlier SDK packages do not gain these methods.
@@ -71,6 +72,64 @@ Rejected, invalid, mismatched, or unavailable review never permits dispatch.
 
 MCP middleware ships inside this SDK: `pip install 'allowly[fastmcp]'`, then `from allowly.mcp import AllowlyMCPMiddleware`. In TypeScript, it lives in the separate `@allowly/mcp` package.
 
+## Author and preview an immutable policy
+
+Policy create/get/list/archive and setup preview/publish require a setup/CLI
+credential, not a runtime API key or an agent token. Use the runtime client for
+Check and native Execute. The SDK does not change credentials or sign agent
+identity for policy setup calls.
+
+```python
+from allowly import Allowly, PolicyDefinition
+
+definition: PolicyDefinition = {
+    "profile": "allowly.policy.v1",
+    "agent_id": "research_agent",
+    "actions": [{
+        "policy": {
+            "profile": "allowly.basic.v1", "action": "web.search",
+            "default_decision": "allow", "default_target": None,
+            "fields": {"risk": "integer"},
+            "rules": [{"id": "review-high-risk", "decision": "confirm",
+                       "target": "agent_owner",
+                       "conditions": [{"field": "risk", "op": "gte", "value": 2}]}],
+        },
+        "guards": {}, "executable_operations": [],
+    }],
+    "default_expiry_days": 30,
+}
+
+async with Allowly(api_key=ALLOWLY_SETUP_KEY) as setup:
+    created = await setup.policies.create(policy_id="research_agent", definition=definition)
+    preview = await setup.policies.preview(definition=definition, action="web.search", context={"risk": 2})
+    assert preview.provisional
+    print(preview.policy_eval.result.decision, preview.policy_eval.input_sha256)
+    retained = await setup.policies.get("research_agent")  # Latest active edition.
+    page = await setup.policies.list(limit=20)
+    # Publish a successor only when ready, naming the exact previous reference:
+    # published = await setup.policies.publish(
+    #     policy_id="research_agent", definition=updated_definition,
+    #     previous_policy_ref=retained.policy_ref, idempotency_key="publish-research-2",
+    # )
+    # await setup.policies.archive("research_agent")
+```
+
+The complete definition and `policy_ref` keep their canonical snake_case JSON
+fields, ordered rules, and exact executable grants. Conditions use `eq`, `ne`,
+`gt`, `gte`, `lt`, `lte`, `in`, `not_in`, or `exists`. Declared comparison types
+are strict; integers must be safe JSON integers, not floats or booleans.
+Allow/deny targets are null, confirm targets are `agent_owner`, and escalation
+targets are actual `member:<account_user_id>` values. Publishing checks agent
+ownership, setup provenance, current membership, and executable catalog bindings
+on the server. A guessed member or team label is not a valid review target.
+
+Preview calculates only provisional OPA rules. It does not check grants, live
+guards, quotas, budgets, or final execution permission. `policy_eval.result`
+can differ from Check's final decision. Parsing it or verifying a receipt
+signature is not independent policy replay; replay needs the original retained
+artifacts and the pinned official native OPA executable. The SDK has no parallel
+Python rule interpreter or unsigned fallback for malformed setup responses.
+
 ## Subject authorization pattern
 
 Do not send raw user/customer PII to Allowly receipts unless you intentionally
@@ -97,6 +156,7 @@ async def main() -> None:
         authorization = await allowly.authorizations.create(
             user_id=f"subject:{subject_id}",
             policy_id="research_agent",
+            policy_version=1,  # The exact retained edition selected during setup.
             metadata={"source": "import"},
         )
 
@@ -105,7 +165,7 @@ async def main() -> None:
             authorization_id=authorization.authorization_id,
             actions=["web.search"],
             resource=f"subject:{subject_id}",
-            context={"stage": "research"},
+            context={"stage": "research", "risk": 1},
         )
 
     if decision.results["web.search"].decision != "allow":
@@ -172,7 +232,7 @@ and customer-hosted execution calls. Provider credentials stay in your runtime.
 
 ## Receipt acknowledgments
 
-After fetching the complete signed receipt, the verifier extra can calculate
+After fetching the complete signed receipt, the included verifier can calculate
 the canonical receipt hash for an acknowledgment:
 
 ```python
@@ -198,8 +258,8 @@ not replace the timestamp issued by Allowly in a receipt.
 ## Execute from customer code
 
 Enable an app in **Settings → Executables**, then bind its exact operation to
-the policy action. Enabling an app alone does not grant permission. Install
-`allowly[verifier]` for the customer execution helper.
+the policy action. Enabling an app alone does not grant permission. The required
+receipt verifier is included with this SDK.
 
 ```python
 from allowly import Allowly
@@ -298,9 +358,11 @@ witnessed execution. The default path downloads a verified precompiled Rust
 helper. Use `allowly setup witness --build-from-source` to download reviewed
 Allowly adapter source and build it with pinned official TLSNotary libraries.
 That path needs Rust 1.95.0, Cargo, Git, Bash, and a native C build toolchain.
-Both paths verify release checksums and remain blocked until reviewed
-`witness-v0.1.0` assets are published and their manifest digest is pinned in the CLI.
-Offline setup still accepts
+The current CLI defaults to `witness-v0.1.1` and pins the SHA-256 digest of
+`SHA256SUMS`, then verifies the selected archive before running or building it.
+Missing assets or checksum mismatches stop setup; there is no unverified fallback.
+This local rebuild does not establish remote asset availability or a tested fresh
+archive installation. Offline setup also accepts
 `--archive FILE --sha256 HEX` or a reviewed `--helper FILE`.
 The command downloads that workspace's **public** witness key, shows its locally
 calculated fingerprint,
@@ -478,9 +540,10 @@ assert result.signature_verified
 assert result.record_matches
 ```
 
-Inline authorization creation requires `agent_id`, `actions`, and `expires_at`.
-Policy-based creation uses `policy_id` instead and rejects inline action or
-decision-override fields.
+Authorization creation requires a logical `policy_id` and exact positive
+`policy_version`. Optional `actions` is a names-only subset of that edition;
+omit it to select all its actions. Inline policy rules, action objects,
+`agent_id`, constraints, and decision-override maps are not accepted.
 
 Unavailable checks fail closed unless an action is explicitly mapped to
 `"fail_open"` with `fallback_by_action`. Unmapped actions always fail closed.
@@ -488,7 +551,8 @@ Identity-enabled checks always fail closed, including token supplier failures
 and `identity_verification_unavailable` responses.
 
 For actions that need third-party approval, define the escalation rule on the
-agent policy, create the authorization from that `policy_id`, and then resolve
+agent policy, create the authorization from its exact `policy_id` and
+`policy_version`, and then resolve
 returned escalation results with
 `await allowly.escalations.approve(escalation_id, resolved_by="manager:123")`
 or `reject(...)`, then re-check before running the action.
@@ -532,12 +596,12 @@ integration examples honest and makes SDK gaps visible early.
 
 ## Offline receipt verification
 
-Install `allowly[verifier]` to hash SEAL records and verify signed receipts
-locally. The 0.7.0 extra uses `allowly-receipt-format>=4.3.1,<5.0.0`, which verifies
-receipt wire format 4 (the package major equals the wire format). `alg` and
+Use the required local verifier to hash SEAL records and verify signed receipts.
+This worktree pins the sibling `allowly-receipt-format==5.0.0`, which verifies
+receipt wire format 5 (the package major equals the wire format). `alg` and
 `key_id` are signed top-level fields, and `signature` is the base64url string.
 
-Wire format 4 also supports daily `receipt.checkpoint` commitments. For an
+Wire format 5 preserves daily `receipt.checkpoint` commitments. For an
 untrusted receipt bundle, pass caller-trusted key fingerprints to
 `verify_receipt`; a fingerprint copied from that same bundle is not a trust
 anchor.

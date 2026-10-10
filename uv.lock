@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -49,13 +49,13 @@ name = "allowly"
 version = "0.7.0"
 source = { editable = "." }
 dependencies = [
+    { name = "allowly-receipt-format" },
     { name = "cryptography" },
     { name = "httpx" },
 ]
 
 [package.optional-dependencies]
 dev = [
-    { name = "allowly-receipt-format" },
     { name = "cryptography" },
     { name = "fastmcp" },
     { name = "mcp" },
@@ -67,14 +67,10 @@ fastmcp = [
     { name = "fastmcp" },
     { name = "mcp" },
 ]
-verifier = [
-    { name = "allowly-receipt-format" },
-]
 
 [package.metadata]
 requires-dist = [
-    { name = "allowly-receipt-format", marker = "extra == 'dev'", specifier = ">=4.3.1,<5.0.0" },
-    { name = "allowly-receipt-format", marker = "extra == 'verifier'", specifier = ">=4.3.1,<5.0.0" },
+    { name = "allowly-receipt-format", editable = "../allowly-receipt-format/verifiers/python" },
     { name = "cryptography", specifier = ">=42" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=42" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=3.4.7,<4" },
@@ -86,19 +82,21 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "respx", marker = "extra == 'dev'", specifier = ">=0.21" },
 ]
-provides-extras = ["fastmcp", "verifier", "dev"]
+provides-extras = ["fastmcp", "dev"]
 
 [[package]]
 name = "allowly-receipt-format"
-version = "4.3.1"
-source = { registry = "https://pypi.org/simple" }
+version = "5.0.0"
+source = { editable = "../allowly-receipt-format/verifiers/python" }
 dependencies = [
     { name = "cryptography" },
     { name = "rfc8785" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/73/26/f1696bc17d2b19424088fe49234317d6e964d29a26f97efdac341d4e9287/allowly_receipt_format-4.3.1.tar.gz", hash = "sha256:097fd6c19e35174d7bd29c6903f4e6681f773324fc444c523ebe3c69ebaab309", size = 33092, upload-time = "2026-10-09T22:53:32.144Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b4/4c/c7445fcde5aecfc2e141195678428df29c2b0279f1ac160b1e1a0400d2d7/allowly_receipt_format-4.3.1-py3-none-any.whl", hash = "sha256:df96cdd73291ee90cc2b93e9f79e5edced5726ef3a466f8b65455b863b68981d", size = 32191, upload-time = "2026-10-09T22:53:30.968Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "cryptography", specifier = ">=42.0" },
+    { name = "rfc8785", specifier = ">=0.1.4,<1" },
 ]
 
 [[package]]
