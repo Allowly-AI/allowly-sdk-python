@@ -7,7 +7,6 @@ import json
 import httpx
 import pytest
 import respx
-from allowly_receipt_format import canonicalize
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from jws_fixture import signed_receipt
 

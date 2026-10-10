@@ -5,7 +5,6 @@ import hashlib
 
 import httpx
 import pytest
-from allowly_receipt_format import canonicalize
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from jws_fixture import signed_receipt
 
