@@ -94,20 +94,20 @@ def validate_policy_definition(value: Any) -> PolicyDefinition:
     names, operations = set(), set()
     for entry in raw["actions"]:
         _keys(entry, {"policy", "guards", "executable_operations"}, "policy action")
-        policy = _keys(entry["policy"], {"profile", "action", "default_decision", "default_target", "fields", "rules"}, "basic policy")
+        policy = _keys(entry["policy"], {"profile", "action", "decision", "target", "fields", "rules"}, "basic policy")
         name = _text(policy["action"], "policy.action", 64)
         if name in names or name in {"allow", "deny", "confirm", "escalate"}:
             raise AllowlyProtocolError("policy actions must be unique executable names")
         names.add(name)
         if policy["profile"] != "allowly.basic.v1":
             raise AllowlyProtocolError("basic policy profile is unsupported")
-        _target(policy["default_decision"], policy["default_target"])
+        _target(policy["decision"], policy["target"])
         fields = policy["fields"]
         if type(fields) is not dict or len(fields) > 64:
             raise AllowlyProtocolError("policy.fields must be a bounded object")
         for field, declared in fields.items():
             _text(field, "field")
-            if type(declared) is not str or declared not in {"string", "integer", "boolean", "null"}:
+            if type(declared) is not str or declared not in {"string", "integer", "boolean", "null", "list"}:
                 raise AllowlyProtocolError("policy field type is unsupported")
         rules = policy["rules"]
         if type(rules) is not list or len(rules) > 32:
@@ -126,12 +126,23 @@ def validate_policy_definition(value: Any) -> PolicyDefinition:
                 _keys(condition, {"field", "op", "value"}, "condition")
                 declared = fields.get(_text(condition["field"], "condition.field"))
                 op, compared = condition["op"], condition["value"]
-                if declared is None or type(op) is not str or op not in {"eq", "ne", "gt", "gte", "lt", "lte", "in", "not_in", "exists"}:
+                if declared is None or type(op) is not str or op not in {"eq", "ne", "gt", "gte", "lt", "lte", "in", "not_in", "exists", "contains_any", "contains_none", "empty"}:
                     raise AllowlyProtocolError("condition requires a declared field and supported operator")
                 if op == "exists":
                     if type(compared) is not bool:
                         raise AllowlyProtocolError("exists requires a boolean value")
                     continue
+                if op == "empty":
+                    if declared != "list" or type(compared) is not bool:
+                        raise AllowlyProtocolError("empty requires a list field and a boolean value")
+                    continue
+                if op in {"contains_any", "contains_none"}:
+                    if (declared != "list" or type(compared) is not list or not 1 <= len(compared) <= 64
+                            or any(type(item) not in {str, int, bool, type(None)} for item in compared)):
+                        raise AllowlyProtocolError("list overlap requires a list field and 1 to 64 scalar values")
+                    continue
+                if declared == "list":
+                    raise AllowlyProtocolError("list fields require list comparisons or exists")
                 membership = op in {"in", "not_in"}
                 if membership != (type(compared) is list):
                     raise AllowlyProtocolError("only membership comparisons use arrays")
@@ -189,7 +200,7 @@ def parse_policy_evaluation(value: Any) -> PolicyEvalInfo:
     for key in result["evaluated_fields"]:
         _text(key, "evaluated field")
     if result["matched_rule_id"] is None and result["evaluated_fields"]:
-        raise AllowlyProtocolError("default result must have empty evaluated_fields")
+        raise AllowlyProtocolError("action-level result must have empty evaluated_fields")
     return PolicyEvalInfo(input_sha256=digest, result=ProvisionalPolicyResult(**result))
 
 

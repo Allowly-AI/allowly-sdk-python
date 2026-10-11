@@ -88,7 +88,7 @@ definition: PolicyDefinition = {
     "actions": [{
         "policy": {
             "profile": "allowly.basic.v1", "action": "web.search",
-            "default_decision": "allow", "default_target": None,
+            "decision": "allow", "target": None,
             "fields": {"risk": "integer"},
             "rules": [{"id": "review-high-risk", "decision": "confirm",
                        "target": "agent_owner",
@@ -116,8 +116,17 @@ async with Allowly(api_key=ALLOWLY_SETUP_KEY) as setup:
 
 The complete definition and `policy_ref` keep their canonical snake_case JSON
 fields, ordered rules, and exact executable grants. Conditions use `eq`, `ne`,
-`gt`, `gte`, `lt`, `lte`, `in`, `not_in`, or `exists`. Declared comparison types
-are strict; integers must be safe JSON integers, not floats or booleans.
+`gt`, `gte`, `lt`, `lte`, `in`, `not_in`, `exists`, `contains_any`,
+`contains_none`, or `empty`. A rule matches if any condition matches (OR).
+Valid comparisons use fixed priority: deny, escalate, confirm, then allow.
+Rules cannot weaken the action decision. Action deny always wins. Otherwise,
+a matching rule wins a tie with the action; the first matching rule wins ties
+between rules. If no rule matches, the action decision stays unchanged.
+List fields support overlap with 1–64 scalar values, or
+`empty` with a strict boolean value.
+Declared comparison types are strict; integers must be safe JSON integers,
+not floats or booleans. List items may mix strings, integers, booleans, and null,
+but not nested arrays or objects.
 Allow/deny targets are null, confirm targets are `agent_owner`, and escalation
 targets are actual `member:<account_user_id>` values. Publishing checks agent
 ownership, setup provenance, current membership, and executable catalog bindings

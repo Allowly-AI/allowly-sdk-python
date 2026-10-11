@@ -54,10 +54,17 @@ def invalid_definitions():
     add("guard_bool", lambda d: d["actions"][0]["guards"].update(max_per_day=True))
     add("guard_unknown", lambda d: d["actions"][0]["guards"].update(confirmation=True))
     add("guard_duplicate_initiator", lambda d: d["actions"][0]["guards"].update(allowed_initiators=["a", "a"]))
-    add("default_bad_target", lambda d: d["actions"][0]["policy"].update(default_decision="allow", default_target="agent_owner"))
-    add("confirm_team_target", lambda d: d["actions"][0]["policy"].update(default_decision="confirm", default_target="team:legal"))
-    add("escalate_unknown_target", lambda d: d["actions"][0]["policy"].update(default_decision="escalate", default_target="team:legal"))
-    add("escalate_empty_member", lambda d: d["actions"][0]["policy"].update(default_decision="escalate", default_target="member: "))
+    add("action_bad_target", lambda d: d["actions"][0]["policy"].update(decision="allow", target="agent_owner"))
+    add("deny_target", lambda d: d["actions"][0]["policy"].update(decision="deny", target="agent_owner"))
+    add("confirm_team_target", lambda d: d["actions"][0]["policy"].update(decision="confirm", target="team:legal"))
+    add("confirm_null_target", lambda d: d["actions"][0]["policy"].update(decision="confirm", target=None))
+    add("escalate_unknown_target", lambda d: d["actions"][0]["policy"].update(decision="escalate", target="team:legal"))
+    add("escalate_empty_member", lambda d: d["actions"][0]["policy"].update(decision="escalate", target="member: "))
+    add("escalate_null_target", lambda d: d["actions"][0]["policy"].update(decision="escalate", target=None))
+    add("missing_action_decision", lambda d: d["actions"][0]["policy"].pop("decision"))
+    add("missing_action_target", lambda d: d["actions"][0]["policy"].pop("target"))
+    add("legacy_default_decision", lambda d: d["actions"][0]["policy"].update(default_decision="allow"))
+    add("legacy_default_target", lambda d: d["actions"][0]["policy"].update(default_target=None))
     add("undeclared_field", lambda d: d["actions"][0]["policy"]["rules"][0]["conditions"][0].update(field="absent"))
     add("old_neq_operator", lambda d: d["actions"][0]["policy"]["rules"][0]["conditions"][0].update(op="neq"))
     add("bool_integer", lambda d: d["actions"][0]["policy"]["rules"][0]["conditions"][0].update(value=True))
@@ -76,6 +83,87 @@ def invalid_definitions():
 def test_strict_authoring_rejects_legacy_or_invalid_definitions(value):
     with pytest.raises(AllowlyProtocolError):
         validate_policy_definition(value)
+
+
+def test_legacy_default_fields_cannot_replace_action_decision_and_target():
+    value = definition()
+    policy = value["actions"][0]["policy"]
+    policy["default_decision"] = policy.pop("decision")
+    policy["default_target"] = policy.pop("target")
+    with pytest.raises(AllowlyProtocolError):
+        validate_policy_definition(value)
+
+
+@pytest.mark.parametrize("decision,target", [
+    ("allow", None), ("deny", None), ("confirm", "agent_owner"), ("escalate", "member:reviewer"),
+])
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_and_list_retain_the_action_decision_and_target(decision, target):
+    value = definition()
+    value["actions"][0]["policy"].update(decision=decision, target=target)
+    response = policy_response(value)
+    respx.get(BASE + "/v1/policies/review").mock(return_value=httpx.Response(200, json=response))
+    respx.get(BASE + "/v1/policies").mock(return_value=httpx.Response(200, json={"items": [response], "has_more": False}))
+    async with Allowly("setup-key", base_url=BASE) as client:
+        assert (await client.policies.get("review")).definition == value
+        assert (await client.policies.list()).items[0].definition == value
+
+
+@pytest.mark.parametrize("op,compared", [
+    ("contains_any", ["sensitive", 1, True, None]),
+    ("contains_none", ["external"]),
+    ("contains_any", list(range(64))),
+    ("empty", True), ("empty", False), ("exists", True), ("exists", False),
+])
+def test_list_conditions_keep_exact_scalar_operands(op, compared):
+    value = definition()
+    policy = value["actions"][0]["policy"]
+    policy["fields"]["tags"] = "list"
+    policy["rules"][0]["conditions"] = [{"field": "tags", "op": op, "value": compared}]
+    normalized = validate_policy_definition(value)
+    assert normalized == value and normalized is not value
+    restored = normalized["actions"][0]["policy"]["rules"][0]["conditions"][0]["value"]
+    if type(compared) is list:
+        assert [type(item) for item in restored] == [type(item) for item in compared]
+
+
+@pytest.mark.parametrize("declared,op,compared", [
+    ("list", "contains_any", []), ("list", "contains_none", []),
+    ("list", "contains_any", list(range(65))),
+    ("list", "contains_any", "sensitive"),
+    ("list", "contains_any", [["sensitive"]]), ("list", "contains_none", [{"tag": "sensitive"}]),
+    ("list", "contains_any", [1.5]), ("list", "contains_any", [2**53]),
+    ("list", "contains_none", [float("nan")]),
+    ("list", "empty", 1), ("list", "empty", "true"), ("list", "empty", None),
+    ("list", "eq", []), ("list", "ne", "sensitive"), ("list", "gt", 1),
+    ("list", "in", []), ("list", "not_in", []),
+    ("string", "contains_any", ["sensitive"]), ("integer", "contains_none", [1]),
+    ("boolean", "empty", True), ("null", "empty", False),
+    ("array", "contains_any", ["sensitive"]),
+])
+def test_list_conditions_reject_wrong_types_shapes_and_scalar_operators(declared, op, compared):
+    value = definition()
+    policy = value["actions"][0]["policy"]
+    policy["fields"]["tags"] = declared
+    policy["rules"][0]["conditions"] = [{"field": "tags", "op": op, "value": compared}]
+    with pytest.raises(AllowlyProtocolError):
+        validate_policy_definition(value)
+
+
+@pytest.mark.parametrize("declared,op,compared", [
+    ("string", "eq", "internal"), ("string", "ne", "external"),
+    ("integer", "gt", -1), ("integer", "gte", 0), ("integer", "lt", 1), ("integer", "lte", 2**53 - 1),
+    ("boolean", "eq", True), ("null", "eq", None),
+    ("string", "in", ["internal"]), ("integer", "not_in", [0]),
+    ("boolean", "in", []), ("null", "not_in", []),
+])
+def test_scalar_comparisons_remain_strict_and_supported(declared, op, compared):
+    value = definition()
+    policy = value["actions"][0]["policy"]
+    policy["fields"]["scalar"] = declared
+    policy["rules"][0]["conditions"] = [{"field": "scalar", "op": op, "value": compared}]
+    assert validate_policy_definition(value) == value
 
 
 @pytest.mark.parametrize("version", [True, False, 0, -1, 1.0, 2**53, "1", None])
@@ -243,8 +331,10 @@ async def test_create_binds_response_to_sent_snapshot_when_caller_changes_defini
     value = definition()
     original = copy.deepcopy(value)
     def during_request(request):
-        value["actions"][0]["policy"]["default_decision"] = "allow"
+        policy = value["actions"][0]["policy"]
+        policy.update(decision="deny" if policy["decision"] == "allow" else "allow", target=None)
         return httpx.Response(201, json=policy_response(original))
     respx.post(BASE + "/v1/policies").mock(side_effect=during_request)
     async with Allowly("setup-key", base_url=BASE) as client:
         assert (await client.policies.create(policy_id="review", definition=value)).definition == original
+    assert value != original

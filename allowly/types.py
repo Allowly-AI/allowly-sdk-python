@@ -320,11 +320,13 @@ class PolicyReference(TypedDict):
 
 class BasicCondition(TypedDict):
     field: str
-    op: Literal["eq", "ne", "gt", "gte", "lt", "lte", "in", "not_in", "exists"]
+    op: Literal["eq", "ne", "gt", "gte", "lt", "lte", "in", "not_in", "exists", "contains_any", "contains_none", "empty"]
     value: str | int | bool | None | list[str | int | bool | None]
 
 
 class BasicRule(TypedDict):
+    """A rule matches when at least one condition matches (OR)."""
+
     id: str
     decision: Decision
     target: str | None
@@ -332,11 +334,13 @@ class BasicRule(TypedDict):
 
 
 class BasicPolicy(TypedDict):
+    """An action decision with rules that may strengthen, but not weaken, it."""
+
     profile: Literal["allowly.basic.v1"]
     action: str
-    default_decision: Decision
-    default_target: str | None
-    fields: dict[str, Literal["string", "integer", "boolean", "null"]]
+    decision: Decision
+    target: str | None
+    fields: dict[str, Literal["string", "integer", "boolean", "null", "list"]]
     rules: list[BasicRule]
 
 

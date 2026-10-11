@@ -435,7 +435,7 @@ async def test_policy_authoring_keeps_exact_executable_grant():
     definition = {
         "profile": "allowly.policy.v1", "agent_id": "a1", "default_expiry_days": None,
         "actions": [{"policy": {"profile": "allowly.basic.v1", "action": "billing.refund",
-            "default_decision": "allow", "default_target": None, "fields": {}, "rules": []},
+            "decision": "allow", "target": None, "fields": {}, "rules": []},
             "guards": {}, "executable_operations": [{
                 "enabled_executable_id": "exe_1", "provider_id": "stripe", "operation_id": "stripe.refunds.create",
                 "catalog_revision": "r1", "definition_fingerprint": "sha256:" + "a" * 64,
