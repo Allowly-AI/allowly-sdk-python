@@ -12,7 +12,7 @@ from allowly.verify import decode_receipt
 from allowly.policies import validate_policy_definition, parse_policy_reference, parse_policy_evaluation, definition_digest
 
 BASE = "https://api.example.com"
-VECTORS = json.loads((Path(__file__).resolve().parents[2] / "allowly-receipt-format/vectors/policy/profile-v1.json").read_text())
+VECTORS = json.loads((Path(__file__).parent / "fixtures/policy-profile-v1.json").read_text())
 
 
 def definition():

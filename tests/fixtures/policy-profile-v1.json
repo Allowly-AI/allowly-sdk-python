@@ -1,0 +1,2660 @@
+{
+  "signature_cases": [
+    {
+      "name": "action_allow",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "integer"
+              },
+              "rules": []
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJhbGxvdyIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiIxNzcwYzZiMDE4Yzc0OGJmOTQ2NDYwYWNkZjgzZGQ4Yzg1OWUxYTM0N2E2NWZiZThhYTQ3MTY4YjEyNmQ0YmE5IiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiYWxsb3ciLCJldmFsdWF0ZWRfZmllbGRzIjp7fSwibWF0Y2hlZF9ydWxlX2lkIjpudWxsLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjpudWxsfX0sInBvbGljeV9yZWYiOnsiZGVmaW5pdGlvbl9zaGEyNTYiOiJkOWYwZWUyYzlhNmViMTJiMzAyY2RmZjJjODQ4NzI2ZjhhMWFiZWEzMWY2M2EzMjE2NTJiNmYyNzgyY2Q5MGJhIiwicG9saWN5X2lkIjoicG9sX2ZpeHR1cmUiLCJwb2xpY3lfdmVyc2lvbiI6MX0sInJlYXNvbiI6InBvbGljeV9ydWxlX21hdGNoZWQiLCJyZWNlaXB0X2lkIjoicmNwX2FjdGlvbl9hbGxvdyIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "I7oysTh1CKZtWwv349JyOhnmb732tr6BHlkjcJUpzp5U2lU1WiU9oQh6Ar5xvyCs-Xl6PrO6ZD487jNS1N6CAg"
+      }
+    },
+    {
+      "name": "rule_deny",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "integer"
+              },
+              "rules": [
+                {
+                  "id": "risk-rule",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjczZWJmZGUxZWViZDYyODA2ZTZjNTk4ZTVkYzE4ZWZkMDdmZDIzNTNiZWU4ODY2YWIzOGM3YmE4MGM2NWMwYmUiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJyaXNrIjoyfSwibWF0Y2hlZF9ydWxlX2lkIjoicmlzay1ydWxlIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiYTNjY2I0NWQyMGEyNTI5MmQzZDFhOWYwNGY1Y2FiMzEyN2UzMGYxY2E2YjgzYTM2NTY3MjAyNDA0MzFlMDdiZCIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9ydWxlX2RlbnkiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "F95XCx3OOSHG4JnIfid64tHmkaVFXikwr3N5nVqA3z3CXzPD4KGx5y7go_QDV92n5Q2if5e3je1iFx8OQkOnDA"
+      }
+    },
+    {
+      "name": "rule_confirm",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "integer"
+              },
+              "rules": [
+                {
+                  "id": "risk-rule",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6ImJmNWI4YWNkZDQ2MjdiMGI4NWM0NmQzYmE2OTlhNDMzMTkxNmZlNDhjMmYzYWY4MWMxYjc2ODdjZTA4MGM1ODgiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJyaXNrIjoyfSwibWF0Y2hlZF9ydWxlX2lkIjoicmlzay1ydWxlIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6ImFnZW50X293bmVyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiYzUwMjA4MmZkMzgwNTVhMmQ4MjkyMjJiNWEyNTRiN2M4MjI5MzljMGU1MmViNzE5NWZjNzk1NThjMzk4ZDYzMCIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9ydWxlX2NvbmZpcm0iLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "2SbCrv8XnQuwkfXRGmarlzYECuf_pSLw1SK0p8fEElR2eInK8m7VQSBxHlspKz6D7wV5oxE-SBu92exDzR2kDA"
+      }
+    },
+    {
+      "name": "rule_escalate",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "integer"
+              },
+              "rules": [
+                {
+                  "id": "risk-rule",
+                  "decision": "escalate",
+                  "target": "member:reviewer",
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJlc2NhbGF0ZSIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI3NTQ5ZWU1NTU0YjZjN2VmOWE2NjU0YzRmMzRhZmQ2ZWQwZjhmYjg0MzRiYjFhZWZkZDk4ZDQyNjM1YzYxYjk0IiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiZXNjYWxhdGUiLCJldmFsdWF0ZWRfZmllbGRzIjp7InJpc2siOjJ9LCJtYXRjaGVkX3J1bGVfaWQiOiJyaXNrLXJ1bGUiLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjoibWVtYmVyOnJldmlld2VyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiYzc4NTM3YTk2NmE4OTUwOWFjM2I3YjlmNWJjZjUxZTQ1YWUzY2NlMDZmOWMwZGE3NTY5MzFkODY5Y2JjNzYyNCIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9ydWxlX2VzY2FsYXRlIiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "Xcnj9dses02O5o1IrvH196vW658v8A9NwDEvG7RqciXLjXZFrJr9CVe240lMd2-Y2ioa5FJB7GltyEicsHDyAg"
+      }
+    },
+    {
+      "name": "opa_allow_final_deny",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "integer"
+              },
+              "rules": []
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjE3NzBjNmIwMThjNzQ4YmY5NDY0NjBhY2RmODNkZDhjODU5ZTFhMzQ3YTY1ZmJlOGFhNDcxNjhiMTI2ZDRiYTkiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJhbGxvdyIsImV2YWx1YXRlZF9maWVsZHMiOnt9LCJtYXRjaGVkX3J1bGVfaWQiOm51bGwsInByb2ZpbGUiOiJhbGxvd2x5LmJhc2ljLnYxIiwic3RhdHVzIjoib2siLCJ0YXJnZXQiOm51bGx9fSwicG9saWN5X3JlZiI6eyJkZWZpbml0aW9uX3NoYTI1NiI6ImQ5ZjBlZTJjOWE2ZWIxMmIzMDJjZGZmMmM4NDg3MjZmOGExYWJlYTMxZjYzYTMyMTY1MmI2ZjI3ODJjZDkwYmEiLCJwb2xpY3lfaWQiOiJwb2xfZml4dHVyZSIsInBvbGljeV92ZXJzaW9uIjoxfSwicmVhc29uIjoiYnVkZ2V0X2V4Y2VlZGVkIiwicmVjZWlwdF9pZCI6InJjcF9vcGFfYWxsb3dfZmluYWxfZGVueSIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "w7bdFD6cx6iGLu3W2ROKOEvqSxlqAeOECqxIn2op-GwUncsNSbFWuUyz-iuG_OJsPXUf__ve01uj3C30od9pDQ"
+      }
+    },
+    {
+      "name": "priority_confirm_then_deny",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "integer"
+              },
+              "rules": [
+                {
+                  "id": "earlier-weaker-rule",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                },
+                {
+                  "id": "risk-rule",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6Ijg4M2I4OTliMzJmZWQxMzQzNTAzYmZhYTQyNjY0OGIwMjcxZWIyM2EwMWI0NDI4Y2U5YjZiNGIzYzI5Y2U5N2EiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJyaXNrIjoyfSwibWF0Y2hlZF9ydWxlX2lkIjoicmlzay1ydWxlIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiNGNlODFkNjdkNDU4ZTcyMjkxMjIxYmU3NTBjNTE0NTEzOTQyZTI2ZWMxYTY5OGJlYzZhYTE4MzMxMDk5NWQwMSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9wcmlvcml0eV9jb25maXJtX3RoZW5fZGVueSIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "v_mNrVtpRBF4zdAqhdIiyWMAB6FkvaRWnZFnJy0flkZfVsOSvUVlzjL0sfLa5IuYvOI9ToT72rxc01ob558tAw"
+      }
+    },
+    {
+      "name": "priority_escalate_then_deny",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "integer"
+              },
+              "rules": [
+                {
+                  "id": "earlier-weaker-rule",
+                  "decision": "escalate",
+                  "target": "member:earlier-reviewer",
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                },
+                {
+                  "id": "risk-rule",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6ImFhOWVlYTEyYjk3YWNmMTE4N2JmMDRiOTk3OTA1NGU2ZjY5OTI0ZDEyMzRlNTZiM2JkNDZjOTA4NWQ2OWZhNjIiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJyaXNrIjoyfSwibWF0Y2hlZF9ydWxlX2lkIjoicmlzay1ydWxlIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiZWE0ZWIzNDZkZjhkMDVmNWM2MzU4MzVkOWIwMTU0ZmQ4NDkwNDZiMDZkN2I3YmJhY2ZhYjcxYTY5OTk0YTcwMSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9wcmlvcml0eV9lc2NhbGF0ZV90aGVuX2RlbnkiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "vXqMg5Y9bNNAiDTr8y-nTVTLoK0vnIGm0QZLoh-hfQDse0K2dpmaQGGLEvd8f3LWmxsRQnTlmY4ETGFE7-ZPAQ"
+      }
+    },
+    {
+      "name": "priority_confirm_then_escalate",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "integer"
+              },
+              "rules": [
+                {
+                  "id": "earlier-weaker-rule",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                },
+                {
+                  "id": "risk-rule",
+                  "decision": "escalate",
+                  "target": "member:reviewer",
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJlc2NhbGF0ZSIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiIwNGIwZmIxN2Y2M2Q3Nzc5N2IxNmU3OWFiYzEyNGRkNTk2MTc4YjFkMjAxNzlhN2Y5ZDJlYWY4Nzg1ZGU1NzAwIiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiZXNjYWxhdGUiLCJldmFsdWF0ZWRfZmllbGRzIjp7InJpc2siOjJ9LCJtYXRjaGVkX3J1bGVfaWQiOiJyaXNrLXJ1bGUiLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjoibWVtYmVyOnJldmlld2VyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiNjY2YjhkZjQ1OTM0YWY0NjZiYmU3NDRmOWQ2OTEzZDQ5NzljZTY2Y2IyNTY2YmEyYjU0YWVhZWFmYTU3NDBmNyIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9wcmlvcml0eV9jb25maXJtX3RoZW5fZXNjYWxhdGUiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "gwQNWSftHmy4mkF4pmci7NYL5fBKRkEuIXv15yP0e3TzT3znWrzR36a-sSZwQDyXT9gUQYzaidNoBXXQ5mqYDA"
+      }
+    },
+    {
+      "name": "priority_allow_then_deny",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "integer"
+              },
+              "rules": [
+                {
+                  "id": "earlier-weaker-rule",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                },
+                {
+                  "id": "risk-rule",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjBkYzMzNzI3OTRkZjIzODg2N2U5OGY1Yjk4Yzc1ZjQ2ODMwNTVmMjk1M2MzY2Q5OTQzYmY4YjE4MTE0YTRiMDkiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJyaXNrIjoyfSwibWF0Y2hlZF9ydWxlX2lkIjoicmlzay1ydWxlIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiZTE0YjkxMjcyYzQzZTE2YjA5NjFlMTI2MTQ5MjhhMDkwYjcyMzVlNDBkNDA4ZTQzYmI5Mjc5OTllNTA5ZjMyNCIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9wcmlvcml0eV9hbGxvd190aGVuX2RlbnkiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "J_uvH1diOBCy-1Wvx9nxo24ZJxeLuAsTidImPP5wv1sVlRRQ_u0ngmZDqQjT1ZVcrYbSb8PhUaU_krAeGL8YDw"
+      }
+    },
+    {
+      "name": "priority_allow_then_escalate",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "integer"
+              },
+              "rules": [
+                {
+                  "id": "earlier-weaker-rule",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                },
+                {
+                  "id": "risk-rule",
+                  "decision": "escalate",
+                  "target": "member:reviewer",
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJlc2NhbGF0ZSIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI3NDg4ZTZhNWQ3MzljYTkzMDVhNTZhYmRiNjBlZGMyMmMxNDJmZWEzMTcwYmMxMDdhYjkwODFhOTA1NmU2MTdjIiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiZXNjYWxhdGUiLCJldmFsdWF0ZWRfZmllbGRzIjp7InJpc2siOjJ9LCJtYXRjaGVkX3J1bGVfaWQiOiJyaXNrLXJ1bGUiLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjoibWVtYmVyOnJldmlld2VyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiYTUxNWEzYTY4ZGI1YTQ0YjMwYzQ3N2YyOGJkYWVlOWQ0ZDUxNzc5YTYxYjY1OTA3YzY4MWQyYjJlODM0ZTM1ZiIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9wcmlvcml0eV9hbGxvd190aGVuX2VzY2FsYXRlIiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "KptZzXqU8ONP-1q1tR63K8Br8tCufDoXRTb9swEKfHN4H0VF84b0CeA6XPVYtzKP9ajU-SHiFaUi9Y7f5PpeAQ"
+      }
+    },
+    {
+      "name": "priority_allow_then_confirm",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "integer"
+              },
+              "rules": [
+                {
+                  "id": "earlier-weaker-rule",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                },
+                {
+                  "id": "risk-rule",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "gte",
+                      "value": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjU3MzE4MjEzMTM3MTJkNWJlNjY2MmZjODYzNWE2ZDA1MTg0MjFiMjI0NzdkMTBlNmMyZDgxMjcwMWE4ZjAzODUiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJyaXNrIjoyfSwibWF0Y2hlZF9ydWxlX2lkIjoicmlzay1ydWxlIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6ImFnZW50X293bmVyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiNmJkOTY1NTE1NTk5MzE3M2U3ZTUwZDgxMjcxZGQwYzJlMGUwZjRmZWQ5N2YyYTk3NmNkNjM2MDQzN2NmMWNjZSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9wcmlvcml0eV9hbGxvd190aGVuX2NvbmZpcm0iLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "1--Erb8hEj8w0ThCe2UNMEa4obwmRk3MdJGFHDeAvO5CUzUlsuEEzpFJjZlz7VkCaxuVsELMRx69BscLUbq0CQ"
+      }
+    },
+    {
+      "name": "missing_exists",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "null"
+              },
+              "rules": [
+                {
+                  "id": "risk-rule",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "exists",
+                      "value": false
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6ImY1ZTEzY2QzZDVjOGVjZGFhNDllN2FmNjk4NjQ4ZDRkZTBlMzcyYmQ1OGFlY2VlZjRkZGFlZDcxNTM1Y2FjYjIiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6e30sIm1hdGNoZWRfcnVsZV9pZCI6InJpc2stcnVsZSIsInByb2ZpbGUiOiJhbGxvd2x5LmJhc2ljLnYxIiwic3RhdHVzIjoib2siLCJ0YXJnZXQiOiJhZ2VudF9vd25lciJ9fSwicG9saWN5X3JlZiI6eyJkZWZpbml0aW9uX3NoYTI1NiI6IjIyYzg3ZTRmN2ZjYjZhYTRhZDU4NGVlYjdlODIwZGE5MTU5YWVlMzFlMTYwZGJhZDhhNzc0ODIyODY3MDllMTMiLCJwb2xpY3lfaWQiOiJwb2xfZml4dHVyZSIsInBvbGljeV92ZXJzaW9uIjoxfSwicmVhc29uIjoicG9saWN5X3J1bGVfbWF0Y2hlZCIsInJlY2VpcHRfaWQiOiJyY3BfbWlzc2luZ19leGlzdHMiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "D1gdJYpwTRw6ohcU3MR7MnKJFBclgW0uiLrqID50Zmz5arjknT1OzvHP5qkhkGsaWg98FomwelJ5AZvTAMqrCg"
+      }
+    },
+    {
+      "name": "null_exists",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "risk": "null"
+              },
+              "rules": [
+                {
+                  "id": "risk-rule",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "risk",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjU5NDg2NjgyZTQ5YmY0NWM5YmUwMmZlYTZhMGIyNTdkMWQ1MWUzN2Y4ODNlYzE2MGIxMDRkM2UwM2Y4YmQ3MWUiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJyaXNrIjpudWxsfSwibWF0Y2hlZF9ydWxlX2lkIjoicmlzay1ydWxlIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6ImFnZW50X293bmVyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiODk2YmIwNmZiOWEwMTZlZTE4MGU0NWE2MWI5NjAwODIyYzNjNTAwMDRjMDMxMDU2ZWFhMTA3ZjdlMjhjNGY3ZCIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9udWxsX2V4aXN0cyIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "Qz4gijV1lt_JE0iq8M9xEFN_ccZfkEhrbCraeGTeS0oFPbXghdToPuJFNDjdQjMIwWy19fqVpqdiYxrNVDIAAw"
+      }
+    },
+    {
+      "name": "list_any_bool_not_int",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        true
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJhbGxvdyIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI1Y2Y0YWUzYTU5YzVjMWFiODlmMTFkNmM0MmRlMmE5ZTlmZjA4ZWE2ZDcwMTJhYjQ1MGM5NGJhNTZjNWYxNjQ3IiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiYWxsb3ciLCJldmFsdWF0ZWRfZmllbGRzIjp7Iml0ZW1zIjpbMV19LCJtYXRjaGVkX3J1bGVfaWQiOiJlYXJsaWVyLWFsbG93IiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiNmM4YjYwMTFmZGIxYTRmYWNjMmZmOTkxN2RlNDA5NDYxNjFkNTE3MTZkNGFhNjk1YWMzMmQwMWRjNTIzMDIwOSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9saXN0X2FueV9ib29sX25vdF9pbnQiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "UeI8JEVPQJRVsQc3kLWhBilwCqvXgfcO-hWUPtahd-X9dpaZ7B4p0AnexbbHM2mZoPFvGrtcEB4WwbpTdhjgCw"
+      }
+    },
+    {
+      "name": "list_any_null",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjgzMmU1ZDgzMTNjODFmNTI1MzU3YTBjOWY5OWJmZDNlMDA4YjIwZWM5MTg1OWQxYTFlOWM2OGJkMjQ4NzAxMDAiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJpdGVtcyI6W251bGwsMSx0cnVlLCIxIixudWxsXX0sIm1hdGNoZWRfcnVsZV9pZCI6Imxpc3QtZGVueSIsInByb2ZpbGUiOiJhbGxvd2x5LmJhc2ljLnYxIiwic3RhdHVzIjoib2siLCJ0YXJnZXQiOm51bGx9fSwicG9saWN5X3JlZiI6eyJkZWZpbml0aW9uX3NoYTI1NiI6Ijk2NTQxNjY2M2U0ODc4MWRkOWJmYTUwYzkzZjZkMWMzNGJkOWQ2MjIwYjJiY2U1MGVhYjU5YzM3N2IwM2NiNzUiLCJwb2xpY3lfaWQiOiJwb2xfZml4dHVyZSIsInBvbGljeV92ZXJzaW9uIjoxfSwicmVhc29uIjoicG9saWN5X3J1bGVfbWF0Y2hlZCIsInJlY2VpcHRfaWQiOiJyY3BfbGlzdF9hbnlfbnVsbCIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "tRsnirkNiuz-sNxO9gK-CkKtIIsr3boVGuPRVnjxKG4QwiwATOyh23o_YsqsKOrf0OK3fv7GySPjW_swdFDMDQ"
+      }
+    },
+    {
+      "name": "list_any_empty",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJhbGxvdyIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI4M2JiMGJhODEwYWJhOTc0OWMzMmUwMTRjNmE5ODFlMmMzM2VhZmMwNTkwYzU1N2QwZDM0YTBiM2JhYjJjYzM2IiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiYWxsb3ciLCJldmFsdWF0ZWRfZmllbGRzIjp7Iml0ZW1zIjpbXX0sIm1hdGNoZWRfcnVsZV9pZCI6ImVhcmxpZXItYWxsb3ciLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjpudWxsfX0sInBvbGljeV9yZWYiOnsiZGVmaW5pdGlvbl9zaGEyNTYiOiI5NjU0MTY2NjNlNDg3ODFkZDliZmE1MGM5M2Y2ZDFjMzRiZDlkNjIyMGIyYmNlNTBlYWI1OWMzNzdiMDNjYjc1IiwicG9saWN5X2lkIjoicG9sX2ZpeHR1cmUiLCJwb2xpY3lfdmVyc2lvbiI6MX0sInJlYXNvbiI6InBvbGljeV9ydWxlX21hdGNoZWQiLCJyZWNlaXB0X2lkIjoicmNwX2xpc3RfYW55X2VtcHR5IiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "9w6-KqO0A5YYsWPvMTnC_V4I479xdwcjceg7vJHZ-ZhDUDF4GVaqwe_USOLSYGMin9OnlVBmcPMKhI4y4_d1Dw"
+      }
+    },
+    {
+      "name": "list_any_mixed_reordered",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        "x",
+                        1,
+                        true,
+                        null
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjQ5N2VlYjIxMTRiOThjODVkOTk3MTJjODNhYmEwYmQ0YjM5YjE3YTBkOTVmZDE5Y2NjNjUyZDgyMGU5ZDVlYzciLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJpdGVtcyI6W251bGwsdHJ1ZSwxLCJ4IiwieCJdfSwibWF0Y2hlZF9ydWxlX2lkIjoibGlzdC1kZW55IiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiOTk2ZTZkODk0YjNjM2YxYWNlOGUzODc0YTVlZmJmOGFiMGI4NDVlMTJlOGU0ZDJmODg5Zjk3NDQ0ZTM2ZWZlZSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9saXN0X2FueV9taXhlZF9yZW9yZGVyZWQiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "AUYXwOwNKbUap42AOOP2K3mo0VNBYx2Bj-qe70-mVzaf9iX8C7I3SsdhUAWaI3s7k_ao1bG5SkxvxJkQIZrmDw"
+      }
+    },
+    {
+      "name": "list_none_bool_not_int",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_none",
+                      "value": [
+                        true
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjBkMTI2NTE2YjBiM2Q2MDc0MTVmMzA0OWQzMmIwOGNkODkwNzgwOWZkMDI5ZTZmZmQ5MDQ2ZTM3NjRjMTg2YzIiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJpdGVtcyI6WzEsIjEiXX0sIm1hdGNoZWRfcnVsZV9pZCI6Imxpc3QtZGVueSIsInByb2ZpbGUiOiJhbGxvd2x5LmJhc2ljLnYxIiwic3RhdHVzIjoib2siLCJ0YXJnZXQiOm51bGx9fSwicG9saWN5X3JlZiI6eyJkZWZpbml0aW9uX3NoYTI1NiI6Ijc4MWZjYTUxYzJjZjkwMDg0MmIxZWQyNDVjZDIwNmZmYzg1ZGNjYmY1ZTZhYWZiYjUzMTVmMTljOTE2YzJmOGQiLCJwb2xpY3lfaWQiOiJwb2xfZml4dHVyZSIsInBvbGljeV92ZXJzaW9uIjoxfSwicmVhc29uIjoicG9saWN5X3J1bGVfbWF0Y2hlZCIsInJlY2VpcHRfaWQiOiJyY3BfbGlzdF9ub25lX2Jvb2xfbm90X2ludCIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "2RJAYF92yAyZIF6xYGRgv58esUD6TU0b2Ac6vKLgy_Z497hhp1R_RcF8T6kk8drah_41y_xDWsMb-1U16eZCCw"
+      }
+    },
+    {
+      "name": "list_none_null",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_none",
+                      "value": [
+                        null
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJhbGxvdyIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiJiOGNmMjRkY2M4Yzg1ZTE0M2I5ZmI5NzgyMTBmMWQzNDkyNTAxODEwMWNmMzg2NzJhZmM2YTA0NDAzNDdkOWEyIiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiYWxsb3ciLCJldmFsdWF0ZWRfZmllbGRzIjp7Iml0ZW1zIjpbZmFsc2UsbnVsbCxudWxsXX0sIm1hdGNoZWRfcnVsZV9pZCI6ImVhcmxpZXItYWxsb3ciLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjpudWxsfX0sInBvbGljeV9yZWYiOnsiZGVmaW5pdGlvbl9zaGEyNTYiOiJhYTAxMWI0OGUyOWNiY2JiZThlNWJiZDdjZjI2NGJjYjU2YmM0NTI4YTY5MTZjYWFhZDIyN2M2NzQzMGNjOGZhIiwicG9saWN5X2lkIjoicG9sX2ZpeHR1cmUiLCJwb2xpY3lfdmVyc2lvbiI6MX0sInJlYXNvbiI6InBvbGljeV9ydWxlX21hdGNoZWQiLCJyZWNlaXB0X2lkIjoicmNwX2xpc3Rfbm9uZV9udWxsIiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "lNGM-fryGLghxN0pb9xkJm-tzp9ktHirlPJ5JfYsJKYEaV11lz6AYLrvcP7UsSpEbPDYy1AO4gm2ionEHEyEAw"
+      }
+    },
+    {
+      "name": "list_none_empty",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_none",
+                      "value": [
+                        null
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6ImExMDAwYzE5YWZmNTkzZWE0M2QwZGNlMDMzODM3MmEzNzVmM2E1ZTNhMTc5ZTQ2MzM3OTIyNTNjZDU3Mzc1MzUiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJpdGVtcyI6W119LCJtYXRjaGVkX3J1bGVfaWQiOiJsaXN0LWRlbnkiLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjpudWxsfX0sInBvbGljeV9yZWYiOnsiZGVmaW5pdGlvbl9zaGEyNTYiOiJhYTAxMWI0OGUyOWNiY2JiZThlNWJiZDdjZjI2NGJjYjU2YmM0NTI4YTY5MTZjYWFhZDIyN2M2NzQzMGNjOGZhIiwicG9saWN5X2lkIjoicG9sX2ZpeHR1cmUiLCJwb2xpY3lfdmVyc2lvbiI6MX0sInJlYXNvbiI6InBvbGljeV9ydWxlX21hdGNoZWQiLCJyZWNlaXB0X2lkIjoicmNwX2xpc3Rfbm9uZV9lbXB0eSIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "qaZGsijusVLlTo4c-QjtencLrfnMzDM8AjroxAVOk9N7IadV1UE92k3VjL340wkrM72kBMu5euHvnmMskXYhDg"
+      }
+    },
+    {
+      "name": "list_none_duplicates",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_none",
+                      "value": [
+                        "x",
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJhbGxvdyIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI5OTVlMGZkYjU5ZmEyMThlOTE3MDEyYzExMDE3YmViODJiZDdlMWZlNTBiN2VjZDI4MWEyMTU5ZjhlZmVhNGNkIiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiYWxsb3ciLCJldmFsdWF0ZWRfZmllbGRzIjp7Iml0ZW1zIjpbIngiLCJ4Il19LCJtYXRjaGVkX3J1bGVfaWQiOiJlYXJsaWVyLWFsbG93IiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiMDBjMzk5YWIyMDNmYTAwNWYxOTZhZjNiYjBjMGI2NDg5MGNjNDEzZjE0NGE1N2FlNDFkNmY0OTJiNWMyODUwZSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9saXN0X25vbmVfZHVwbGljYXRlcyIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "L2DAHt065NtUm8Z2jG9PQ3c6zjK_UozqmVx5ud7pkCxZ91bojiOthH26Uf569s07RQHx5TCjW_PLLBEcD5YfDA"
+      }
+    },
+    {
+      "name": "list_empty_true",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "empty",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6ImI3NTBiNzE1ZGUxYmRkZGE1YWMxY2VmZDk4NGJlNGM3MzNjMjVjODlhYzA4YjVlODFlZTE1ODcwMjFiODNlY2IiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJpdGVtcyI6W119LCJtYXRjaGVkX3J1bGVfaWQiOiJsaXN0LWRlbnkiLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjpudWxsfX0sInBvbGljeV9yZWYiOnsiZGVmaW5pdGlvbl9zaGEyNTYiOiI0N2RlYjBmZGUyMTk0MDczYmJlMWU0NjlkZGVmMmUxMTMwZDk0ZjMxNjNiNGIzYjZmYzgxMjEwYjAyM2EwNWM2IiwicG9saWN5X2lkIjoicG9sX2ZpeHR1cmUiLCJwb2xpY3lfdmVyc2lvbiI6MX0sInJlYXNvbiI6InBvbGljeV9ydWxlX21hdGNoZWQiLCJyZWNlaXB0X2lkIjoicmNwX2xpc3RfZW1wdHlfdHJ1ZSIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "mdjkjQzTw0scRs5C7m3TM3Mk0CHN9gijIv8fJUf8LkE_Co5yhdp3RMF6CvTdGEcmDqmdNgeb-1SWH5E6BvdCCQ"
+      }
+    },
+    {
+      "name": "list_empty_true_nonempty",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "empty",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJhbGxvdyIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiJhZGU3YWUxMDQ4ZGRiMjFiZmRlMmI2NTEyZWI1MTQ5YTc4YTczMWExMDQ5YTg3ZTI5NDFjODZhYjUyMGZiMGViIiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiYWxsb3ciLCJldmFsdWF0ZWRfZmllbGRzIjp7Iml0ZW1zIjpbbnVsbF19LCJtYXRjaGVkX3J1bGVfaWQiOiJlYXJsaWVyLWFsbG93IiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiNDdkZWIwZmRlMjE5NDA3M2JiZTFlNDY5ZGRlZjJlMTEzMGQ5NGYzMTYzYjRiM2I2ZmM4MTIxMGIwMjNhMDVjNiIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9saXN0X2VtcHR5X3RydWVfbm9uZW1wdHkiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "lXlm1rGfNgVyHp4shTzVz11knOtwdLR42f4zRZfvjkl_Gg4wDqhEXkJ6vTUEQJgHUMPn4R9h-7BjgNJHh4ecDw"
+      }
+    },
+    {
+      "name": "list_empty_false",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "empty",
+                      "value": false
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6ImI0NTVjZWE4YThhOTNmODMzZGMzZjA0NzZmZDQzMGU5YWNkOTQwZDQ1MWQ0MGU1OTEzNzBkNTQxYWQxNDViMjUiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJpdGVtcyI6WyJ4IiwwLGZhbHNlLG51bGxdfSwibWF0Y2hlZF9ydWxlX2lkIjoibGlzdC1kZW55IiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiNjdhYWNkYTNjOTRkODE2OTZhYWFhNDg3Y2M4NTM3MDdmNWZjMDA3MDdhZGExZTEzODdkNDA4ZmI1MDMzMTY4OCIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9saXN0X2VtcHR5X2ZhbHNlIiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "GOzKzP6eeaxL74La-2pxqmTd-aL8oUcJgmLsHmIeoAZqOfNiBEUrlExrYZVnYzjlPGH3AO-iNPYOuOUSlmSVDw"
+      }
+    },
+    {
+      "name": "list_empty_false_empty",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list"
+              },
+              "rules": [
+                {
+                  "id": "earlier-allow",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "exists",
+                      "value": true
+                    }
+                  ]
+                },
+                {
+                  "id": "list-deny",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "empty",
+                      "value": false
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJhbGxvdyIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiIxYmE1ZjAxZjg4NTI0NzI0ODdlNGJmMTFmNWZlMThiYjhlMDE2NmY2ZTMwMjM2MTA2NGJmMDk2NjA4MDc2MDI5IiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiYWxsb3ciLCJldmFsdWF0ZWRfZmllbGRzIjp7Iml0ZW1zIjpbXX0sIm1hdGNoZWRfcnVsZV9pZCI6ImVhcmxpZXItYWxsb3ciLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjpudWxsfX0sInBvbGljeV9yZWYiOnsiZGVmaW5pdGlvbl9zaGEyNTYiOiI2N2FhY2RhM2M5NGQ4MTY5NmFhYWE0ODdjYzg1MzcwN2Y1ZmMwMDcwN2FkYTFlMTM4N2Q0MDhmYjUwMzMxNjg4IiwicG9saWN5X2lkIjoicG9sX2ZpeHR1cmUiLCJwb2xpY3lfdmVyc2lvbiI6MX0sInJlYXNvbiI6InBvbGljeV9ydWxlX21hdGNoZWQiLCJyZWNlaXB0X2lkIjoicmNwX2xpc3RfZW1wdHlfZmFsc2VfZW1wdHkiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "pFc8jYse62G-38vMVx8Ic8G5NcSvl9Nz1KzT_g0dl2YX9QJRAB0mBNTUyIKSo6Q8R12rShGDxTgkUJ4xQb4QCg"
+      }
+    },
+    {
+      "name": "or_True_False_False",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "first": "boolean",
+                "second": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "or-review",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "first",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "second",
+                      "op": "eq",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjQ2ZjZhM2I4OGJjZjA1OTI0ZDgxNGQxY2Y0MjM1YTljZTkxZWJkYTkyMzZjYmY5YTkxMjJmYWU3YWRiN2MyMWIiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJmaXJzdCI6dHJ1ZSwic2Vjb25kIjpmYWxzZX0sIm1hdGNoZWRfcnVsZV9pZCI6Im9yLXJldmlldyIsInByb2ZpbGUiOiJhbGxvd2x5LmJhc2ljLnYxIiwic3RhdHVzIjoib2siLCJ0YXJnZXQiOiJhZ2VudF9vd25lciJ9fSwicG9saWN5X3JlZiI6eyJkZWZpbml0aW9uX3NoYTI1NiI6ImZiMjY1OTYxNTAxZTdkMGU3NzI4NGRjYmM0NTFlZmQ2OTU5OTMyZjI5MWVmMjBhOGQyNjEyN2Y1NjYwMzE3MzciLCJwb2xpY3lfaWQiOiJwb2xfZml4dHVyZSIsInBvbGljeV92ZXJzaW9uIjoxfSwicmVhc29uIjoicG9saWN5X3J1bGVfbWF0Y2hlZCIsInJlY2VpcHRfaWQiOiJyY3Bfb3JfVHJ1ZV9GYWxzZV9GYWxzZSIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "3GP14zTEXkHNgRZxFyvOlgcWVf7HWlM_FlsmYmTum4v-nW-Srs8G8qncXaw9mZK-iUxWnG-zmlMJUmYi2SxjAA"
+      }
+    },
+    {
+      "name": "or_True_False_True",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "first": "boolean",
+                "second": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "or-review",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "second",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "first",
+                      "op": "eq",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjdlNGFmZWNmOWIyNGFhYzEzMmZjYjAyMjgyNTAwZDBhNzQ3ZWU2NzRmMzdkODU4NTgzNWQwOTJhMWI1ZGIyNjEiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJmaXJzdCI6dHJ1ZSwic2Vjb25kIjpmYWxzZX0sIm1hdGNoZWRfcnVsZV9pZCI6Im9yLXJldmlldyIsInByb2ZpbGUiOiJhbGxvd2x5LmJhc2ljLnYxIiwic3RhdHVzIjoib2siLCJ0YXJnZXQiOiJhZ2VudF9vd25lciJ9fSwicG9saWN5X3JlZiI6eyJkZWZpbml0aW9uX3NoYTI1NiI6IjkyZDc0MTljMTQyZDRlMjZkMmYyNDdlOTBhNWM5OWFlMjgxOWY2OGJjMTFiMTkwNDNkNjdjZWFhNTA0YmFkMGUiLCJwb2xpY3lfaWQiOiJwb2xfZml4dHVyZSIsInBvbGljeV92ZXJzaW9uIjoxfSwicmVhc29uIjoicG9saWN5X3J1bGVfbWF0Y2hlZCIsInJlY2VpcHRfaWQiOiJyY3Bfb3JfVHJ1ZV9GYWxzZV9UcnVlIiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "kB4eRb5HG6_nhVGtdKI4NYirbAczah7gxUk_P1-YekLu-m3ycGBfKkM1-msYCz_YM5XFMn8vvGMTS29Jj7UEDw"
+      }
+    },
+    {
+      "name": "or_False_True_False",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "first": "boolean",
+                "second": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "or-review",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "first",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "second",
+                      "op": "eq",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6ImViODU2ZTQwMGVkZWJhOGVkOGM1MWJhODU4NjRjZjhiODYxY2NiM2Q1YmMzYjYzNjU4MmJmMGU3MGJlOWE5MGQiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJmaXJzdCI6ZmFsc2UsInNlY29uZCI6dHJ1ZX0sIm1hdGNoZWRfcnVsZV9pZCI6Im9yLXJldmlldyIsInByb2ZpbGUiOiJhbGxvd2x5LmJhc2ljLnYxIiwic3RhdHVzIjoib2siLCJ0YXJnZXQiOiJhZ2VudF9vd25lciJ9fSwicG9saWN5X3JlZiI6eyJkZWZpbml0aW9uX3NoYTI1NiI6ImZiMjY1OTYxNTAxZTdkMGU3NzI4NGRjYmM0NTFlZmQ2OTU5OTMyZjI5MWVmMjBhOGQyNjEyN2Y1NjYwMzE3MzciLCJwb2xpY3lfaWQiOiJwb2xfZml4dHVyZSIsInBvbGljeV92ZXJzaW9uIjoxfSwicmVhc29uIjoicG9saWN5X3J1bGVfbWF0Y2hlZCIsInJlY2VpcHRfaWQiOiJyY3Bfb3JfRmFsc2VfVHJ1ZV9GYWxzZSIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "DT07aOFJI4PDbOkc0yiRnwr9ZLoEm-cqjUseinf1Ycbu01qs-QmeI_ZtxwGhtB25tc-tnmxs3oVplNIWPmqYDg"
+      }
+    },
+    {
+      "name": "or_False_True_True",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "first": "boolean",
+                "second": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "or-review",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "second",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "first",
+                      "op": "eq",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6Ijc2NTZlZjlmMWNmNGM4MDFmZDBmNmIxYWY1OTE4YTA4Mzc1OGEzOTMxNjliZmFlZjIyYTc3MDFkM2M3Y2E1NDgiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJmaXJzdCI6ZmFsc2UsInNlY29uZCI6dHJ1ZX0sIm1hdGNoZWRfcnVsZV9pZCI6Im9yLXJldmlldyIsInByb2ZpbGUiOiJhbGxvd2x5LmJhc2ljLnYxIiwic3RhdHVzIjoib2siLCJ0YXJnZXQiOiJhZ2VudF9vd25lciJ9fSwicG9saWN5X3JlZiI6eyJkZWZpbml0aW9uX3NoYTI1NiI6IjkyZDc0MTljMTQyZDRlMjZkMmYyNDdlOTBhNWM5OWFlMjgxOWY2OGJjMTFiMTkwNDNkNjdjZWFhNTA0YmFkMGUiLCJwb2xpY3lfaWQiOiJwb2xfZml4dHVyZSIsInBvbGljeV92ZXJzaW9uIjoxfSwicmVhc29uIjoicG9saWN5X3J1bGVfbWF0Y2hlZCIsInJlY2VpcHRfaWQiOiJyY3Bfb3JfRmFsc2VfVHJ1ZV9UcnVlIiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "ezrgawoutkynsIBWDLR9UcG3zYEwYidkK5MVMQPJZRoh0ZWkfg94dYnByiP8F4c25_CKYkIAZHw0xxLEyItRDQ"
+      }
+    },
+    {
+      "name": "or_True_True_False",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "first": "boolean",
+                "second": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "or-review",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "first",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "second",
+                      "op": "eq",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjhlZWZjYzI3ZTliZDQyNmIwZmZlYWQ2MWExZDg4NjI1MzcwM2ZkZTQ0YTkxYjcwZTZjODJhNjgwMjI1ZDEyNzkiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJmaXJzdCI6dHJ1ZSwic2Vjb25kIjp0cnVlfSwibWF0Y2hlZF9ydWxlX2lkIjoib3ItcmV2aWV3IiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6ImFnZW50X293bmVyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiZmIyNjU5NjE1MDFlN2QwZTc3Mjg0ZGNiYzQ1MWVmZDY5NTk5MzJmMjkxZWYyMGE4ZDI2MTI3ZjU2NjAzMTczNyIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9vcl9UcnVlX1RydWVfRmFsc2UiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "7oDsI1zl1CVb20cI95iq21SSOkhwEHKZiBdhRUiZoA2Knz8482IaLYa7FCcqjr0fcOxL4WdvMoQfnTTGqbvDBQ"
+      }
+    },
+    {
+      "name": "or_True_True_True",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "first": "boolean",
+                "second": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "or-review",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "second",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "first",
+                      "op": "eq",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjhiZTZmYmY0MzQwNzAxYzBhYTY4NGZhMTk5YzgxOWE3NTNiMjZhNzYzYjEyNGI4ZjMwOGNkZDEzNmMwNDgzZGQiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJmaXJzdCI6dHJ1ZSwic2Vjb25kIjp0cnVlfSwibWF0Y2hlZF9ydWxlX2lkIjoib3ItcmV2aWV3IiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6ImFnZW50X293bmVyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiOTJkNzQxOWMxNDJkNGUyNmQyZjI0N2U5MGE1Yzk5YWUyODE5ZjY4YmMxMWIxOTA0M2Q2N2NlYWE1MDRiYWQwZSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9vcl9UcnVlX1RydWVfVHJ1ZSIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "HlbhI9ZdZVwMO1iIP4kBNHYrQPY_8AmTwAkdOV9RuVD-zy7D-fnbKSdDB9ZXuM4QIu6dAOwj38FzWcmMTtYTCg"
+      }
+    },
+    {
+      "name": "or_False_False_False",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "first": "boolean",
+                "second": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "or-review",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "first",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "second",
+                      "op": "eq",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJhbGxvdyIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI1OTFjMGQ2NGY5YjU0OGQzYWUzZDU5NDlhNjQ1ZWNiNWE3NDJjNjcwMGQ5ODY1MjJkOTkyODY4MTUxNGRiY2I5IiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiYWxsb3ciLCJldmFsdWF0ZWRfZmllbGRzIjp7fSwibWF0Y2hlZF9ydWxlX2lkIjpudWxsLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjpudWxsfX0sInBvbGljeV9yZWYiOnsiZGVmaW5pdGlvbl9zaGEyNTYiOiJmYjI2NTk2MTUwMWU3ZDBlNzcyODRkY2JjNDUxZWZkNjk1OTkzMmYyOTFlZjIwYThkMjYxMjdmNTY2MDMxNzM3IiwicG9saWN5X2lkIjoicG9sX2ZpeHR1cmUiLCJwb2xpY3lfdmVyc2lvbiI6MX0sInJlYXNvbiI6InBvbGljeV9ydWxlX21hdGNoZWQiLCJyZWNlaXB0X2lkIjoicmNwX29yX0ZhbHNlX0ZhbHNlX0ZhbHNlIiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "-XKbQg7b4IsQREojdAu8ddIlkLuuv6mWEVk2k__2vBeXtozGO_t4IdV3rn2LJPlX1ZuqDBA5IKernYA_UDU8Dw"
+      }
+    },
+    {
+      "name": "or_False_False_True",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "first": "boolean",
+                "second": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "or-review",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "second",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "first",
+                      "op": "eq",
+                      "value": true
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJhbGxvdyIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI5OTBmN2IzOWUwM2I3MDI4ZmMxYjg3ZjkyOTljMTk1YjNkNDlkNjAwZmY3YTgxOWM1NGZlZDBmOTVjNWY4ZmYyIiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiYWxsb3ciLCJldmFsdWF0ZWRfZmllbGRzIjp7fSwibWF0Y2hlZF9ydWxlX2lkIjpudWxsLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjpudWxsfX0sInBvbGljeV9yZWYiOnsiZGVmaW5pdGlvbl9zaGEyNTYiOiI5MmQ3NDE5YzE0MmQ0ZTI2ZDJmMjQ3ZTkwYTVjOTlhZTI4MTlmNjhiYzExYjE5MDQzZDY3Y2VhYTUwNGJhZDBlIiwicG9saWN5X2lkIjoicG9sX2ZpeHR1cmUiLCJwb2xpY3lfdmVyc2lvbiI6MX0sInJlYXNvbiI6InBvbGljeV9ydWxlX21hdGNoZWQiLCJyZWNlaXB0X2lkIjoicmNwX29yX0ZhbHNlX0ZhbHNlX1RydWUiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "EYaUoP4aFmB74vTwm1yog_V7qpHFzajMEOlS3it5bS6JQb4phe6hizuPonKYm-SHiAGxD4Z4txL5mrowJJt_Bg"
+      }
+    },
+    {
+      "name": "action_allow_rule_allow",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJhbGxvdyIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI1YzY3ZGZkMTlmMGMzNThmMjc2NGU2NGNkYzg0MTdiMWNiOWY2MzA0MWI3YjEzZDZlMTQ3NjE4Yjg4MjEzZTI1IiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiYWxsb3ciLCJldmFsdWF0ZWRfZmllbGRzIjp7ImZsYWciOmZhbHNlLCJpdGVtcyI6WzEsbnVsbCx0cnVlLCJ4IiwieCJdfSwibWF0Y2hlZF9ydWxlX2lkIjoiY29uZGl0aW9uYWwiLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjpudWxsfX0sInBvbGljeV9yZWYiOnsiZGVmaW5pdGlvbl9zaGEyNTYiOiI2ODk2MWI0YTAwZDJjNTQ0OGY5NTViMzNlZDc1NDFmZGRkNDM2ZWYzZjYxMzhiMzQzMzkzYWIyNzAyZTY2MDIwIiwicG9saWN5X2lkIjoicG9sX2ZpeHR1cmUiLCJwb2xpY3lfdmVyc2lvbiI6MX0sInJlYXNvbiI6InBvbGljeV9ydWxlX21hdGNoZWQiLCJyZWNlaXB0X2lkIjoicmNwX2FjdGlvbl9hbGxvd19ydWxlX2FsbG93IiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "Z3U3eu3gXlA_NOIzEq_mgzFM4hecFmKNPywx3gpOFYO5MwxECrYTHR6G0ZvYsCV8RwhHcs1tlx49wI0P2YiKCg"
+      }
+    },
+    {
+      "name": "action_allow_rule_confirm",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjE3OWM3ZGVkMTZlZTdiYTNhZThhMzQ3MTMwNWRjNjY5NmViM2RjOWMwODM3ZDFlNzg0NWFkNjY5MzU0NjYzZjgiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJmbGFnIjpmYWxzZSwiaXRlbXMiOlsxLG51bGwsdHJ1ZSwieCIsIngiXX0sIm1hdGNoZWRfcnVsZV9pZCI6ImNvbmRpdGlvbmFsIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6ImFnZW50X293bmVyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiMWE4YjU1MDJhYTRhZWE4ZGMzYjJlNjQ1YTU5OWIzMWFiNmRmZmI0YmIzMjZhZmIzYWY4MWIyNzAzYjMyZTJhYSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fYWxsb3dfcnVsZV9jb25maXJtIiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "4Ti7xCOD_xPRCR4A7F5oXMFlxKoGSwPhjGwHn5sv2opT2V-Xla0XvNG2DGkMDK1d9AAN-VDQwI1cq8iDfPV4BA"
+      }
+    },
+    {
+      "name": "action_allow_rule_escalate",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "escalate",
+                  "target": "member:conditional-reviewer",
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJlc2NhbGF0ZSIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiIzOTM3YjlkOTkxMjczY2ZhM2Q4NzBlN2FmYTlmMjcwYmViYmJlZjRkMzA2NjA0ZTFkMDczZGJhNjVhZjc1OTNkIiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiZXNjYWxhdGUiLCJldmFsdWF0ZWRfZmllbGRzIjp7ImZsYWciOmZhbHNlLCJpdGVtcyI6WzEsbnVsbCx0cnVlLCJ4IiwieCJdfSwibWF0Y2hlZF9ydWxlX2lkIjoiY29uZGl0aW9uYWwiLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjoibWVtYmVyOmNvbmRpdGlvbmFsLXJldmlld2VyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiZmRmYTViYjQ2MDdjYzEyNWNhMjMxNGNmMDQzNDRjNzYxYzA3MGM4ODU1MmI4YjRlYzJjY2ZhZWIyMTdiMzhmNSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fYWxsb3dfcnVsZV9lc2NhbGF0ZSIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "J_X9Si-SkFnrJGykh2lwupe-TexeKrdQSMvfrkhUkrikyaLSd3KodT-03aHVBkU2XifN6JxPtYPb0p5nrJ2WBg"
+      }
+    },
+    {
+      "name": "action_allow_rule_deny",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjkzMGY3MGViZmJjMmJiMjgyYmI0NjQ0NDMyYTg2M2E2YTE2YWRiNGI0ZjE2NzMxNjUyYWIyZjVlNWExZjBlMmMiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJmbGFnIjpmYWxzZSwiaXRlbXMiOlsxLG51bGwsdHJ1ZSwieCIsIngiXX0sIm1hdGNoZWRfcnVsZV9pZCI6ImNvbmRpdGlvbmFsIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiOWMzNmZiMDg3ZDdjMGRjNzdlZWY1OWY5MGU0YTc0ZDlhMzU5Y2ZkODc2Yzg4ZDY4OWU3ZjE0YTZkNTBkN2UzNCIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fYWxsb3dfcnVsZV9kZW55IiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "ad9BGSc8DeI08luF-1bx5S0Prq2eRR7wuiJLp3HJO3qf0p1AwrM7YutVzxDnQEVQDKLtcYju8rO9swS-PN2hBw"
+      }
+    },
+    {
+      "name": "action_allow_no_match",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "allow",
+              "target": null,
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "nonmatching",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        "absent"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJhbGxvdyIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiIyMDU4YzYzM2JmYjI4NTNjZDhjZWJhMWMyODQxYTYyZmY2NjdlYjRlNWMyOTVkN2M5ZDY4MDM0MzRjMTU0ZmJmIiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiYWxsb3ciLCJldmFsdWF0ZWRfZmllbGRzIjp7fSwibWF0Y2hlZF9ydWxlX2lkIjpudWxsLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjpudWxsfX0sInBvbGljeV9yZWYiOnsiZGVmaW5pdGlvbl9zaGEyNTYiOiJhZTFjNDIxYWFjODE0ZmM0ZTA5YjlkZjA2MzMxNzEyZjBhNTdhMTYyYzg1NWRiZTYzOWRhZjQ3OTk1YzlmMjc5IiwicG9saWN5X2lkIjoicG9sX2ZpeHR1cmUiLCJwb2xpY3lfdmVyc2lvbiI6MX0sInJlYXNvbiI6InBvbGljeV9ydWxlX21hdGNoZWQiLCJyZWNlaXB0X2lkIjoicmNwX2FjdGlvbl9hbGxvd19ub19tYXRjaCIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "ko5ZqInIUy4a3tX26vUj5RhinYDxEq0ppCdGhMK9xcmqor8i_T9c5NZgihLo7jw8DWGTL5vlwNFtkfHKXomCCg"
+      }
+    },
+    {
+      "name": "action_confirm_rule_allow",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "confirm",
+              "target": "agent_owner",
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6ImY5N2RiYjJiN2FkMGJkYTQ4MmJlOGM0Yjg5MDg5MzQ4ZWM1M2FmYzA5MTZjNTcwZWQ4NWMwNjA2ZjAxNGRiNjkiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6e30sIm1hdGNoZWRfcnVsZV9pZCI6bnVsbCwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6ImFnZW50X293bmVyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiYWNmMjY0MGQ1N2M1NGNkNmRkMTI4YmVmOTY4YTdhOTBmMWM4YWJkMjQyZWZjODc4MDY1YTkwNTc2MjBkOWU3ZSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fY29uZmlybV9ydWxlX2FsbG93IiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "-7-OymF-B-2ZNSEzNvfEH5o2fK1-1OhmklThK98-J4TZuiTg-__XiHVLVY5cJHrXUSmFI-6pJ-6dwrp_r_pKCg"
+      }
+    },
+    {
+      "name": "action_confirm_rule_confirm",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "confirm",
+              "target": "agent_owner",
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjE3ZTExNzliYTE4MTZiNzM1ODAwZWIxM2NhY2I3MjQwMzEzNjlhMDQ1MzQwZjZjNjliYTI1N2FiNTFhYTgxNWQiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJmbGFnIjpmYWxzZSwiaXRlbXMiOlsxLG51bGwsdHJ1ZSwieCIsIngiXX0sIm1hdGNoZWRfcnVsZV9pZCI6ImNvbmRpdGlvbmFsIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6ImFnZW50X293bmVyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiZmRhNjIyMDc4OGFlNWI5MTNmN2JlOGQ3NTY0YTkyNDdhNjUxZmNhMTYxZTQ2MGU1NDFjMmRlOTk2YjU1OTVkZiIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fY29uZmlybV9ydWxlX2NvbmZpcm0iLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "bhiNlfvJw-31rZBfymu8WeHYVE8pCd1klRj15LZTcaJuwCdXh5hKLsV5TU2mw8pDmEaqiJk7ZiVmz3l1eh3QDg"
+      }
+    },
+    {
+      "name": "action_confirm_rule_escalate",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "confirm",
+              "target": "agent_owner",
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "escalate",
+                  "target": "member:conditional-reviewer",
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJlc2NhbGF0ZSIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiIwMzUwZjczZjEwMjFhYWRhMGQxNmIwZGE5YTYwNTc1NzEwNjdmYTdiYTg3Nzk0N2NkMThiNWFlMDQ1NTkyNDVlIiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiZXNjYWxhdGUiLCJldmFsdWF0ZWRfZmllbGRzIjp7ImZsYWciOmZhbHNlLCJpdGVtcyI6WzEsbnVsbCx0cnVlLCJ4IiwieCJdfSwibWF0Y2hlZF9ydWxlX2lkIjoiY29uZGl0aW9uYWwiLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjoibWVtYmVyOmNvbmRpdGlvbmFsLXJldmlld2VyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiNGE3YjNiNGFjMzJhMDA1MjYwNjcwNzYyN2ExODNlYzg3Zjg5OTUzOTJhNmNjYzE0NjVhMDA0YTE0MTg2OWJjOSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fY29uZmlybV9ydWxlX2VzY2FsYXRlIiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "XUNS_1W1S-oJXksj_eobupBP-3BxL2mpTE2xdqd0nHF3YgYvM3E9s1xmsCvTL5uKRO0lxHPy-V3lvFj2YAV5Aw"
+      }
+    },
+    {
+      "name": "action_confirm_rule_deny",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "confirm",
+              "target": "agent_owner",
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjhiNGJkOTFjZDQyNGQ2OWYyMWE0OWQ5Y2MzMTQ2MDQ5NThkNmFhYWY4ZmU3MjIxY2MzYmMwODRmNDY3ZjhmNTkiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJmbGFnIjpmYWxzZSwiaXRlbXMiOlsxLG51bGwsdHJ1ZSwieCIsIngiXX0sIm1hdGNoZWRfcnVsZV9pZCI6ImNvbmRpdGlvbmFsIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiNzUwMjFjYjZlOTI0YzcwMTM2NDE2MjZlMjFhODUwYWZiZTdlMDFkYzU5ZmRkNjBiOGNkNDhmMTg2ZDQ2NzBkNCIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fY29uZmlybV9ydWxlX2RlbnkiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "52GD61CDN-iPQWXjmGu5EV2A2i927F9n11154CcF4GJHKe0TVXMA-_d-ggp8B5p8FKBGiInPBiZ1jvUyPapIDA"
+      }
+    },
+    {
+      "name": "action_confirm_no_match",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "confirm",
+              "target": "agent_owner",
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "nonmatching",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        "absent"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJjb25maXJtIiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjNjMTkyMDhjNGI4NzVlNDVhNjM5NTQ4NGNkZTZlMjc5MzFiNDBhYTVmZTAzZTY0MDgxMTEzMGMyZjM5ZDVlMTYiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJjb25maXJtIiwiZXZhbHVhdGVkX2ZpZWxkcyI6e30sIm1hdGNoZWRfcnVsZV9pZCI6bnVsbCwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6ImFnZW50X293bmVyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiZDg4ZGRlNDk0MjE3YzExYzNjNDE1MDg1MDQxNDI5NDgxMDc5MTMxYzU4ZGNhZTI0ZTgwOGIwODc3NWE2YThmZSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fY29uZmlybV9ub19tYXRjaCIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "yC-c11phI18FjbEMjXrwvDkfzM3EtsJ8IIItrKrZOpCIamxnC4CMye0sgCkyJa5wmGDoWKAVuHAAJkv28O5_DQ"
+      }
+    },
+    {
+      "name": "action_escalate_rule_allow",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "escalate",
+              "target": "member:action-reviewer",
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJlc2NhbGF0ZSIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI3MWFlZjIxZGMwYTE5NWY2YWYxNzllMjFiNGFmMGJmNWRkNWE5Mjg3NWRiMjZkOGZjNWJlOThmNjFmYjI0ODRkIiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiZXNjYWxhdGUiLCJldmFsdWF0ZWRfZmllbGRzIjp7fSwibWF0Y2hlZF9ydWxlX2lkIjpudWxsLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjoibWVtYmVyOmFjdGlvbi1yZXZpZXdlciJ9fSwicG9saWN5X3JlZiI6eyJkZWZpbml0aW9uX3NoYTI1NiI6ImQ3MDVmNzNjMmFkM2FjMGFjYzkyNTU0YWUzY2NjZmYyNTc1NzQxMGNjNTkwY2RhMmQ4ODI0NmJmMWY0NWI4MTgiLCJwb2xpY3lfaWQiOiJwb2xfZml4dHVyZSIsInBvbGljeV92ZXJzaW9uIjoxfSwicmVhc29uIjoicG9saWN5X3J1bGVfbWF0Y2hlZCIsInJlY2VpcHRfaWQiOiJyY3BfYWN0aW9uX2VzY2FsYXRlX3J1bGVfYWxsb3ciLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "nxicWe7V2Yovz4UxaM7xH0Ebd1wrWG-iSDxENFIDsOLs7VV8AEvJVEbuTjnOMfP7q8YpwJ4T7_tTHO1Q2Fg_Dg"
+      }
+    },
+    {
+      "name": "action_escalate_rule_confirm",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "escalate",
+              "target": "member:action-reviewer",
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJlc2NhbGF0ZSIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI5ZGQzNWM1ZjBkOTYwMTY0YWJhMTA1ZmE0M2U2NTNmNzU3NjYxZTM1ZWIzNTMyN2YxOTc5OGU0ZjA3MjFmYWJlIiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiZXNjYWxhdGUiLCJldmFsdWF0ZWRfZmllbGRzIjp7fSwibWF0Y2hlZF9ydWxlX2lkIjpudWxsLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjoibWVtYmVyOmFjdGlvbi1yZXZpZXdlciJ9fSwicG9saWN5X3JlZiI6eyJkZWZpbml0aW9uX3NoYTI1NiI6IjQ0OWQ5MmYyM2VhZWIxZDkyYjJlYTZmMmE5OWZlODRiYWNiZjBhNDkyYWNkMDAzNTA4OTVjZDlmZDEwOGRjYjQiLCJwb2xpY3lfaWQiOiJwb2xfZml4dHVyZSIsInBvbGljeV92ZXJzaW9uIjoxfSwicmVhc29uIjoicG9saWN5X3J1bGVfbWF0Y2hlZCIsInJlY2VpcHRfaWQiOiJyY3BfYWN0aW9uX2VzY2FsYXRlX3J1bGVfY29uZmlybSIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "4jsCkTkfXZ6KZcz_WBLi-HsT1XjL8C6uHm4Ei7TuDzYfTbOQQlX01wtK0aacDxRBeLwDjtxPa7oZkMDNpwobCA"
+      }
+    },
+    {
+      "name": "action_escalate_rule_escalate",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "escalate",
+              "target": "member:action-reviewer",
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "escalate",
+                  "target": "member:conditional-reviewer",
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJlc2NhbGF0ZSIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI5MzU1YWFmODE1NGNiNTYyNTc2MmZjMWQyZjg1OWE3ZDI0M2U5NjM5NWE3MGNkZGJkMDJlYWQ5NGFmM2Y3OWY2IiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiZXNjYWxhdGUiLCJldmFsdWF0ZWRfZmllbGRzIjp7ImZsYWciOmZhbHNlLCJpdGVtcyI6WzEsbnVsbCx0cnVlLCJ4IiwieCJdfSwibWF0Y2hlZF9ydWxlX2lkIjoiY29uZGl0aW9uYWwiLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjoibWVtYmVyOmNvbmRpdGlvbmFsLXJldmlld2VyIn19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiNTMwOTM2OTk0MmYwOGY5ZjUwZDU3NDdlODc5MDljNjVlYWU1M2E0MzUyNDRkYWUxOWE2MmNmZTI5NDNlNWIwMiIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fZXNjYWxhdGVfcnVsZV9lc2NhbGF0ZSIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "-TE_N3zMbIwSR_VZ0nZg1Qmzh7W289Q4mojrFYMKUHBId9PvtoLWilHBg2-52pUOQVOoOByRGVAcPHyScggMCg"
+      }
+    },
+    {
+      "name": "action_escalate_rule_deny",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "escalate",
+              "target": "member:action-reviewer",
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjU5YmNmMzUzMTYyMDcxNDBiOTljNzNjMGEwMGE4NDQxZjdjMGI2MGVmMjIyNmJhMTFlMTIxZTkwNjQzNmI1YjIiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6eyJmbGFnIjpmYWxzZSwiaXRlbXMiOlsxLG51bGwsdHJ1ZSwieCIsIngiXX0sIm1hdGNoZWRfcnVsZV9pZCI6ImNvbmRpdGlvbmFsIiwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiYjI4YjRkYWUwYjQyM2Q5OGQzZmRiNTVhMTVmMjRlZGE0MjIyZDUzYmNjOTRmZDM2MmZmN2I1N2Y2MmRkNzFmNCIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fZXNjYWxhdGVfcnVsZV9kZW55IiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "UwnZziWPVIbd1BaTA9nAi42uABq5rm6Khf061sSi-VhnXVofS-i3w0bRMLwi-oPSeY_XWZTI0Ad8F2MqnCoKAQ"
+      }
+    },
+    {
+      "name": "action_escalate_no_match",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "escalate",
+              "target": "member:action-reviewer",
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "nonmatching",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        "absent"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJlc2NhbGF0ZSIsImVuZ2luZV92ZXJzaW9uIjoic2hhMjU2OjRjYjI4YjE5Yjc3YWEwM2NhYWNjOWQyM2ZhZmQ4MDQzMjM3ZmM4YTQ3YWRjYmE4MGRmZTQxOTg2YjRiYzMzYjIiLCJpc3N1ZWRfYXQiOiIyMDI2LTEwLTA5VDEyOjAwOjAwLjAwMFoiLCJwb2xpY3lfZXZhbCI6eyJpbnB1dF9zaGEyNTYiOiI3NWFkYmRjOWU1ZjJmYTFkYWUwNTI4ZWEwNjY3MTM1NTBiZWIxYjgwNDQ3ZDExMmU1YmVmMGE2YjJmZmVhMjc1IiwicmVzdWx0Ijp7ImRlY2lzaW9uIjoiZXNjYWxhdGUiLCJldmFsdWF0ZWRfZmllbGRzIjp7fSwibWF0Y2hlZF9ydWxlX2lkIjpudWxsLCJwcm9maWxlIjoiYWxsb3dseS5iYXNpYy52MSIsInN0YXR1cyI6Im9rIiwidGFyZ2V0IjoibWVtYmVyOmFjdGlvbi1yZXZpZXdlciJ9fSwicG9saWN5X3JlZiI6eyJkZWZpbml0aW9uX3NoYTI1NiI6IjIwNWNjOTliOWRhNWQ0MGY1MTVkYjgxYjhhMWViM2RlZjkyOTA2MjMwNDUyZmFhYjlhNmRjZjVkYmZlYzNmYTciLCJwb2xpY3lfaWQiOiJwb2xfZml4dHVyZSIsInBvbGljeV92ZXJzaW9uIjoxfSwicmVhc29uIjoicG9saWN5X3J1bGVfbWF0Y2hlZCIsInJlY2VpcHRfaWQiOiJyY3BfYWN0aW9uX2VzY2FsYXRlX25vX21hdGNoIiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "gAZMnSFe9dyZScmlULStslFkw24_BWICihplORw5BsuJQDlRvCn4Ba_lHZoGmcWcigMroV-qd1JQhyXLo4ZeBw"
+      }
+    },
+    {
+      "name": "action_deny_rule_allow",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "deny",
+              "target": null,
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "allow",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjhlZWFlODI0Y2ExZDk0NWJmZjZjYjg2MGIxOWYxM2RiYjE2MTVkNDhiZTQwZWU5ZDE4NzE0M2ZlYmMyMDFkYmUiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6e30sIm1hdGNoZWRfcnVsZV9pZCI6bnVsbCwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiODA2NDIzMWJjYmU5NzMxOTRhYzdiOGY3ODkxNzc5MjU2ZjNjMTA4YzZjYWMzMTRhZWQzODkxYmIwNjA4ZjhmNiIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fZGVueV9ydWxlX2FsbG93IiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "ksIyK03AF9AulMdidy9zRFsuuyyzVJ4bhqONTOrKX2iM8sXa1uZlJmnaGV3F_8G4Q02Islb_Wp-3io9-6-B_Dg"
+      }
+    },
+    {
+      "name": "action_deny_rule_confirm",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "deny",
+              "target": null,
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "confirm",
+                  "target": "agent_owner",
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6ImQyMzAwN2YzZWM5NmI0ZjlhNTdkMzNkMzVmZjQ5ZmQyYzBmNDA2MDc3OGNkN2Q2MDQ3N2U1NDU4NzA0YjgyZmEiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6e30sIm1hdGNoZWRfcnVsZV9pZCI6bnVsbCwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiMDJiOGFmYTE1OTcwOWI1Nzk2YmExYTQ2Yzk1ZTAyZjU2YWI4YzFjYzVhMTRhMzQzZDllZDkzYjllYTNjN2M0MiIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fZGVueV9ydWxlX2NvbmZpcm0iLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "7bDla2_Ww3iiY_3uErded4vXFhgmPO8-AiR6f-ZJtI_mFMsODznYH5J1fZcNrR4E0IJVGNMojd0MTPkwWoOlBQ"
+      }
+    },
+    {
+      "name": "action_deny_rule_escalate",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "deny",
+              "target": null,
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "escalate",
+                  "target": "member:conditional-reviewer",
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6ImQxMWMzODVkOTc1YTVlYmQ0Y2Q2NDVkMTVlZjA2MGJjMmNmYjZlZmFiMDAxZWVhMGFlMjZlZjA5ZjhmMGUzZTAiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6e30sIm1hdGNoZWRfcnVsZV9pZCI6bnVsbCwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiMjEwMjJlNzQ5ZDRmNTMzNzg4NjA4M2NiNjZhODJjMTRjMDU1MTNjNTUxYzgwMTMxMjQ3NjQ1MzliNzQxY2QwOSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fZGVueV9ydWxlX2VzY2FsYXRlIiwicmVzb3VyY2UiOm51bGwsInNjaGVtYV92ZXJzaW9uIjoiNSIsInVzZXJfaWQiOiJ1c2VyX2ZpeHR1cmUiLCJ3b3Jrc3BhY2VfaWQiOiJ3c19vcGFfZml4dHVyZSJ9",
+        "signature": "iUqpHGiGDb8-6DbeOds-ptmmNIxQOQZbgx7nbiancpPmUXbxOX6fGq57_i-HIZf32h-lc2thJTeRuCkzKkA2Dw"
+      }
+    },
+    {
+      "name": "action_deny_rule_deny",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "deny",
+              "target": null,
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "conditional",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "flag",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        null,
+                        true,
+                        "x"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjcxYTYwMDRiOGUwYmE2YmIxZWIxNDBmNzFiY2Y5MTA1ZjUxMTRhOGZlNjg0N2RmZGRiNDU5NWU0NGM3MmZiOWIiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6e30sIm1hdGNoZWRfcnVsZV9pZCI6bnVsbCwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiZjA4YTQyMjdiZjViZmZhMjc3ZDU5ODIzMjEwYzE4ZjlmOGU5MDdmYWVjYjk4YTllYWFkODI2NDRmMGY2ZmVlOSIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fZGVueV9ydWxlX2RlbnkiLCJyZXNvdXJjZSI6bnVsbCwic2NoZW1hX3ZlcnNpb24iOiI1IiwidXNlcl9pZCI6InVzZXJfZml4dHVyZSIsIndvcmtzcGFjZV9pZCI6IndzX29wYV9maXh0dXJlIn0",
+        "signature": "QYkU8f9T61tlH6BK0WfS_UzrHwL3qY8fETHyN9hFMebIlA83y4OrXbTKadO9w7uaTFZnfyJgcbXGdjgGpN9-CA"
+      }
+    },
+    {
+      "name": "action_deny_no_match",
+      "definition": {
+        "profile": "allowly.policy.v1",
+        "agent_id": "agent_fixture",
+        "actions": [
+          {
+            "policy": {
+              "profile": "allowly.basic.v1",
+              "action": "records.review",
+              "decision": "deny",
+              "target": null,
+              "fields": {
+                "items": "list",
+                "flag": "boolean"
+              },
+              "rules": [
+                {
+                  "id": "nonmatching",
+                  "decision": "deny",
+                  "target": null,
+                  "conditions": [
+                    {
+                      "field": "items",
+                      "op": "contains_any",
+                      "value": [
+                        "absent"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "guards": {},
+            "executable_operations": []
+          }
+        ],
+        "default_expiry_days": null
+      },
+      "receipt": {
+        "protected": "eyJhbGciOiJFZERTQSIsImtpZCI6Im9wYS1maXh0dXJlLWtleSIsInR5cCI6ImFsbG93bHktcmVjZWlwdCtqd3MifQ",
+        "payload": "eyJhY3Rpb24iOiJyZWNvcmRzLnJldmlldyIsImFnZW50X2lkIjoiYWdlbnRfZml4dHVyZSIsImF1dGhvcml6YXRpb25faWQiOiJhdXRoX2ZpeHR1cmUiLCJjb250ZXh0Ijp7ImlkZW50aXR5X3ZlcmlmaWNhdGlvbiI6eyJzdGF0dXMiOiJ2ZXJpZmllZCJ9fSwiZGVjaXNpb24iOiJkZW55IiwiZW5naW5lX3ZlcnNpb24iOiJzaGEyNTY6NGNiMjhiMTliNzdhYTAzY2FhY2M5ZDIzZmFmZDgwNDMyMzdmYzhhNDdhZGNiYTgwZGZlNDE5ODZiNGJjMzNiMiIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMDlUMTI6MDA6MDAuMDAwWiIsInBvbGljeV9ldmFsIjp7ImlucHV0X3NoYTI1NiI6IjhhY2M4MmIzZWFmMDIxNTZkZTY2ZGFjNzNhMjMyMTg5NjNhY2ZlYzIzYTRiNWM5NjM0MDYwNDZhMjExMjllM2IiLCJyZXN1bHQiOnsiZGVjaXNpb24iOiJkZW55IiwiZXZhbHVhdGVkX2ZpZWxkcyI6e30sIm1hdGNoZWRfcnVsZV9pZCI6bnVsbCwicHJvZmlsZSI6ImFsbG93bHkuYmFzaWMudjEiLCJzdGF0dXMiOiJvayIsInRhcmdldCI6bnVsbH19LCJwb2xpY3lfcmVmIjp7ImRlZmluaXRpb25fc2hhMjU2IjoiNjU3Mjk0ZGY2YTYxM2UxYjUwYjFlY2M5OGIxNTQwY2RjMzE4ZGRkYTc5NjU3MjViY2Q2MWVlZDg0N2JjNTUwOCIsInBvbGljeV9pZCI6InBvbF9maXh0dXJlIiwicG9saWN5X3ZlcnNpb24iOjF9LCJyZWFzb24iOiJwb2xpY3lfcnVsZV9tYXRjaGVkIiwicmVjZWlwdF9pZCI6InJjcF9hY3Rpb25fZGVueV9ub19tYXRjaCIsInJlc291cmNlIjpudWxsLCJzY2hlbWFfdmVyc2lvbiI6IjUiLCJ1c2VyX2lkIjoidXNlcl9maXh0dXJlIiwid29ya3NwYWNlX2lkIjoid3Nfb3BhX2ZpeHR1cmUifQ",
+        "signature": "jtH3p3ajCZax87rk5t1TtkmgBz-c7lpTDUhLFsgLRbgIlZEeRwLpJFK1Gx1j6TVzkPibseweKtw5OyqUKDdHBA"
+      }
+    }
+  ]
+}
