@@ -38,8 +38,5 @@ asyncio_mode = "auto"
 [tool.uv]
 prerelease = "disallow"
 
-[tool.uv.sources]
-allowly-receipt-format = { path = "../allowly-receipt-format/verifiers/python", editable = true }
-
 [tool.hatch.build.targets.wheel]
 packages = ["allowly"]

@@ -14,10 +14,9 @@ identity or approval. Resolution does not dispatch an action. A standalone
 Check integration re-checks with its original authorization; native Execute
 continues its saved operation as described below.
 
-This unpublished local OPA worktree uses the sibling
-`allowly-receipt-format==5.0.0` as a required dependency and accepts only
-receipt wire 5. Run `uv sync` in this multi-repo workspace;
-the source mapping selects the local verifier, not an unpublished PyPI release.
+This OPA rebuild requires the published PyPI package
+`allowly-receipt-format==5.0.0` and accepts only receipt wire 5.
+Run `uv sync` from this repository; no sibling verifier checkout is required.
 Native continuation requires a runtime that supports
 `/v1/executions/{operation_id}/continue`; upgrading this SDK does not deploy
 that runtime. Earlier SDK packages do not gain these methods.
@@ -607,8 +606,8 @@ integration examples honest and makes SDK gaps visible early.
 
 ## Offline receipt verification
 
-Use the required local verifier to hash SEAL records and verify signed receipts.
-This worktree pins the sibling `allowly-receipt-format==5.0.0`, which verifies
+Use the included verifier to hash SEAL records and verify signed receipts.
+This SDK pins the published `allowly-receipt-format==5.0.0`, which verifies
 receipt wire format 5 (the package major equals the wire format). `alg` and
 the key ID are in the signed JWS protected header. The receipt has only
 `protected`, `payload`, and `signature` fields, all base64url strings. Store and

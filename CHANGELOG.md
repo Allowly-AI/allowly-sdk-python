@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.0 (local, unpublished)
+## 0.7.0
 
 - Use verifier 5.0.0 and receipt wire 5 only, preserving the original signed
   JWS envelope for verification. This breaking rebuild removes wire-4 parsing.
@@ -17,9 +17,8 @@
 - Include the existing workspace resolution-webhook setup resource, typed
   events, and strict raw-byte verification helper. Verified callbacks only wake
   saved jobs; they do not grant permission or dispatch a provider request.
-- Require verifier `5.0.0`. The current source mapping and lock use the sibling
-  verifier for local testing. Publish that verifier to PyPI first, then remove
-  the staging override and regenerate the registry-backed lock before release.
+- Require the published PyPI verifier `5.0.0` with a registry-backed lock;
+  standalone installs no longer require a sibling verifier checkout.
 
 ## 0.6.1
 
