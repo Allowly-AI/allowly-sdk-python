@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.0
+## 0.8.0
 
 - Use verifier 5.0.0 and receipt wire 5 only, preserving the original signed
   JWS envelope for verification. This breaking rebuild removes wire-4 parsing.
