@@ -355,17 +355,21 @@ async def test_witness_setup_is_bound_to_workspace_and_confirmed_key(tmp_path, m
 @pytest.mark.asyncio
 async def test_receipt_finalization_checks_hash_linkage_without_provider(tmp_path, monkeypatch):
     monkeypatch.setattr("allowly.execution._provider_send", lambda *a: OBSERVED)
-    monkeypatch.setattr("allowly.verify.verify_receipt", lambda *a, **k: None)
+    from jws_fixture import signed_receipt
+    from allowly.verify import decode_receipt
+    monkeypatch.setattr("allowly.verify.verify_receipt", lambda receipt, *a, **k: decode_receipt(receipt))
     with respx.mock as mock:
         seen, _ = runtime(mock)
         async with Allowly("key", base_url=BASE) as client:
             result = await client.execute_http(URL, **PARAMS, storage_dir=str(tmp_path))
-            receipt = {"receipt_id": "rcp_1", "decision": "allow", "action": "billing.refund", "authorization_id": "auth_1",
+            claims = {"receipt_id": "rcp_1", "decision": "allow", "action": "billing.refund", "authorization_id": "auth_1",
                        "context": {"execution": {"approval_sha256": seen["approved"]["approval_sha256"]}}}
+            receipt = signed_receipt(claims)
             route = mock.get(BASE + "/v1/receipts/rcp_1").mock(return_value=httpx.Response(200, json={"status": "signed", "receipt": receipt}))
             package = await complete_execution_evidence(client, result.operation_dir, public_keys=[], expected_workspace_id="ws_1")
             assert package["decision_receipt_verified"] is True
-            receipt["context"]["execution"]["approval_sha256"] = "sha256:" + "0" * 64
+            claims["context"]["execution"]["approval_sha256"] = "sha256:" + "0" * 64
+            receipt = signed_receipt(claims)
             route.mock(return_value=httpx.Response(200, json={"status": "signed", "receipt": receipt}))
             with pytest.raises(AllowlyProtocolError):
                 await complete_execution_evidence(client, result.operation_dir, public_keys=[], expected_workspace_id="ws_1")
@@ -426,16 +430,25 @@ async def test_remote_outage_ignores_check_fail_open_setting(tmp_path, monkeypat
 
 
 @pytest.mark.asyncio
-async def test_inline_authorization_keeps_exact_executable_grant():
-    from allowly import ActionEntry, ExecutableOperationGrant
-    grant = ExecutableOperationGrant("exe_1", "stripe", "stripe.refunds.create", "r1", "sha256:" + "a" * 64, "witnessed")
+async def test_policy_authoring_keeps_exact_executable_grant():
+    from allowly.policies import definition_digest
+    definition = {
+        "profile": "allowly.policy.v1", "agent_id": "a1", "default_expiry_days": None,
+        "actions": [{"policy": {"profile": "allowly.basic.v1", "action": "billing.refund",
+            "decision": "allow", "target": None, "fields": {}, "rules": []},
+            "guards": {}, "executable_operations": [{
+                "enabled_executable_id": "exe_1", "provider_id": "stripe", "operation_id": "stripe.refunds.create",
+                "catalog_revision": "r1", "definition_fingerprint": "sha256:" + "a" * 64,
+                "minimum_evidence_mode": "witnessed",
+            }]}],
+    }
     with respx.mock as mock:
-        route = mock.post(BASE + "/v1/authorizations").mock(return_value=httpx.Response(201, json={
-            "authorization_id": "auth_1", "created_at": "2026-09-27T00:00:00Z", "expires_at": "2027-01-01T00:00:00Z",
-            "requires_confirm_for": [], "requires_escalation_for": [], "requires_deny_for": [], "escalation_targets": {},
-            "receipt": {"status": "pending", "receipt_id": "rcp_1", "ready_at_estimate": None, "url": BASE + "/v1/receipts/rcp_1"}}))
-        async with Allowly("key", base_url=BASE) as client:
-            await client.authorizations.create(user_id="u1", agent_id="a1", expires_at="2027-01-01T00:00:00Z",
-                                               actions=[ActionEntry("billing.refund", executable_operations=[grant])])
+        route = mock.post(BASE + "/v1/policies").mock(return_value=httpx.Response(201, json={
+            "policy_ref": {"policy_id": "billing", "policy_version": 1, "definition_sha256": definition_digest(definition)},
+            "definition": definition,
+        }))
+        async with Allowly("setup-key", base_url=BASE) as client:
+            created = await client.policies.create(policy_id="billing", definition=definition)
     actual = json.loads(route.calls[0].request.content)["actions"][0]["executable_operations"][0]
-    assert actual["minimum_evidence_mode"] == "witnessed" and actual["definition_fingerprint"] == grant.definition_fingerprint
+    assert actual == definition["actions"][0]["executable_operations"][0]
+    assert created.definition == definition

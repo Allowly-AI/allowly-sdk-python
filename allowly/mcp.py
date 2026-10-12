@@ -1,4 +1,4 @@
-"""Allowly middleware for FastMCP 3.x servers.
+"""Allowly middleware for FastMCP 4.x servers.
 
 Usage:
     from fastmcp import FastMCP

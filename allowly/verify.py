@@ -17,13 +17,14 @@ import httpx
 import json
 import time
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote, urlparse
 
-# Offline verification is powered by the published reference verifier,
-# allowly-receipt-format 4.x (import path allowly_receipt_format). It ships as an
-# optional extra so the core SDK stays dependency-light:
-#     pip install 'allowly[verifier]'
+from .types import JwsReceipt
+
+# Offline verification is powered by the local wire-5 reference verifier,
+# allowly-receipt-format 5.x (import path allowly_receipt_format). It ships as an
+# required dependency so transport and authoring reuse the maintained canonicalizer.
 try:
     from allowly_receipt_format import (
         SEAL_ACTION,
@@ -34,6 +35,7 @@ try:
         SealVerificationResult,
         hash_seal_json,
         hash_seal_value,
+        decode_receipt as _decode_receipt,
         verify_receipt as _verify_receipt,
         verify_seal_json as _verify_seal_json,
         verify_seal_value as _verify_seal_value,
@@ -43,8 +45,8 @@ try:
     )
 except ImportError as exc:
     raise ImportError(
-        "SEAL and receipt verification require allowly-receipt-format>=4.3.1. "
-        "Install the verifier extra: pip install 'allowly[verifier]'"
+        "SEAL and receipt verification require allowly-receipt-format==5.0.0. "
+        "Install this SDK with its required local verifier dependency."
     ) from exc
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"
@@ -52,16 +54,21 @@ DEFAULT_KEYS_DOC_CACHE_TTL_SECONDS = 300
 _keys_doc_cache: dict[tuple[str, str | None, int], tuple[float, dict[str, Any]]] = {}
 
 
+def decode_receipt(receipt: JwsReceipt | dict[str, Any]) -> dict[str, Any]:
+    """Read strict receipt claims for display only. This does not verify trust."""
+    return _decode_receipt(cast(dict[str, Any], receipt))
+
+
 def verify_receipt(
-    receipt: dict[str, Any],
+    receipt: JwsReceipt | dict[str, Any],
     public_keys: list[PublicKey],
     *,
     expected_workspace_id: str,
     trusted_key_fingerprints: set[str] | frozenset[str] | None = None,
     now: datetime | None = None,
-) -> None:
-    _verify_receipt(
-        receipt,
+) -> dict[str, Any]:
+    return _verify_receipt(
+        cast(dict[str, Any], receipt),
         public_keys,
         now=now,
         expected_workspace_id=expected_workspace_id,
@@ -71,7 +78,7 @@ def verify_receipt(
 
 def verify_seal_json(
     raw_json: str | bytes,
-    receipt: dict[str, Any],
+    receipt: JwsReceipt | dict[str, Any],
     public_keys: list[PublicKey],
     *,
     expected_workspace_id: str,
@@ -80,7 +87,7 @@ def verify_seal_json(
 ) -> SealVerificationResult:
     return _verify_seal_json(
         raw_json,
-        receipt,
+        cast(dict[str, Any], receipt),
         public_keys,
         expected_workspace_id=expected_workspace_id,
         trusted_key_fingerprints=trusted_key_fingerprints,
@@ -90,7 +97,7 @@ def verify_seal_json(
 
 def verify_seal_value(
     record: Any,
-    receipt: dict[str, Any],
+    receipt: JwsReceipt | dict[str, Any],
     public_keys: list[PublicKey],
     *,
     expected_workspace_id: str,
@@ -99,7 +106,7 @@ def verify_seal_value(
 ) -> SealVerificationResult:
     return _verify_seal_value(
         record,
-        receipt,
+        cast(dict[str, Any], receipt),
         public_keys,
         expected_workspace_id=expected_workspace_id,
         trusted_key_fingerprints=trusted_key_fingerprints,
@@ -190,6 +197,7 @@ def clear_keys_doc_cache() -> None:
 
 
 __all__ = [
+    "decode_receipt",
     "verify_receipt",
     "verify_seal_json",
     "verify_seal_value",

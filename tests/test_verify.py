@@ -5,8 +5,8 @@ import hashlib
 
 import httpx
 import pytest
-from allowly_receipt_format import canonicalize
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from jws_fixture import signed_receipt
 
 from allowly.verify import (
     VerificationError,
@@ -38,7 +38,7 @@ _TEST_PRIVATE_KEY = Ed25519PrivateKey.from_private_bytes(bytes(32))
 _TEST_PUBLIC_KEY = _TEST_PRIVATE_KEY.public_key().public_bytes_raw()
 
 
-V4_DOC = {
+V5_DOC = {
     "workspace_id": "ws_test",
     "keys": [
         {
@@ -52,8 +52,8 @@ V4_DOC = {
     ],
 }
 
-V4_RECEIPT = {
-    "schema_version": "4",
+V5_RECEIPT = {
+    "schema_version": "5",
     "receipt_id": "rcp_01HXZMINIMAL0000000000000",
     "workspace_id": "ws_test",
     "issued_at": "2026-04-21T14:32:17.482Z",
@@ -65,11 +65,12 @@ V4_RECEIPT = {
     "resource": "edge:emp_8821:conn_9f2a",
     "context": {},
     "authorization_id": "auth_01HXZ2A0K1L2M3N4P5Q6R7S8T9",
-    "engine_version": "2026-04-17.1",
+    "engine_version": "sha256:" + "a" * 64,
+    "policy_ref": {"policy_id": "pol_fixture", "policy_version": 1, "definition_sha256": "b" * 64},
     "alg": "Ed25519",
     "key_id": "test-key/v1",
 }
-V4_RECEIPT["signature"] = _b64u(_TEST_PRIVATE_KEY.sign(canonicalize(V4_RECEIPT)))
+V5_RECEIPT = signed_receipt(V5_RECEIPT, _TEST_PRIVATE_KEY)
 
 
 @pytest.fixture(autouse=True)
@@ -230,13 +231,13 @@ def test_verify_receipt_requires_and_forwards_workspace_binding(monkeypatch):
 
 
 def test_verify_v4_receipt_with_signed_algorithm_and_key_id():
-    keys = load_keys_from_json(V4_DOC)
+    keys = load_keys_from_json(V5_DOC)
 
     verify_receipt(
-        V4_RECEIPT,
+        V5_RECEIPT,
         keys,
         expected_workspace_id="ws_test",
-        trusted_key_fingerprints={V4_DOC["keys"][0]["public_key_fingerprint"]},
+        trusted_key_fingerprints={V5_DOC["keys"][0]["public_key_fingerprint"]},
     )
 
 

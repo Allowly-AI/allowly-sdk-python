@@ -6,7 +6,7 @@ from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 import httpx
 
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
-from .types import SealWebhookDelivery, SealWebhookStatus
+from .types import JwsReceipt, SealWebhookDelivery, SealWebhookStatus
 
 _SEAL_PROFILE = "allowly.seal.jcs-sha256.v1"
 
@@ -218,13 +218,18 @@ def _parse_delivery(value: Any) -> SealWebhookDelivery:
     receipt_id = _optional_str(raw, "receipt_id")
     workspace_id = _require_str(raw, "workspace_id")
     if receipt is not None:
-        if receipt_id is None or receipt.get("receipt_id") != receipt_id:
+        from .verify import decode_receipt, VerificationError
+        try:
+            claims = decode_receipt(receipt)
+        except VerificationError as exc:
+            raise AllowlyProtocolError(f"invalid SEAL webhook receipt: {exc}") from exc
+        if receipt_id is None or claims.get("receipt_id") != receipt_id:
             raise AllowlyProtocolError("SEAL webhook receipt_id binding does not match")
-        if receipt.get("workspace_id") != workspace_id:
+        if claims.get("workspace_id") != workspace_id:
             raise AllowlyProtocolError(
                 "SEAL webhook workspace_id binding does not match"
             )
-        context = _optional_dict(receipt, "context")
+        context = _optional_dict(claims, "context")
         signed_metadata = _optional_metadata(
             context.get("seal_metadata") if context is not None else None,
             "signed SEAL receipt metadata",
@@ -248,7 +253,7 @@ def _parse_delivery(value: Any) -> SealWebhookDelivery:
         status_url=_require_str(raw, "status_url"),
         receipt_url=_optional_str(raw, "receipt_url"),
         keys_url=_require_str(raw, "keys_url"),
-        receipt=receipt,
+        receipt=cast(JwsReceipt | None, receipt),
     )
 
 

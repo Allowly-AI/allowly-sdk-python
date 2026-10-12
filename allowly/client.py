@@ -6,13 +6,15 @@ from datetime import datetime
 import inspect
 import re
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 from urllib.parse import quote, urlparse
 
 import httpx
 
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .resolution_webhook import _ResolutionWebhookResource
+from .policies import (_PoliciesResource, parse_policy_reference, parse_policy_evaluation,
+                       _document, _integer, _strings, _text, _keys)
 from .types import (
     CheckResponse,
     CustomExecutableCreateRequest,
@@ -37,15 +39,14 @@ from .types import (
     ExecutionResponse,
     ExecutionStatus,
     OutcomeEvidence,
-    PolicyConditionEvidence,
     PolicyEvalInfo,
     ReceiptEnvelopePending,
     ReceiptEnvelopeSigned,
     ReceiptEnvelope,
+    JwsReceipt,
     ReceiptAcknowledgmentCaller,
     ReceiptAcknowledgmentResponse,
     SealResponse,
-    ActionEntry,
     FallbackMode,
     ActionCheckResultAllow,
     ActionCheckResultConfirm,
@@ -109,6 +110,7 @@ class Allowly:
             headers=headers,
             timeout=timeout,
         )
+        self.policies = _PoliciesResource(self)
         self.authorizations = _AuthorizationsResource(self)
         self.confirmations = _ConfirmationsResource(self)
         self.escalations = _EscalationsResource(self)
@@ -712,112 +714,68 @@ class _AuthorizationsResource:
         self,
         *,
         user_id: str,
-        policy_id: str | None = None,
+        policy_id: str,
+        policy_version: int,
+        actions: list[str] | None = None,
         expires_at: datetime | str | None = None,
-        agent_id: str | None = None,
-        actions: list[ActionEntry] | list[str] | None = None,
-        requires_confirm_for: list[str] | None = None,
-        requires_escalation_for: list[str] | None = None,
-        requires_deny_for: list[str] | None = None,
-        escalation_targets: dict[str, str] | None = None,
         budget_limit_micros: int | None = None,
         replaces: str | None = None,
         metadata: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
     ) -> AuthorizationCreateResponse:
-        """Create an authorization for a user.
-
-        Canonical flow: pass ``policy_id`` referencing a reusable agent policy.
-        Inline flow (``agent_id`` + ``actions``, no ``policy_id``) is for
-        prototyping and ad-hoc per-user grants. Exactly one of the two shapes
-        must be used.
-        """
-        if policy_id is not None:
-            if agent_id is not None or actions is not None:
-                raise ValueError("policy_id cannot be combined with agent_id or actions")
-            decision_overrides = {
-                "requires_confirm_for": requires_confirm_for,
-                "requires_escalation_for": requires_escalation_for,
-                "requires_deny_for": requires_deny_for,
-                "escalation_targets": escalation_targets,
-            }
-            for field_name, value in decision_overrides.items():
-                if value is not None:
-                    raise ValueError(f"policy_id cannot be combined with {field_name}")
-        else:
-            if agent_id is None or actions is None:
-                raise ValueError(
-                    "provide either policy_id or inline agent_id and actions"
-                )
-            if expires_at is None:
-                raise ValueError("expires_at is required for inline authorizations")
-
+        """Grant a names-only subset of one exact immutable policy edition."""
+        _text(user_id, "user_id")
+        _text(policy_id, "policy_id")
+        _integer(policy_version, "policy_version")
+        requested_actions = list(_strings(actions, "actions", 32, 64)) if actions is not None else None
+        if budget_limit_micros is not None:
+            _integer(budget_limit_micros, "budget_limit_micros", minimum=0)
+        if replaces is not None:
+            _text(replaces, "replaces")
         expires_iso = expires_at.isoformat() if isinstance(expires_at, datetime) else expires_at
         body: dict[str, Any] = {
-            "user_id": user_id,
-            "metadata": metadata or {},
+            "user_id": user_id, "policy_id": policy_id, "policy_version": policy_version,
+            "metadata": _document(metadata if metadata is not None else {}, "metadata", 4096),
         }
+        if requested_actions is not None:
+            body["actions"] = requested_actions
         if expires_iso is not None:
             body["expires_at"] = expires_iso
         if budget_limit_micros is not None:
             body["budget_limit_micros"] = budget_limit_micros
         if replaces is not None:
             body["replaces"] = replaces
-        if policy_id is not None:
-            body["policy_id"] = policy_id
-        else:
-            assert agent_id is not None and actions is not None
-            body.update({
-                "agent_id": agent_id,
-                "actions": [
-                    {"name": action, "constraints": {}}
-                    if isinstance(action, str)
-                    else {"name": action.name, "constraints": action.constraints,
-                          **({"executable_operations": [asdict(grant) for grant in action.executable_operations]}
-                             if action.executable_operations else {})}
-                    for action in actions
-                ],
-                "requires_confirm_for": requires_confirm_for or [],
-                "requires_escalation_for": requires_escalation_for or [],
-                "requires_deny_for": requires_deny_for or [],
-                "escalation_targets": escalation_targets or {},
-            })
-
-        headers = {"Idempotency-Key": idempotency_key} if idempotency_key is not None else None
         raw, response_headers = await self._client._request_with_headers(
-            "POST",
-            "/v1/authorizations",
-            json=body,
-            headers=headers,
+            "POST", "/v1/authorizations", json=body,
+            headers={"Idempotency-Key": idempotency_key} if idempotency_key is not None else None,
             expected_success_status=201,
         )
-        raw = _require_dict(raw, "authorization create response")
+        raw = _keys(raw,
+            {"authorization_id", "policy_ref", "actions", "created_at", "expires_at", "receipt", "authorization_provenance"},
+            "authorization response",
+            {"budget_limit_micros", "budget_spent_micros", "replaced_authorization_id", "revocation_receipt"})
+        reference = parse_policy_reference(raw.get("policy_ref"))
+        if reference["policy_id"] != policy_id or reference["policy_version"] != policy_version:
+            raise AllowlyProtocolError("authorization policy_ref does not match the requested edition")
+        granted_actions = _strings(raw.get("actions"), "actions", 32, 64)
+        if requested_actions is not None and granted_actions != requested_actions:
+            raise AllowlyProtocolError("authorization actions do not match the requested scope")
+        provenance = _document(raw.get("authorization_provenance"), "authorization_provenance")
+        for key in ("budget_limit_micros", "budget_spent_micros"):
+            if raw.get(key) is not None:
+                _integer(raw[key], key, minimum=0)
         revocation_receipt = raw.get("revocation_receipt")
         return AuthorizationCreateResponse(
             authorization_id=_require_str(raw, "authorization_id"),
+            policy_ref=reference, actions=granted_actions,
             created_at=_require_str(raw, "created_at"),
             expires_at=_require_str(raw, "expires_at"),
-            receipt=_parse_pending_envelope(raw["receipt"]),
-            policy_id=_optional_str(raw, "policy_id"),
-            requires_confirm_for=_require_str_list(raw, "requires_confirm_for"),
-            requires_escalation_for=_require_str_list(
-                raw, "requires_escalation_for"
-            ),
-            requires_deny_for=_require_str_list(raw, "requires_deny_for"),
-            escalation_targets=_require_str_map(raw, "escalation_targets"),
+            receipt=_parse_pending_envelope(raw.get("receipt")),
+            authorization_provenance=provenance,
             budget_limit_micros=raw.get("budget_limit_micros"),
             budget_spent_micros=raw.get("budget_spent_micros"),
-            replaced_authorization_id=raw.get("replaced_authorization_id"),
-            revocation_receipt=(
-                _parse_pending_envelope(revocation_receipt)
-                if revocation_receipt is not None
-                else None
-            ),
-            authorization_provenance=(
-                _require_dict(raw["authorization_provenance"], "authorization provenance")
-                if raw.get("authorization_provenance") is not None
-                else None
-            ),
+            replaced_authorization_id=_optional_str(raw, "replaced_authorization_id"),
+            revocation_receipt=_parse_pending_envelope(revocation_receipt) if revocation_receipt is not None else None,
             billing_warning=response_headers.get("X-Allowly-Billing-Warning"),
         )
 
@@ -880,7 +838,7 @@ class _ConfirmationsResource:
             headers=headers,
         )
         decision = _require_str(raw, "decision")
-        if decision not in {"approved", "not_approved", "denied_by_user"}:
+        if decision not in {"approved", "not_approved"}:
             raise AllowlyProtocolError(f"unknown confirmation decision: {decision!r}")
         if decision == "approved":
             authorization_id = _require_str(raw, "authorization_id")
@@ -988,7 +946,7 @@ class _ReceiptsResource:
         *,
         poll_interval: float = 1.0,
         timeout: float = 120.0,
-    ) -> dict[str, Any]:
+    ) -> JwsReceipt:
         """Poll until the receipt is signed, then return the full signed receipt dict.
 
         The default timeout covers the signer's once-per-minute batch tick plus
@@ -1018,7 +976,8 @@ class _ReceiptsResource:
                     retry_delay = exc.retry_after_seconds
             else:
                 if isinstance(envelope, ReceiptEnvelopeSigned):
-                    if _require_str(envelope.receipt, "receipt_id") != receipt_id:
+                    from .verify import decode_receipt
+                    if decode_receipt(envelope.receipt)["receipt_id"] != receipt_id:
                         raise AllowlyProtocolError(
                             "signed receipt_id does not match the requested receipt"
                         )
@@ -1113,9 +1072,15 @@ def _parse_receipt_envelope(raw: Any) -> ReceiptEnvelope:
     if raw.get("status") == "pending":
         return _parse_pending_envelope(raw)
     if raw.get("status") == "signed":
+        from .verify import decode_receipt, VerificationError
+        receipt = _require_dict(raw.get("receipt"), "signed receipt")
+        try:
+            decode_receipt(receipt)
+        except VerificationError as exc:
+            raise AllowlyProtocolError(f"invalid signed receipt: {exc}") from exc
         return ReceiptEnvelopeSigned(
             status="signed",
-            receipt=_require_dict(raw.get("receipt"), "signed receipt"),
+            receipt=cast(JwsReceipt, receipt),
         )
     raise AllowlyProtocolError("receipt status must be 'pending' or 'signed'")
 
@@ -1219,12 +1184,15 @@ def _parse_check_response(
                 escalation_to=_optional_str(item, "escalation_to"),
                 escalation_expires_at=_optional_str(item, "escalation_expires_at"),
             )
+    engine_version = _require_str(raw, "engine_version")
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", engine_version):
+        raise AllowlyProtocolError("engine_version must identify the full engine manifest by SHA-256")
     return CheckResponse(
         user_id=_optional_str(raw, "user_id"),
         agent_id=_optional_str(raw, "agent_id"),
         authorization_id=authorization_id,
         authorization_expires_at=_optional_str(raw, "authorization_expires_at"),
-        engine_version=_require_str(raw, "engine_version"),
+        engine_version=engine_version,
         results=results,
     )
 
@@ -1338,7 +1306,12 @@ def _validate_seal_receipt(
     expected_workspace_id: str,
     expected_receipt_id: str | None,
 ) -> None:
-    from .verify import SEAL_ACTION, SEAL_AGENT_ID, SEAL_PROFILE, SEAL_USER_ID
+    from .verify import SEAL_ACTION, SEAL_AGENT_ID, SEAL_PROFILE, SEAL_USER_ID, decode_receipt, VerificationError
+
+    try:
+        receipt = decode_receipt(receipt)
+    except VerificationError as exc:
+        raise AllowlyProtocolError(f"invalid SEAL receipt: {exc}") from exc
 
     receipt_id = _require_str(receipt, "receipt_id")
     if not receipt_id:
@@ -1346,21 +1319,17 @@ def _validate_seal_receipt(
     if expected_receipt_id is not None and receipt_id != expected_receipt_id:
         raise AllowlyProtocolError("seal receipt_id does not match the pending receipt")
     expected_fields = {
-        "schema_version": "4",
+        "schema_version": "5",
         "action": SEAL_ACTION,
         "decision": "allow",
         "agent_id": SEAL_AGENT_ID,
         "user_id": SEAL_USER_ID,
-        "alg": "Ed25519",
     }
     for key, expected in expected_fields.items():
         if _require_str(receipt, key) != expected:
             raise AllowlyProtocolError(f"seal receipt {key} does not match the request")
     if _require_str(receipt, "workspace_id") != expected_workspace_id:
         raise AllowlyProtocolError("seal receipt workspace_id does not match the response")
-    for key in ("key_id", "signature"):
-        if not _require_str(receipt, key):
-            raise AllowlyProtocolError(f"seal receipt {key} must be non-empty")
     context = _require_dict(receipt.get("context"), "seal receipt context")
     if _require_str(context, "seal_profile") != SEAL_PROFILE:
         raise AllowlyProtocolError("seal receipt profile does not match the request")
@@ -1386,16 +1355,6 @@ def _require_str_list(raw: dict[str, Any], key: str) -> list[str]:
     value = raw.get(key)
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
         raise AllowlyProtocolError(f"{key} must be an array of strings")
-    return value
-
-
-def _require_str_map(raw: dict[str, Any], key: str) -> dict[str, str]:
-    value = raw.get(key)
-    if not isinstance(value, dict) or any(
-        not isinstance(map_key, str) or not isinstance(map_value, str)
-        for map_key, map_value in value.items()
-    ):
-        raise AllowlyProtocolError(f"{key} must be an object of string values")
     return value
 
 
@@ -1467,7 +1426,8 @@ def _parse_execution_response(raw: Any) -> ExecutionResponse:
             raise AllowlyProtocolError("invalid execution review binding")
     if status == "waiting_for_review":
         envelope = _parse_receipt_envelope(body.get("decision_receipt"))
-        receipt_id = envelope.receipt_id if isinstance(envelope, ReceiptEnvelopePending) else envelope.receipt.get("receipt_id")
+        from .verify import decode_receipt
+        receipt_id = envelope.receipt_id if isinstance(envelope, ReceiptEnvelopePending) else decode_receipt(envelope.receipt).get("receipt_id")
         if (review is None or decision != review.kind or review.source_receipt_id != receipt_id
                 or body.get("approval") is not None or body.get("approval_sha256") is not None
                 or body.get("downstream") is not None or body.get("decision_state") != "not_allowed"
@@ -1681,21 +1641,4 @@ def _parse_escalation_info(raw: Any) -> EscalationInfo | None:
 
 
 def _parse_policy_eval(raw: Any) -> PolicyEvalInfo | None:
-    if raw is None:
-        return None
-    raw = _require_dict(raw, "policy evaluation")
-    matched = raw.get("matched_condition")
-    if matched is not None:
-        matched = _require_dict(matched, "matched policy condition")
-    return PolicyEvalInfo(
-        matched_condition=(
-            PolicyConditionEvidence(
-                field=_require_str(matched, "field"),
-                op=_require_str(matched, "op"),
-                value=matched.get("value"),
-            )
-            if matched is not None
-            else None
-        ),
-        field_value=raw.get("field_value"),
-    )
+    return None if raw is None else parse_policy_evaluation(raw)

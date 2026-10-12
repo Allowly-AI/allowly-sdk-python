@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.7.0
+## 0.8.0
+
+- Use verifier 5.0.0 and receipt wire 5 only, preserving the original signed
+  JWS envelope for verification. This breaking rebuild removes wire-4 parsing.
+- Create grants from exact immutable policy editions. Support action choices,
+  decision precedence, OR conditions and list operators in the typed policy API.
 
 - Continue a durable native Execute review using the original operation and
   request. Pending/rejected review never sends; attempted dispatch remains
@@ -12,9 +17,8 @@
 - Include the existing workspace resolution-webhook setup resource, typed
   events, and strict raw-byte verification helper. Verified callbacks only wake
   saved jobs; they do not grant permission or dispatch a provider request.
-- Require verifier `4.3.1` for engine `2026-10-09.1` policy replay on receipt wire `4`.
-  Use the published PyPI verifier and a registry-only lock; no sibling-source
-  override is needed.
+- Require the published PyPI verifier `5.0.0` with a registry-backed lock;
+  standalone installs no longer require a sibling verifier checkout.
 
 ## 0.6.1
 
