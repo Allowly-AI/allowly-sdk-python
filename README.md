@@ -294,7 +294,7 @@ async with Allowly(api_key=ALLOWLY_RUNTIME_KEY, agent_token=AGENT_TOKEN) as allo
 Use the operation ID from the catalog returned by your deployment; the initial
 catalog contains documentation-checked candidates, not a live compatibility
 guarantee. Policy inputs such as `policy_input={"context": {"amount": 2500}}`
-are customer-reported. Neither a receipt nor the compact witness record proves
+are customer-reported. A receipt does not prove
 that those inputs match the meaning of the provider body.
 
 The helper calls remote `/v1/execute`, validates the approval, and claims dispatch
@@ -302,7 +302,7 @@ once before sending locally. It fails closed on unavailable checks and stops on
 deny. Confirmation and escalation return `status="waiting_for_review"` with a
 typed `review` containing its kind, opaque ID, source receipt ID, and expiry.
 No provider request is sent while review is pending. Low-level customer methods are `prepare_execution`,
-`continue_execution`, `claim_execution_dispatch`, `get_execution_witness_token`,
+`continue_execution`, `claim_execution_dispatch`,
 `report_execution_outcome`, and `get_execution`.
 
 Read the review without running another Check or creating a receipt:
@@ -360,43 +360,6 @@ locally observed response and the journal retains the report for upload.
 The Python helper also raises `ExecutionRecoveryRequired` for a duplicate
 completed continuation instead of returning a cached local response. Use
 `get_execution` to read the outcome; do not turn that error into another send.
-Install witness setup before a witnessed Execute. A missing or invalid setup
-leaves a durable pre-dispatch journal, but never claims dispatch or sends.
-
-Run `allowly setup witness` in the Allowly CLI for each workspace that will use
-witnessed execution. The default path downloads a verified precompiled Rust
-helper. Use `allowly setup witness --build-from-source` to download reviewed
-Allowly adapter source and build it with pinned official TLSNotary libraries.
-That path needs Rust 1.95.0, Cargo, Git, Bash, and a native C build toolchain.
-The current CLI defaults to `witness-v0.1.1` and pins the SHA-256 digest of
-`SHA256SUMS`, then verifies the selected archive before running or building it.
-Missing assets or checksum mismatches stop setup; there is no unverified fallback.
-This local rebuild does not establish remote asset availability or a tested fresh
-archive installation. Offline setup also accepts
-`--archive FILE --sha256 HEX` or a reviewed `--helper FILE`.
-The command downloads that workspace's **public** witness key, shows its locally
-calculated fingerprint,
-and opens the authenticated workspace key page for you to compare and confirm.
-The CLI saves the confirmed fingerprint and local file paths in
-`~/.allowly/witness/<workspace-id>/config.json` (or below `ALLOWLY_CONFIG_DIR`).
-The SDK reads that setup automatically for the workspace in the execution
-approval and checks the public key against the confirmed fingerprint on every
-witnessed call. Keep this config and the public key available to the runtime
-user on the machine that sends provider requests. No private witness key is
-downloaded.
-For a local witness with a private CA, `allowly setup witness --witness-ca-cert`
-also pins that CA. The SDK checks its fingerprint before dispatch and passes it
-to the helper for the witness socket only. Provider HTTPS trust is unchanged.
-
-Set `evidence_mode="witnessed"` to request the native witness transport; a
-policy can also require this mode. Existing deployments may pass both
-`native_binary` and an independently provisioned `trusted_notary_key` file
-explicitly. The SDK compares the configured key with the witness session and
-waits for online witness admission and MPC setup before claiming dispatch. It
-never silently falls back to a regular receipt. The experimental native profile
-supports HTTP/1.1 over TLS 1.2, a **2 KiB complete request** and **16 KiB response**,
-with UTF-8 bodies, no compression or redirect following. Unsupported responses
-can be discovered after a provider action and leave an evidence gap.
 
 Signing stays asynchronous. To assemble the Allowly side of the evidence later:
 
@@ -409,18 +372,7 @@ package = await complete_execution_evidence(
 )
 ```
 
-This verifies the decision receipt signature and its exact approval hash. For
-witnessed execution, independently run the native `verify-execute` command on
-the full customer-held presentation using the trusted notary key. The compact
-record held by Allowly proves the notary's approval reference; full request-byte
-verification needs the customer presentation. Keep that presentation private:
-it includes provider credentials and response data. HTTP status is not proof of
-business completion. Native transport setup and limitations are documented in
-the workspace's `allowly_mcp/witness/EXECUTE.md`. That same repository owns the
-Allowly-hosted Witness Bridge source. The customer helper wraps unchanged
-TLSNotary libraries pinned to `v0.1.0-alpha.15` /
-`47aee45b53e06648c1b2ad3689b367b8c923fdec`. Setup does not install a second MCP
-package or start the hosted witnessing socket/service.
+This verifies the decision receipt signature and its exact approval hash. The outcome remains customer-reported, not independent proof of execution or business completion.
 
 ## FastMCP identity mapping
 
