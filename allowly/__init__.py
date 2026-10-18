@@ -7,6 +7,8 @@ from .seal_webhook import SealWebhookClient
 from .resolution_webhook import verify_resolution_webhook
 from .execution import LocalExecutionResult, ExecutionRecoveryRequired, complete_execution_evidence
 from .types import (
+    ObserveEventStatus,
+    ObserveReportedExecution,
     ActionCheckResult,
     ActionCheckResultAllow,
     ActionCheckResultConfirm,
@@ -67,6 +69,8 @@ from .types import (
 )
 
 __all__ = [
+    "ObserveEventStatus",
+    "ObserveReportedExecution",
     "Allowly",
     "JwsReceipt",
     "NativeAgentCredential",
