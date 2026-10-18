@@ -72,6 +72,7 @@ fastmcp = [
 [package.metadata]
 requires-dist = [
     { name = "allowly-receipt-format", specifier = "==5.0.0" },
+    { name = "allowly-receipt-format", url = "https://github.com/Allowly-AI/allowly-receipt-format/archive/affb43af7cb7d4019e69437c4c5d66841694d4a2.tar.gz", subdirectory = "verifiers/python" },
     { name = "cryptography", specifier = ">=50.0.2" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = ">=50.0.2" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=4.1.0,<5" },
@@ -88,15 +89,19 @@ provides-extras = ["fastmcp", "dev"]
 [[package]]
 name = "allowly-receipt-format"
 version = "5.0.0"
-source = { registry = "https://pypi.org/simple" }
+source = { url = "https://github.com/Allowly-AI/allowly-receipt-format/archive/affb43af7cb7d4019e69437c4c5d66841694d4a2.tar.gz", subdirectory = "verifiers/python" }
 dependencies = [
     { name = "cryptography" },
     { name = "pyjwt", extra = ["crypto"] },
     { name = "rfc8785" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d0/43/8a45099363e2927f34d699ab84b580428654a17713193f37ab26dd0ca654/allowly_receipt_format-5.0.0.tar.gz", hash = "sha256:aba332524ad03d937c7ba4032f12312f76a735b11427335f5c49ccc983c6c87b", size = 33555, upload-time = "2026-10-12T05:33:53.561Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/db/13/6b34612de786643e74bba111fb58f0b75a2b14446836c73d666d445ca7ad/allowly_receipt_format-5.0.0-py3-none-any.whl", hash = "sha256:791fbb04e6a1982a353436b72c10b046433a0d4ebd27da16142626d1208f8ecd", size = 32288, upload-time = "2026-10-12T05:33:52.152Z" },
+sdist = { hash = "sha256:66b51a63a38a13213773c83bc2888e26caa084eef137739f2ff9885045729eea" }
+
+[package.metadata]
+requires-dist = [
+    { name = "cryptography", specifier = ">=50.0.2" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15.1,<3" },
+    { name = "rfc8785", specifier = ">=0.1.4,<1" },
 ]
 
 [[package]]

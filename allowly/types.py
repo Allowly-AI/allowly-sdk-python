@@ -359,10 +359,32 @@ class PolicyExecutableOperationGrant(TypedDict):
     minimum_evidence_mode: Literal["receipt", "witnessed"]
 
 
-class PolicyActionEntry(TypedDict):
+class PolicyAIExtraction(TypedDict):
+    sources: list[str]
+    instruction: str
+
+
+class PolicyDomainExtraction(TypedDict):
+    source: str
+    transform: Literal["email_domain"]
+    empty_sources: list[str]
+
+
+class PolicyAllOf(TypedDict):
+    all_of: list[str]
+
+
+PolicyEvidenceRequirement = PolicyAIExtraction | PolicyDomainExtraction | PolicyAllOf
+
+
+class _PolicyActionRequired(TypedDict):
     policy: BasicPolicy
     guards: ActionGuards
     executable_operations: list[PolicyExecutableOperationGrant]
+
+
+class PolicyActionEntry(_PolicyActionRequired, total=False):
+    evidence: dict[str, PolicyEvidenceRequirement]
 
 
 class PolicyDefinition(TypedDict):
