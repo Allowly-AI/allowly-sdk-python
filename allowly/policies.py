@@ -8,6 +8,7 @@ from typing import Any, TYPE_CHECKING
 from urllib.parse import quote
 
 from allowly_receipt_format import VerificationError, canonicalize
+from allowly_receipt_format.evidence import validate_policy_definition as _validate_definition
 
 from .error import AllowlyProtocolError
 from .types import (PolicyDefinition, PolicyReference, PolicyResponse, PolicyListResponse,
@@ -83,100 +84,11 @@ def parse_policy_reference(value: Any) -> PolicyReference:
 
 
 def validate_policy_definition(value: Any) -> PolicyDefinition:
-    raw = _keys(_document(value, "definition"), {"profile", "agent_id", "actions", "default_expiry_days"}, "definition")
-    if raw["profile"] != "allowly.policy.v1":
-        raise AllowlyProtocolError("definition profile is unsupported")
-    _text(raw["agent_id"], "definition.agent_id")
-    if raw["default_expiry_days"] is not None:
-        _integer(raw["default_expiry_days"], "default_expiry_days", maximum=3650)
-    if type(raw["actions"]) is not list or not 1 <= len(raw["actions"]) <= 32:
-        raise AllowlyProtocolError("definition.actions must contain 1 to 32 entries")
-    names, operations = set(), set()
-    for entry in raw["actions"]:
-        _keys(entry, {"policy", "guards", "executable_operations"}, "policy action")
-        policy = _keys(entry["policy"], {"profile", "action", "decision", "target", "fields", "rules"}, "basic policy")
-        name = _text(policy["action"], "policy.action", 64)
-        if name in names or name in {"allow", "deny", "confirm", "escalate"}:
-            raise AllowlyProtocolError("policy actions must be unique executable names")
-        names.add(name)
-        if policy["profile"] != "allowly.basic.v1":
-            raise AllowlyProtocolError("basic policy profile is unsupported")
-        _target(policy["decision"], policy["target"])
-        fields = policy["fields"]
-        if type(fields) is not dict or len(fields) > 64:
-            raise AllowlyProtocolError("policy.fields must be a bounded object")
-        for field, declared in fields.items():
-            _text(field, "field")
-            if type(declared) is not str or declared not in {"string", "integer", "boolean", "null", "list"}:
-                raise AllowlyProtocolError("policy field type is unsupported")
-        rules = policy["rules"]
-        if type(rules) is not list or len(rules) > 32:
-            raise AllowlyProtocolError("policy.rules must contain at most 32 ordered rules")
-        rule_ids = set()
-        for rule in rules:
-            _keys(rule, {"id", "decision", "target", "conditions"}, "rule")
-            rule_id = _text(rule["id"], "rule.id")
-            if rule_id in rule_ids:
-                raise AllowlyProtocolError("rule IDs must be unique")
-            rule_ids.add(rule_id)
-            _target(rule["decision"], rule["target"])
-            if type(rule["conditions"]) is not list or not 1 <= len(rule["conditions"]) <= 10:
-                raise AllowlyProtocolError("rule.conditions must contain 1 to 10 entries")
-            for condition in rule["conditions"]:
-                _keys(condition, {"field", "op", "value"}, "condition")
-                declared = fields.get(_text(condition["field"], "condition.field"))
-                op, compared = condition["op"], condition["value"]
-                if declared is None or type(op) is not str or op not in {"eq", "ne", "gt", "gte", "lt", "lte", "in", "not_in", "exists", "contains_any", "contains_none", "empty"}:
-                    raise AllowlyProtocolError("condition requires a declared field and supported operator")
-                if op == "exists":
-                    if type(compared) is not bool:
-                        raise AllowlyProtocolError("exists requires a boolean value")
-                    continue
-                if op == "empty":
-                    if declared != "list" or type(compared) is not bool:
-                        raise AllowlyProtocolError("empty requires a list field and a boolean value")
-                    continue
-                if op in {"contains_any", "contains_none"}:
-                    if (declared != "list" or type(compared) is not list or not 1 <= len(compared) <= 64
-                            or any(type(item) not in {str, int, bool, type(None)} for item in compared)):
-                        raise AllowlyProtocolError("list overlap requires a list field and 1 to 64 scalar values")
-                    continue
-                if declared == "list":
-                    raise AllowlyProtocolError("list fields require list comparisons or exists")
-                membership = op in {"in", "not_in"}
-                if membership != (type(compared) is list):
-                    raise AllowlyProtocolError("only membership comparisons use arrays")
-                values = compared if membership else [compared]
-                expected = {"string": str, "integer": int, "boolean": bool, "null": type(None)}[declared]
-                if len(values) > 64 or any(type(item) is not expected for item in values):
-                    raise AllowlyProtocolError("comparison values must match the declared field type")
-                if op in {"gt", "gte", "lt", "lte"} and declared != "integer":
-                    raise AllowlyProtocolError("ordered comparisons require integer fields")
-        guards = _keys(entry["guards"], set(), "guards", {"resource_pattern", "allowed_initiators", "max_per_day"})
-        if "resource_pattern" in guards:
-            _text(guards["resource_pattern"], "resource_pattern", 256)
-        if "allowed_initiators" in guards:
-            _strings(guards["allowed_initiators"], "allowed_initiators", 128)
-        if "max_per_day" in guards:
-            _integer(guards["max_per_day"], "max_per_day")
-        grants = entry["executable_operations"]
-        if type(grants) is not list or len(grants) > 100:
-            raise AllowlyProtocolError("executable_operations must be a bounded array")
-        for grant in grants:
-            _keys(grant, {"enabled_executable_id", "provider_id", "operation_id", "catalog_revision", "definition_fingerprint", "minimum_evidence_mode"}, "executable grant")
-            for key in ("enabled_executable_id", "provider_id", "operation_id", "catalog_revision"):
-                _text(grant[key], key)
-            fingerprint = grant["definition_fingerprint"]
-            if type(fingerprint) is not str or not re.fullmatch(r"sha256:[0-9a-f]{64}", fingerprint):
-                raise AllowlyProtocolError("executable definition_fingerprint is invalid")
-            if type(grant["minimum_evidence_mode"]) is not str or grant["minimum_evidence_mode"] not in {"receipt", "witnessed"}:
-                raise AllowlyProtocolError("minimum_evidence_mode is unsupported")
-            identity = (grant["enabled_executable_id"], grant["operation_id"])
-            if identity in operations:
-                raise AllowlyProtocolError("an executable operation may belong to only one action")
-            operations.add(identity)
-    if _contains_nul(raw):
-        raise AllowlyProtocolError("definition cannot contain NUL characters")
+    raw = _document(value, "definition")
+    try:
+        _validate_definition(raw)
+    except (ValueError, TypeError, KeyError):
+        raise AllowlyProtocolError("definition has invalid policy or evidence fields") from None
     return raw
 
 
@@ -303,13 +215,3 @@ class _PoliciesResource:
 
 def body_definition(body: dict) -> PolicyDefinition:
     return {key: body[key] for key in ("profile", "agent_id", "actions", "default_expiry_days")}
-
-
-def _contains_nul(value: Any) -> bool:
-    if isinstance(value, str):
-        return "\x00" in value
-    if isinstance(value, dict):
-        return any(_contains_nul(key) or _contains_nul(item) for key, item in value.items())
-    if isinstance(value, list):
-        return any(_contains_nul(item) for item in value)
-    return False

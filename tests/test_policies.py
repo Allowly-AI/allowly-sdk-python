@@ -19,6 +19,63 @@ def definition():
     return copy.deepcopy(VECTORS["signature_cases"][1]["definition"])
 
 
+def evidence_definition():
+    value = definition()
+    entry = value["actions"][0]
+    entry["policy"].update(fields={"a": "boolean", "b": "boolean", "both": "boolean", "domain": "string"}, rules=[])
+    entry["evidence"] = {
+        "a": {"sources": ["text"], "instruction": "Identify a confidential statement."},
+        "b": {"sources": ["to"], "instruction": "Is the recipient external to example.com?"},
+        "both": {"all_of": ["a", "b"]},
+        "domain": {"source": "to", "transform": "email_domain", "empty_sources": ["cc", "bcc"]},
+    }
+    return value
+
+
+def test_evidence_is_retained_and_committed_without_changing_ordinary_definitions():
+    old, value = definition(), evidence_definition()
+    assert validate_policy_definition(old) == old
+    assert "evidence" not in validate_policy_definition(old)["actions"][0]
+    normalized = validate_policy_definition(value)
+    assert normalized == value and normalized is not value
+    changed = copy.deepcopy(value)
+    changed["actions"][0]["evidence"]["a"]["instruction"] += " Review carefully."
+    assert definition_digest(changed) != definition_digest(value)
+
+
+@pytest.mark.parametrize("edit", [
+    lambda e: e.update(evidence=None),
+    lambda e: e.update(evidence={}),
+    lambda e: e["evidence"].pop("a"),
+    lambda e: e["evidence"]["a"].update(instruction=" "),
+    lambda e: e["evidence"]["a"].update(sources=["text", "text"]),
+    lambda e: e["evidence"]["a"].update(sources=["x" * 65]),
+    lambda e: e["evidence"]["a"].update(extra=True),
+    lambda e: e["evidence"]["both"].update(all_of=["domain"]),
+    lambda e: e["evidence"]["both"].update(all_of=["both"]),
+    lambda e: e["evidence"]["both"].update(all_of=["a", "a"]),
+    lambda e: e["evidence"]["domain"].update(transform="arbitrary_code"),
+    lambda e: e["evidence"]["domain"].update(empty_sources=["to"]),
+    lambda e: e["evidence"]["domain"].pop("empty_sources"),
+    lambda e: e["policy"]["fields"].update(domain="boolean"),
+])
+def test_invalid_evidence_cannot_be_saved_or_published(edit):
+    value = evidence_definition()
+    edit(value["actions"][0])
+    with pytest.raises(AllowlyProtocolError):
+        validate_policy_definition(value)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_evidence_survives_policy_transport_and_hash_binding():
+    value = evidence_definition()
+    route = respx.post(BASE + "/v1/policies").mock(return_value=httpx.Response(201, json=policy_response(value)))
+    async with Allowly("setup-key", base_url=BASE) as client:
+        assert (await client.policies.create(policy_id="review", definition=value)).definition == value
+    assert json.loads(route.calls[0].request.content)["actions"][0]["evidence"] == value["actions"][0]["evidence"]
+
+
 def policy_response(value=None, policy_id="review", version=1):
     value = value or definition()
     return {"policy_ref": {"policy_id": policy_id, "policy_version": version, "definition_sha256": definition_digest(value)},
