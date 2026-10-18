@@ -13,6 +13,7 @@ import httpx
 
 from .error import AllowlyAPIError, AllowlyProtocolError, FieldError
 from .resolution_webhook import _ResolutionWebhookResource
+from .observe import _ObserveResource
 from .policies import (_PoliciesResource, parse_policy_reference, parse_policy_evaluation,
                        _document, _integer, _strings, _text, _keys)
 from .types import (
@@ -116,6 +117,7 @@ class Allowly:
         self.escalations = _EscalationsResource(self)
         self.receipts = _ReceiptsResource(self)
         self.resolution_webhook = _ResolutionWebhookResource(self)
+        self.observe = _ObserveResource(self)
 
     async def create_custom_executable(
         self, request: CustomExecutableCreateRequest,

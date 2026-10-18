@@ -5,6 +5,7 @@ from typing import Any, Literal, TypedDict, Union
 
 Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
+ObserveReportedExecution = Literal["accepted", "sent", "failed", "unknown"]
 SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed"]
 PromptStatus = Literal["pending", "approved", "rejected", "expired", "unknown"]
 ConfirmationAuthorityStatus = Literal["none", "available", "expired", "revoked", "unknown"]
@@ -316,6 +317,24 @@ class PolicyReference(TypedDict):
     policy_id: str
     policy_version: int
     definition_sha256: str
+
+
+@dataclass(frozen=True)
+class ObserveEventStatus:
+    event_id: str
+    agent_id: str
+    action: str
+    policy_ref: PolicyReference
+    mode: Literal["observe"]
+    intervention: Literal["none"]
+    reported_execution: ObserveReportedExecution
+    processing_status: Literal["pending", "processing", "complete", "failed"]
+    assessment_status: Literal["not_assessed", "no_violation_found", "violation_detected", "insufficient_evidence"]
+    signing_status: Literal["unavailable", "pending", "signed"]
+    observed_action_id: str | None
+    assessment_id: str | None
+    dashboard_url: str | None
+    last_error: str | None
 
 
 class BasicCondition(TypedDict):
