@@ -300,6 +300,57 @@ class Allowly:
         response.billing_warning = response_headers.get("X-Allowly-Billing-Warning")
         return response
 
+    async def check_by_agent(
+        self,
+        *,
+        agent_name: str,
+        actions: list[str],
+        resource: str | None = None,
+        session_id: str | None = None,
+        estimated_cost_micros: int | None = None,
+        context: dict[str, Any] | None = None,
+        wait: bool = False,
+        idempotency_key: str | None = None,
+        client_timestamp: datetime | str | None = None,
+    ) -> CheckResponse:
+        """Check the workspace's shared policy using a self-reported agent name.
+
+        Name routing never uses availability fallbacks or verified agent identity.
+        ``context.agent_label`` is reserved for the server's self-reported label.
+        """
+        if self._agent_token is not None or self._agent_token_supplier is not None:
+            raise ValueError("name-routed checks cannot use configured agent identity")
+        if context is not None and "agent_label" in context:
+            raise ValueError("context.agent_label is reserved for the server")
+        body = {
+            "agent_name": agent_name,
+            "actions": actions,
+            "resource": resource,
+            "session_id": session_id,
+            "estimated_cost_micros": estimated_cost_micros,
+            "context": context or {},
+        }
+        if client_timestamp is not None:
+            body["client_timestamp"] = _client_timestamp(client_timestamp)
+        timeout = max(self._check_timeout, 6.0) if wait else self._check_timeout
+        raw, response_headers = await asyncio.wait_for(
+            self._request_with_headers(
+                "POST", "/v1/agent-check" + ("?wait=true" if wait else ""),
+                json=body, timeout=timeout,
+                headers={"Idempotency-Key": idempotency_key} if idempotency_key is not None else None,
+            ),
+            timeout=timeout,
+        )
+        raw = _require_dict(raw, "check response")
+        authorization_id = _require_str(raw, "authorization_id")
+        if not authorization_id or authorization_id != authorization_id.strip() or len(authorization_id) > 128:
+            raise AllowlyProtocolError("resolved authorization_id must be a nonempty bounded ID")
+        response = _parse_check_response(
+            raw, expected_authorization_id=authorization_id, expected_actions=actions,
+        )
+        response.billing_warning = response_headers.get("X-Allowly-Billing-Warning")
+        return response
+
     async def _identity_headers(
         self,
         agent_token: str | None,

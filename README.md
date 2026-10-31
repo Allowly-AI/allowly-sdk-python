@@ -2,6 +2,38 @@
 
 Async Python client for the Allowly runtime API.
 
+## Check shared permissions by agent name
+
+After an operator explicitly finishes shared-policy setup, the runtime can
+resolve the authorization for a registered, self-reported agent name:
+
+```python
+from allowly import Allowly
+
+async with Allowly(api_key=ALLOWLY_RUNTIME_KEY) as client:
+    result = await client.check_by_agent(
+        agent_name="Support agent", actions=["ticket.reply"],
+        resource="ticket:one", context={"external": True},
+        idempotency_key="support-ticket-one",
+    )
+    authorization_id = result.authorization_id  # Evidence link, resolved by the server.
+    if result.results["ticket.reply"].decision == "allow":
+        await send_reply()
+```
+
+The name is a routing label, not verified identity. `context.agent_label` is
+reserved: the server records `{name, source: "self_reported"}`. Name routing
+rejects clients configured with an agent token or token supplier and never
+uses availability fallbacks, including configured `fail_open` actions. Stop
+on an error or deny; pause confirm/escalate for review. Save the original named
+request, including its context, resource, cost and session. After approval,
+call `check_by_agent` again with that same name and unchanged inputs, using a
+fresh idempotency key, and execute only a fresh allow. The runtime checks the
+current name assignment; the returned authorization ID links evidence and
+does not replace the named continuation flow. Existing `check` behavior
+and identity-bound authorizations are unchanged. This source addition requires
+a runtime supporting `/v1/agent-check`; it does not publish or deploy it.
+
 ## Confirmation receipts
 
 Confirmation responses expose `receipt`, a pending resolution envelope or
