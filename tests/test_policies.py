@@ -25,6 +25,37 @@ def policy_response(value=None, policy_id="review", version=1):
             "definition": value, "description": None, "created_by": "member:owner", "created_at": "2026-10-10T00:00:00Z", "deleted_at": None}
 
 
+def test_request_parsing_guidance_preserves_old_editions_and_commits_new_meanings():
+    old = definition()
+    assert "request_parsing" not in validate_policy_definition(old)["actions"][0]
+    value = definition()
+    entry = value["actions"][0]
+    entry["request_parsing"] = {"description": "Perform this action", "resource": "Exact target ID",
+                                "fields": {field: "Exact value for " + field for field in entry["policy"]["fields"]}}
+    assert validate_policy_definition(value) == value
+    changed = copy.deepcopy(value)
+    changed["actions"][0]["request_parsing"]["resource"] = "A different target meaning"
+    assert definition_digest(changed) != definition_digest(value)
+    assert definition_digest(old) != definition_digest(value)
+
+
+@pytest.mark.parametrize("fault", ["blank", "long", "missing", "extra", "unknown", "null"])
+def test_request_parsing_guidance_rejects_incomplete_or_invalid_descriptions(fault):
+    value = definition()
+    entry = value["actions"][0]
+    hints = {"description": "Perform this action", "resource": "Exact target ID",
+             "fields": {field: "Exact value" for field in entry["policy"]["fields"]}}
+    entry["request_parsing"] = hints
+    if fault == "blank": hints["resource"] = " "
+    elif fault == "long": hints["description"] = "x" * 2049
+    elif fault == "missing": hints["fields"].pop(next(iter(hints["fields"])))
+    elif fault == "extra": hints["fields"]["undeclared"] = "No field"
+    elif fault == "unknown": hints["extra"] = True
+    else: entry["request_parsing"] = None
+    with pytest.raises(AllowlyProtocolError):
+        validate_policy_definition(value)
+
+
 @pytest.mark.parametrize("case", VECTORS["signature_cases"], ids=lambda case: case["name"])
 def test_shared_opa_shapes_are_retained_without_renaming_or_recalculation(case):
     assert validate_policy_definition(case["definition"]) == case["definition"]

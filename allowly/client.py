@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from dataclasses import asdict
 from datetime import datetime
 import inspect
@@ -17,6 +18,7 @@ from .policies import (_PoliciesResource, parse_policy_reference, parse_policy_e
                        _document, _integer, _strings, _text, _keys)
 from .types import (
     CheckResponse,
+    ParsedTextRequest, TextCheckParse, TextCheckResponse,
     CustomExecutableCreateRequest,
     EnabledExecutableResponse,
     ExecutableOperation,
@@ -349,6 +351,55 @@ class Allowly:
             raw, expected_authorization_id=authorization_id, expected_actions=actions,
         )
         response.billing_warning = response_headers.get("X-Allowly-Billing-Warning")
+        return response
+
+    async def check_text_by_agent(
+        self, *, agent_name: str, request: str, idempotency_key: str,
+        session_id: str | None = None, estimated_cost_micros: int | None = None,
+        client_timestamp: datetime | str | None = None, timeout_seconds: float = 35.0,
+    ) -> TextCheckResponse:
+        """Parse one request, then check it. Execute only the returned parsed request on allow."""
+        _text(request, "request", 16_384)
+        if not request.strip() or "\x00" in request or len(request.encode("utf-8")) > 16_384:
+            raise ValueError("request must be nonblank UTF-8 text of at most 16384 bytes without NUL")
+        body = {"agent_name": agent_name, "request": request,
+                "session_id": session_id, "estimated_cost_micros": estimated_cost_micros}
+        if client_timestamp is not None:
+            body["client_timestamp"] = _client_timestamp(client_timestamp)
+        return await self._text_check(
+            "/v1/agent-check/text", body, idempotency_key, timeout_seconds,
+            expected_request_sha256=hashlib.sha256(request.encode("utf-8")).hexdigest(),
+        )
+
+    async def recheck_text_by_agent(
+        self, *, agent_name: str, parse_id: str, idempotency_key: str,
+    ) -> TextCheckResponse:
+        """Recheck the saved parse against current authority without another model call."""
+        _text(parse_id, "parse_id")
+        return await self._text_check(
+            f"/v1/agent-check/text/{quote(parse_id, safe='')}", {"agent_name": agent_name},
+            idempotency_key, self._check_timeout, expected_parse_id=parse_id,
+        )
+
+    async def _text_check(
+        self, path: str, body: dict[str, Any], idempotency_key: str, timeout_seconds: float,
+        *, expected_request_sha256: str | None = None, expected_parse_id: str | None = None,
+    ) -> TextCheckResponse:
+        if self._agent_token is not None or self._agent_token_supplier is not None:
+            raise ValueError("name-routed checks cannot use configured agent identity")
+        _text(body["agent_name"], "agent_name")
+        _text(idempotency_key, "idempotency_key")
+        if not 0 < timeout_seconds < float("inf"):
+            raise ValueError("timeout_seconds must be positive")
+        raw, headers = await asyncio.wait_for(self._request_with_headers(
+            "POST", path, json=body, timeout=timeout_seconds,
+            headers={"Idempotency-Key": idempotency_key},
+        ), timeout=timeout_seconds)
+        response = _parse_text_check_response(
+            raw, expected_agent_name=body["agent_name"],
+            expected_request_sha256=expected_request_sha256, expected_parse_id=expected_parse_id,
+        )
+        response.billing_warning = headers.get("X-Allowly-Billing-Warning")
         return response
 
     async def _identity_headers(
@@ -1246,6 +1297,47 @@ def _parse_check_response(
         engine_version=engine_version,
         results=results,
     )
+
+
+def _parse_text_check_response(
+    raw: Any, *, expected_agent_name: str,
+    expected_request_sha256: str | None, expected_parse_id: str | None,
+) -> TextCheckResponse:
+    raw = _require_dict(raw, "text check response")
+    parsed = _keys(_document(raw.get("parse"), "parse"), {
+        "id", "agent_name", "policy_ref", "parsed_request", "request_sha256",
+        "model", "model_version", "expires_at",
+    }, "parse")
+    parse_id = _text(parsed["id"], "parse.id")
+    if parsed["agent_name"] != expected_agent_name or (expected_parse_id is not None and parse_id != expected_parse_id):
+        raise AllowlyProtocolError("text parse does not match the requested agent or parse ID")
+    digest = parsed["request_sha256"]
+    if (type(digest) is not str or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            or (expected_request_sha256 is not None and digest != expected_request_sha256)):
+        raise AllowlyProtocolError("text parse request_sha256 does not match the request")
+    request = _keys(parsed["parsed_request"], {"actions", "resource", "context"}, "parsed_request")
+    actions = _strings(request["actions"], "parsed_request.actions", 1, 64)
+    resource = _text(request["resource"], "parsed_request.resource", 256)
+    context = _document(request["context"], "parsed_request.context", 4096)
+    if not resource.strip() or "\x00" in resource or len(context) > 23 or any(
+        "\x00" in key or any(type(item) not in {str, int, bool, type(None)}
+            or (type(item) is str and "\x00" in item)
+            for item in (value if type(value) is list else [value]))
+        for key, value in context.items()
+    ):
+        raise AllowlyProtocolError("parsed_request requires a valid resource and at most 23 flat scalar/list fields")
+    authorization_id = _text(raw.get("authorization_id"), "authorization_id")
+    if authorization_id != authorization_id.strip():
+        raise AllowlyProtocolError("resolved authorization_id must be a nonempty bounded ID")
+    response = _parse_check_response(raw, expected_authorization_id=authorization_id, expected_actions=actions)
+    metadata = TextCheckParse(
+        id=parse_id, agent_name=expected_agent_name, policy_ref=parse_policy_reference(parsed["policy_ref"]),
+        parsed_request=cast(ParsedTextRequest, {"actions": actions, "resource": resource, "context": context}),
+        request_sha256=digest, model=_text(parsed["model"], "parse.model", 256),
+        model_version=_text(parsed["model_version"], "parse.model_version", 256),
+        expires_at=cast(str, _status_timestamp(parsed, "expires_at")),
+    )
+    return TextCheckResponse(**vars(response), parse=metadata)
 
 
 def _require_dict(value: Any, name: str) -> dict[str, Any]:
