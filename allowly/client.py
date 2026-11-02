@@ -173,7 +173,14 @@ class Allowly:
                 rendered = rendered.replace(sensitive_value, "[REDACTED]")
             return rendered
 
-        resp = await self._http.request(method, path, **kwargs)
+        try:
+            resp = await self._http.request(method, path, **kwargs)
+        except httpx.RemoteProtocolError:
+            if method.upper() != "GET":
+                raise
+            # A server can close a pooled idle connection as polling resumes.
+            # HTTPX discards that connection; retry only the read, once.
+            resp = await self._http.request(method, path, **kwargs)
         expected_statuses = (
             (expected_success_status,)
             if isinstance(expected_success_status, int)

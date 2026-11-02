@@ -567,8 +567,10 @@ print(escalation.status, escalation.authority_status)
 The released `get` names remain aliases of `get_status`; both return the same
 typed status object. `ConfirmationStatusResponse` and `EscalationStatusResponse`
 are aliases of the existing `ConfirmationStatus` and `EscalationStatus` types.
-Each read makes one authenticated request. Repeat it in your application's own
-bounded polling loop if needed. The prompt `status` is `pending`, `approved`,
+Each read retries once if the server disconnects without a response. A second
+failure or malformed response raises an error; keep the workflow paused. These
+GET retries never replay a Check or other write. Repeat reads in your
+application's own bounded polling loop if needed. The prompt `status` is `pending`, `approved`,
 `rejected`, `expired`, or `unknown`; `unknown` means a legacy record does not
 show the choice. An approved choice stays approved after its grant expires,
 is revoked, or (for escalations) is consumed. `authority_status="available"`
