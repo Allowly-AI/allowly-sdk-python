@@ -25,33 +25,33 @@ def policy_response(value=None, policy_id="review", version=1):
             "definition": value, "description": None, "created_by": "member:owner", "created_at": "2026-10-10T00:00:00Z", "deleted_at": None}
 
 
-def test_request_parsing_guidance_preserves_old_editions_and_commits_new_meanings():
+def test_input_descriptions_guidance_preserves_old_editions_and_commits_new_meanings():
     old = definition()
-    assert "request_parsing" not in validate_policy_definition(old)["actions"][0]
+    assert "input_descriptions" not in validate_policy_definition(old)["actions"][0]
     value = definition()
     entry = value["actions"][0]
-    entry["request_parsing"] = {"description": "Perform this action", "resource": "Exact target ID",
+    entry["input_descriptions"] = {"description": "Perform this action", "resource": "Exact target ID",
                                 "fields": {field: "Exact value for " + field for field in entry["policy"]["fields"]}}
     assert validate_policy_definition(value) == value
     changed = copy.deepcopy(value)
-    changed["actions"][0]["request_parsing"]["resource"] = "A different target meaning"
+    changed["actions"][0]["input_descriptions"]["resource"] = "A different target meaning"
     assert definition_digest(changed) != definition_digest(value)
     assert definition_digest(old) != definition_digest(value)
 
 
 @pytest.mark.parametrize("fault", ["blank", "long", "missing", "extra", "unknown", "null"])
-def test_request_parsing_guidance_rejects_incomplete_or_invalid_descriptions(fault):
+def test_input_descriptions_guidance_rejects_incomplete_or_invalid_descriptions(fault):
     value = definition()
     entry = value["actions"][0]
     hints = {"description": "Perform this action", "resource": "Exact target ID",
              "fields": {field: "Exact value" for field in entry["policy"]["fields"]}}
-    entry["request_parsing"] = hints
+    entry["input_descriptions"] = hints
     if fault == "blank": hints["resource"] = " "
     elif fault == "long": hints["description"] = "x" * 2049
     elif fault == "missing": hints["fields"].pop(next(iter(hints["fields"])))
     elif fault == "extra": hints["fields"]["undeclared"] = "No field"
     elif fault == "unknown": hints["extra"] = True
-    else: entry["request_parsing"] = None
+    else: entry["input_descriptions"] = None
     with pytest.raises(AllowlyProtocolError):
         validate_policy_definition(value)
 
@@ -369,3 +369,10 @@ async def test_create_binds_response_to_sent_snapshot_when_caller_changes_defini
     async with Allowly("setup-key", base_url=BASE) as client:
         assert (await client.policies.create(policy_id="review", definition=value)).definition == original
     assert value != original
+
+
+def test_removed_request_parsing_alias_is_rejected():
+    value = definition()
+    value["actions"][0]["request_parsing"] = {"description": "Action", "resource": "Target", "fields": {}}
+    with pytest.raises(AllowlyProtocolError):
+        validate_policy_definition(value)

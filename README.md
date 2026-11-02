@@ -12,6 +12,7 @@ from allowly import Allowly
 
 async with Allowly(api_key=ALLOWLY_RUNTIME_KEY) as client:
     result = await client.check_by_agent(
+        expected_policy_ref={"policy_id": "support", "policy_version": 1, "definition_sha256": "a" * 64},
         agent_name="Support agent", actions=["ticket.reply"],
         resource="ticket:one", context={"external": True},
         idempotency_key="support-ticket-one",
@@ -26,41 +27,15 @@ reserved: the server records `{name, source: "self_reported"}`. Name routing
 rejects clients configured with an agent token or token supplier and never
 uses availability fallbacks, including configured `fail_open` actions. Stop
 on an error or deny; pause confirm/escalate for review. Save the original named
-request, including its context, resource, cost and session. After approval,
+request, including `expected_policy_ref`, context, resource, cost and session. After approval,
 call `check_by_agent` again with that same name and unchanged inputs, using a
 fresh idempotency key, and execute only a fresh allow. The runtime checks the
 current name assignment; the returned authorization ID links evidence and
 does not replace the named continuation flow. Existing `check` behavior
 and identity-bound authorizations are unchanged. This source addition requires
-a runtime supporting `/v1/agent-check`; it does not publish or deploy it.
-
-## Parse a free-text request
-
-Unreleased source methods require an enabled text-check runtime. Published
-0.8.0 is unchanged. Add reviewed `request_parsing` descriptions to every policy
-action, its resource and every declared field, then call:
-
-```python
-checked = await client.check_text_by_agent(
-    agent_name="Support agent", request="Reply to ticket:one with a refund of 0 dollars.",
-    idempotency_key="ticket-one-initial", estimated_cost_micros=0,
-)
-canonical = checked.parse.parsed_request
-# Execute only canonical, unchanged, when checked.results[canonical["actions"][0]] allows.
-# After approved review with usable authority, recheck that saved parse:
-resumed = await client.recheck_text_by_agent(
-    agent_name="Support agent", parse_id=checked.parse.id, idempotency_key="ticket-one-resume",
-)
-```
-
-Never parse the prose again to resume approval. Save the parse ID and payload,
-recheck current authority, and execute only an unchanged parsed payload on a fresh
-allow. Both methods require idempotency keys, reject configured identity and
-propagate errors without fallback. Initial `timeout_seconds` defaults to 35;
-an explicit shorter value is honored. Recheck uses `check_timeout_ms`.
-`TextCheckResponse` extends `CheckResponse` with typed `TextCheckParse`.
-`PolicyRequestParsing` is optional policy metadata; omitting it preserves old
-definition digests. Changing it requires a new policy edition.
+a runtime supporting `/v1/agent-check`. Copy the exact policy reference from
+the generated setup instructions. A policy change requires a refreshed prompt;
+a mismatched reference stops the request before policy evaluation.
 
 ## Confirmation receipts
 

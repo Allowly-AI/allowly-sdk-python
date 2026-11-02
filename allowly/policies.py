@@ -93,7 +93,7 @@ def validate_policy_definition(value: Any) -> PolicyDefinition:
         raise AllowlyProtocolError("definition.actions must contain 1 to 32 entries")
     names, operations = set(), set()
     for entry in raw["actions"]:
-        _keys(entry, {"policy", "guards", "executable_operations"}, "policy action", {"request_parsing"})
+        _keys(entry, {"policy", "guards", "executable_operations"}, "policy action", {"input_descriptions"})
         policy = _keys(entry["policy"], {"profile", "action", "decision", "target", "fields", "rules"}, "basic policy")
         name = _text(policy["action"], "policy.action", 64)
         if name in names or name in {"allow", "deny", "confirm", "escalate"}:
@@ -109,12 +109,12 @@ def validate_policy_definition(value: Any) -> PolicyDefinition:
             _text(field, "field")
             if type(declared) is not str or declared not in {"string", "integer", "boolean", "null", "list"}:
                 raise AllowlyProtocolError("policy field type is unsupported")
-        if "request_parsing" in entry:
-            guidance = _keys(entry["request_parsing"], {"description", "resource", "fields"}, "request_parsing")
-            descriptions = _keys(guidance["fields"], set(fields), "request_parsing.fields")
+        if "input_descriptions" in entry:
+            guidance = _keys(entry["input_descriptions"], {"description", "resource", "fields"}, "input_descriptions")
+            descriptions = _keys(guidance["fields"], set(fields), "input_descriptions.fields")
             for value in [guidance["description"], guidance["resource"], *descriptions.values()]:
-                if not _text(value, "request_parsing description", 2048).strip():
-                    raise AllowlyProtocolError("request_parsing descriptions must not be blank")
+                if not _text(value, "input_descriptions description", 2048).strip():
+                    raise AllowlyProtocolError("input_descriptions descriptions must not be blank")
         rules = policy["rules"]
         if type(rules) is not list or len(rules) > 32:
             raise AllowlyProtocolError("policy.rules must contain at most 32 ordered rules")

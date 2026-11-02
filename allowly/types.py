@@ -359,7 +359,7 @@ class PolicyExecutableOperationGrant(TypedDict):
     minimum_evidence_mode: Literal["receipt", "witnessed"]
 
 
-class PolicyRequestParsing(TypedDict):
+class PolicyInputDescriptions(TypedDict):
     description: str
     resource: str
     fields: dict[str, str]
@@ -372,7 +372,7 @@ class _PolicyActionRequired(TypedDict):
 
 
 class PolicyActionEntry(_PolicyActionRequired, total=False):
-    request_parsing: PolicyRequestParsing
+    input_descriptions: PolicyInputDescriptions
 
 
 class PolicyDefinition(TypedDict):
@@ -493,29 +493,6 @@ class CheckResponse:
     #: X-Allowly-Billing-Warning response header, when the workspace is close
     #: to a quota/payment boundary. Surface it to operators.
     billing_warning: str | None = None
-
-
-class ParsedTextRequest(TypedDict):
-    actions: list[str]
-    resource: str
-    context: dict[str, Any]
-
-
-@dataclass
-class TextCheckParse:
-    id: str
-    agent_name: str
-    policy_ref: PolicyReference
-    parsed_request: ParsedTextRequest
-    request_sha256: str
-    model: str
-    model_version: str
-    expires_at: str
-
-
-@dataclass(kw_only=True)
-class TextCheckResponse(CheckResponse):
-    parse: TextCheckParse
 
 
 @dataclass
