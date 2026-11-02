@@ -108,7 +108,8 @@ async def test_recheck_rejects_different_parse_id():
 
 
 @pytest.mark.parametrize("method", ["initial", "recheck"])
-@pytest.mark.parametrize("status,code", [(422, "text_parse_incomplete"), (429, "text_parse_quota_exceeded"), (503, "text_parser_unavailable")])
+@pytest.mark.parametrize("status,code", [(422, "text_parse_incomplete"), (429, "text_parse_quota_exceeded"),
+                                       (503, "text_parser_busy"), (503, "text_parser_unavailable")])
 @respx.mock
 @pytest.mark.asyncio
 async def test_text_check_propagates_api_errors_once(method, status, code):
@@ -121,8 +122,11 @@ async def test_text_check_propagates_api_errors_once(method, status, code):
                 await client.check_text_by_agent(agent_name="Support agent", request=REQUEST, idempotency_key="one")
             else:
                 await client.recheck_text_by_agent(agent_name="Support agent", parse_id="parse_one", idempotency_key="one")
-    assert error.value.code == code and error.value.fields[0].field == "amount_micros"
+    assert error.value.status == status and error.value.code == code
+    assert error.value.retry_after_seconds is None
+    assert error.value.fields[0].field == "amount_micros"
     assert route.call_count == 1
+    assert route.calls[0].request.method == "POST"
 
 
 @pytest.mark.parametrize("method", ["initial", "recheck"])
