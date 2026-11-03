@@ -2,6 +2,24 @@
 
 Async Python client for the Allowly runtime API.
 
+## Load hosted agent instructions
+
+```python
+from allowly import Allowly
+
+async with Allowly(api_key=ALLOWLY_RUNTIME_KEY) as client:
+    instructions = await client.agent_instructions(agent_name="Support agent")
+```
+
+Pass the returned text to your agent. It contains the action, resource and field
+schema, descriptions, and exact policy reference for that configured name.
+In both hosted and copied modes, your agent turns free text into structured
+Check JSON; Allowly Check decides permission. Execute only after an `allow`.
+Refresh the instructions after policy changes. This local source method requires
+a runtime supporting `GET /v1/agent-instructions`; earlier published SDKs do not
+gain it. It uses the runtime API key, rejects invalid text responses, and never
+uses an availability fallback.
+
 ## Check shared permissions by agent name
 
 After an operator explicitly finishes shared-policy setup, the runtime can

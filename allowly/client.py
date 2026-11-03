@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import asdict
 from datetime import datetime
 import inspect
+import json
 import re
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -136,6 +137,18 @@ class Allowly:
         raw = _require_dict(await self._request("GET", "/readyz"), "readiness response")
         return _require_str(raw, "status") == "ready"
 
+    async def agent_instructions(self, *, agent_name: str) -> str:
+        """Fetch plain-text guidance for the exact configured name; never grants permission."""
+        if self._agent_token is not None or self._agent_token_supplier is not None:
+            raise ValueError("name-routed instructions cannot use configured agent identity")
+        _text(agent_name, "agent_name")
+        if agent_name != agent_name.strip() or "\x00" in agent_name:
+            raise ValueError("agent_name must be an exact configured name")
+        return await self._request(
+            "GET", "/v1/agent-instructions", params={"agent_name": agent_name},
+            headers={"Accept": "text/plain"}, response_format="text",
+        )
+
     async def __aenter__(self) -> Allowly:
         return self
 
@@ -152,6 +165,7 @@ class Allowly:
         path: str,
         *,
         expected_success_status: int | tuple[int, ...] = 200,
+        response_format: Literal["json", "text"] = "json",
         **kwargs: Any,
     ) -> tuple[Any, httpx.Headers]:
         request_headers = kwargs.get("headers")
@@ -193,6 +207,20 @@ class Allowly:
             )
         if resp.status_code == 204:
             return None, resp.headers
+        if resp.is_success and response_format == "text":
+            if resp.history or resp.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "text/plain":
+                raise AllowlyProtocolError("instructions response must be unredirected text/plain")
+            try:
+                text = resp.content.decode("utf-8")
+            except UnicodeError:
+                raise AllowlyProtocolError("instructions response must be UTF-8") from None
+            if not text.strip() or text.lstrip().startswith("<") or any(value in text for value in sensitive_values):
+                raise AllowlyProtocolError("instructions response must contain nonempty plain-text guidance")
+            try:
+                json.loads(text)
+            except ValueError:
+                return text, resp.headers
+            raise AllowlyProtocolError("instructions response must not be JSON")
         try:
             data = resp.json()
         except ValueError as exc:
