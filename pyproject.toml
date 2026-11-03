@@ -4,15 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "allowly"
-version = "0.8.0"
+version = "0.9.0"
 description = "Python SDK for the Allowly API"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
-    "allowly-receipt-format==5.0.0",
-    # Reviewed pre-client source; keep the package version constraint above.
-    "allowly-receipt-format @ https://github.com/Allowly-AI/allowly-receipt-format/archive/affb43af7cb7d4019e69437c4c5d66841694d4a2.tar.gz#subdirectory=verifiers/python",
+    "allowly-receipt-format==5.1.0",
     "cryptography>=50.0.2",
     "httpx>=0.28.1",
 ]
@@ -42,6 +40,3 @@ prerelease = "disallow"
 
 [tool.hatch.build.targets.wheel]
 packages = ["allowly"]
-
-[tool.hatch.metadata]
-allow-direct-references = true

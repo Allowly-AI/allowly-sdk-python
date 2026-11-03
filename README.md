@@ -2,6 +2,59 @@
 
 Async Python client for the Allowly runtime API.
 
+## Load hosted agent instructions
+
+```python
+from allowly import Allowly
+
+async with Allowly(api_key=ALLOWLY_RUNTIME_KEY) as client:
+    instructions = await client.agent_instructions(agent_name="Support agent")
+```
+
+Pass the returned text to your agent. It contains the action, resource and field
+schema, descriptions, and exact policy reference for that configured name.
+In both hosted and copied modes, your agent turns free text into structured
+Check JSON; Allowly Check decides permission. Execute only after an `allow`.
+Refresh the instructions after policy changes. This method was added in SDK
+0.9.0 and requires a runtime supporting `GET /v1/agent-instructions`; earlier SDKs do not
+gain it. It uses the runtime API key, rejects invalid text responses, and never
+uses an availability fallback.
+
+## Check shared permissions by agent name
+
+After an operator explicitly finishes shared-policy setup, the runtime can
+resolve the authorization for a registered, self-reported agent name:
+
+```python
+from allowly import Allowly
+
+async with Allowly(api_key=ALLOWLY_RUNTIME_KEY) as client:
+    result = await client.check_by_agent(
+        expected_policy_ref={"policy_id": "support", "policy_version": 1, "definition_sha256": "a" * 64},
+        agent_name="Support agent", actions=["ticket.reply"],
+        resource="ticket:one", context={"external": True},
+        idempotency_key="support-ticket-one",
+    )
+    authorization_id = result.authorization_id  # Evidence link, resolved by the server.
+    if result.results["ticket.reply"].decision == "allow":
+        await send_reply()
+```
+
+The name is a routing label, not verified identity. `context.agent_label` is
+reserved: the server records `{name, source: "self_reported"}`. Name routing
+rejects clients configured with an agent token or token supplier and never
+uses availability fallbacks, including configured `fail_open` actions. Stop
+on an error or deny; pause confirm/escalate for review. Save the original named
+request, including `expected_policy_ref`, context, resource, cost and session. After approval,
+call `check_by_agent` again with that same name and unchanged inputs, using a
+fresh idempotency key, and execute only a fresh allow. The runtime checks the
+current name assignment; the returned authorization ID links evidence and
+does not replace the named continuation flow. Existing `check` behavior
+and identity-bound authorizations are unchanged. The named method requires SDK
+0.9.0 or newer and a runtime supporting `/v1/agent-check`. Copy the exact policy reference from
+the generated setup instructions. A policy change requires a refreshed prompt;
+a mismatched reference stops the request before policy evaluation.
+
 ## Confirmation receipts
 
 Confirmation responses expose `receipt`, a pending resolution envelope or
@@ -15,7 +68,7 @@ Check integration re-checks with its original authorization; native Execute
 continues its saved operation as described below.
 
 This OPA rebuild requires the published PyPI package
-`allowly-receipt-format==5.0.0` and accepts only receipt wire 5.
+`allowly-receipt-format==5.1.0` and accepts only receipt wire 5.
 Run `uv sync` from this repository; no sibling verifier checkout is required.
 Native continuation requires a runtime that supports
 `/v1/executions/{operation_id}/continue`; upgrading this SDK does not deploy
@@ -78,12 +131,8 @@ declared field: AI `{sources, instruction}`, deterministic
 `{source, transform: "email_domain", empty_sources}`, or a boolean
 `{all_of: [direct_boolean_field, ...]}`. Requirements are retained in the whole
 definition digest. Omitted evidence stays omitted. Rules still use OR.
-This source revision uses the maintainer's no-version-bump exception before
-external clients; no registry package is published by this change.
-Install this revision from the checked-out repository with `pip install .`.
-Its normal dependency install pins reviewed format source commit
-`affb43af7cb7d4019e69437c4c5d66841694d4a2` while retaining the `5.0.0`
-constraint. Existing registry artifacts are unchanged.
+SDK 0.9.0 uses the published verifier 5.1.0 for these policy and evidence
+validation helpers. No sibling checkout or source archive is required.
 
 Policy create/get/list/archive and setup preview/publish require a setup/CLI
 credential, not a runtime API key or an agent token. Use the runtime client for
@@ -306,7 +355,7 @@ async with Allowly(api_key=ALLOWLY_RUNTIME_KEY, agent_token=AGENT_TOKEN) as allo
 Use the operation ID from the catalog returned by your deployment; the initial
 catalog contains documentation-checked candidates, not a live compatibility
 guarantee. Policy inputs such as `policy_input={"context": {"amount": 2500}}`
-are customer-reported. Neither a receipt nor the compact witness record proves
+are customer-reported. A receipt does not prove
 that those inputs match the meaning of the provider body.
 
 The helper calls remote `/v1/execute`, validates the approval, and claims dispatch
@@ -314,7 +363,7 @@ once before sending locally. It fails closed on unavailable checks and stops on
 deny. Confirmation and escalation return `status="waiting_for_review"` with a
 typed `review` containing its kind, opaque ID, source receipt ID, and expiry.
 No provider request is sent while review is pending. Low-level customer methods are `prepare_execution`,
-`continue_execution`, `claim_execution_dispatch`, `get_execution_witness_token`,
+`continue_execution`, `claim_execution_dispatch`,
 `report_execution_outcome`, and `get_execution`.
 
 Read the review without running another Check or creating a receipt:
@@ -372,43 +421,6 @@ locally observed response and the journal retains the report for upload.
 The Python helper also raises `ExecutionRecoveryRequired` for a duplicate
 completed continuation instead of returning a cached local response. Use
 `get_execution` to read the outcome; do not turn that error into another send.
-Install witness setup before a witnessed Execute. A missing or invalid setup
-leaves a durable pre-dispatch journal, but never claims dispatch or sends.
-
-Run `allowly setup witness` in the Allowly CLI for each workspace that will use
-witnessed execution. The default path downloads a verified precompiled Rust
-helper. Use `allowly setup witness --build-from-source` to download reviewed
-Allowly adapter source and build it with pinned official TLSNotary libraries.
-That path needs Rust 1.95.0, Cargo, Git, Bash, and a native C build toolchain.
-The current CLI defaults to `witness-v0.1.1` and pins the SHA-256 digest of
-`SHA256SUMS`, then verifies the selected archive before running or building it.
-Missing assets or checksum mismatches stop setup; there is no unverified fallback.
-This local rebuild does not establish remote asset availability or a tested fresh
-archive installation. Offline setup also accepts
-`--archive FILE --sha256 HEX` or a reviewed `--helper FILE`.
-The command downloads that workspace's **public** witness key, shows its locally
-calculated fingerprint,
-and opens the authenticated workspace key page for you to compare and confirm.
-The CLI saves the confirmed fingerprint and local file paths in
-`~/.allowly/witness/<workspace-id>/config.json` (or below `ALLOWLY_CONFIG_DIR`).
-The SDK reads that setup automatically for the workspace in the execution
-approval and checks the public key against the confirmed fingerprint on every
-witnessed call. Keep this config and the public key available to the runtime
-user on the machine that sends provider requests. No private witness key is
-downloaded.
-For a local witness with a private CA, `allowly setup witness --witness-ca-cert`
-also pins that CA. The SDK checks its fingerprint before dispatch and passes it
-to the helper for the witness socket only. Provider HTTPS trust is unchanged.
-
-Set `evidence_mode="witnessed"` to request the native witness transport; a
-policy can also require this mode. Existing deployments may pass both
-`native_binary` and an independently provisioned `trusted_notary_key` file
-explicitly. The SDK compares the configured key with the witness session and
-waits for online witness admission and MPC setup before claiming dispatch. It
-never silently falls back to a regular receipt. The experimental native profile
-supports HTTP/1.1 over TLS 1.2, a **2 KiB complete request** and **16 KiB response**,
-with UTF-8 bodies, no compression or redirect following. Unsupported responses
-can be discovered after a provider action and leave an evidence gap.
 
 Signing stays asynchronous. To assemble the Allowly side of the evidence later:
 
@@ -421,18 +433,7 @@ package = await complete_execution_evidence(
 )
 ```
 
-This verifies the decision receipt signature and its exact approval hash. For
-witnessed execution, independently run the native `verify-execute` command on
-the full customer-held presentation using the trusted notary key. The compact
-record held by Allowly proves the notary's approval reference; full request-byte
-verification needs the customer presentation. Keep that presentation private:
-it includes provider credentials and response data. HTTP status is not proof of
-business completion. Native transport setup and limitations are documented in
-the workspace's `allowly_mcp/witness/EXECUTE.md`. That same repository owns the
-Allowly-hosted Witness Bridge source. The customer helper wraps unchanged
-TLSNotary libraries pinned to `v0.1.0-alpha.15` /
-`47aee45b53e06648c1b2ad3689b367b8c923fdec`. Setup does not install a second MCP
-package or start the hosted witnessing socket/service.
+This verifies the decision receipt signature and its exact approval hash. The outcome remains customer-reported, not independent proof of execution or business completion.
 
 ## FastMCP identity mapping
 
@@ -592,8 +593,10 @@ print(escalation.status, escalation.authority_status)
 The released `get` names remain aliases of `get_status`; both return the same
 typed status object. `ConfirmationStatusResponse` and `EscalationStatusResponse`
 are aliases of the existing `ConfirmationStatus` and `EscalationStatus` types.
-Each read makes one authenticated request. Repeat it in your application's own
-bounded polling loop if needed. The prompt `status` is `pending`, `approved`,
+Each read retries once if the server disconnects without a response. A second
+failure or malformed response raises an error; keep the workflow paused. These
+GET retries never replay a Check or other write. Repeat reads in your
+application's own bounded polling loop if needed. The prompt `status` is `pending`, `approved`,
 `rejected`, `expired`, or `unknown`; `unknown` means a legacy record does not
 show the choice. An approved choice stays approved after its grant expires,
 is revoked, or (for escalations) is consumed. `authority_status="available"`
@@ -619,7 +622,7 @@ integration examples honest and makes SDK gaps visible early.
 ## Offline receipt verification
 
 Use the included verifier to hash SEAL records and verify signed receipts.
-This SDK pins the published `allowly-receipt-format==5.0.0`, which verifies
+This SDK pins the published `allowly-receipt-format==5.1.0`, which verifies
 receipt wire format 5 (the package major equals the wire format). `alg` and
 the key ID are in the signed JWS protected header. The receipt has only
 `protected`, `payload`, and `signature` fields, all base64url strings. Store and

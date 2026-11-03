@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import asdict
 from datetime import datetime
 import inspect
+import json
 import re
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -18,6 +19,7 @@ from .policies import (_PoliciesResource, parse_policy_reference, parse_policy_e
                        _document, _integer, _strings, _text, _keys)
 from .types import (
     CheckResponse,
+    PolicyReference,
     CustomExecutableCreateRequest,
     EnabledExecutableResponse,
     ExecutableOperation,
@@ -137,6 +139,18 @@ class Allowly:
         raw = _require_dict(await self._request("GET", "/readyz"), "readiness response")
         return _require_str(raw, "status") == "ready"
 
+    async def agent_instructions(self, *, agent_name: str) -> str:
+        """Fetch plain-text guidance for the exact configured name; never grants permission."""
+        if self._agent_token is not None or self._agent_token_supplier is not None:
+            raise ValueError("name-routed instructions cannot use configured agent identity")
+        _text(agent_name, "agent_name")
+        if agent_name != agent_name.strip() or "\x00" in agent_name:
+            raise ValueError("agent_name must be an exact configured name")
+        return await self._request(
+            "GET", "/v1/agent-instructions", params={"agent_name": agent_name},
+            headers={"Accept": "text/plain"}, response_format="text",
+        )
+
     async def __aenter__(self) -> Allowly:
         return self
 
@@ -153,6 +167,7 @@ class Allowly:
         path: str,
         *,
         expected_success_status: int | tuple[int, ...] = 200,
+        response_format: Literal["json", "text"] = "json",
         **kwargs: Any,
     ) -> tuple[Any, httpx.Headers]:
         request_headers = kwargs.get("headers")
@@ -174,7 +189,14 @@ class Allowly:
                 rendered = rendered.replace(sensitive_value, "[REDACTED]")
             return rendered
 
-        resp = await self._http.request(method, path, **kwargs)
+        try:
+            resp = await self._http.request(method, path, **kwargs)
+        except httpx.RemoteProtocolError:
+            if method.upper() != "GET":
+                raise
+            # A server can close a pooled idle connection as polling resumes.
+            # HTTPX discards that connection; retry only the read, once.
+            resp = await self._http.request(method, path, **kwargs)
         expected_statuses = (
             (expected_success_status,)
             if isinstance(expected_success_status, int)
@@ -187,6 +209,20 @@ class Allowly:
             )
         if resp.status_code == 204:
             return None, resp.headers
+        if resp.is_success and response_format == "text":
+            if resp.history or resp.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "text/plain":
+                raise AllowlyProtocolError("instructions response must be unredirected text/plain")
+            try:
+                text = resp.content.decode("utf-8")
+            except UnicodeError:
+                raise AllowlyProtocolError("instructions response must be UTF-8") from None
+            if not text.strip() or text.lstrip().startswith("<") or any(value in text for value in sensitive_values):
+                raise AllowlyProtocolError("instructions response must contain nonempty plain-text guidance")
+            try:
+                json.loads(text)
+            except ValueError:
+                return text, resp.headers
+            raise AllowlyProtocolError("instructions response must not be JSON")
         try:
             data = resp.json()
         except ValueError as exc:
@@ -298,6 +334,59 @@ class Allowly:
             raw,
             expected_authorization_id=authorization_id,
             expected_actions=actions,
+        )
+        response.billing_warning = response_headers.get("X-Allowly-Billing-Warning")
+        return response
+
+    async def check_by_agent(
+        self,
+        *,
+        agent_name: str,
+        expected_policy_ref: PolicyReference,
+        actions: list[str],
+        resource: str | None = None,
+        session_id: str | None = None,
+        estimated_cost_micros: int | None = None,
+        context: dict[str, Any] | None = None,
+        wait: bool = False,
+        idempotency_key: str | None = None,
+        client_timestamp: datetime | str | None = None,
+    ) -> CheckResponse:
+        """Check the workspace's shared policy using a self-reported agent name.
+
+        Name routing never uses availability fallbacks or verified agent identity.
+        ``context.agent_label`` is reserved for the server's self-reported label.
+        """
+        if self._agent_token is not None or self._agent_token_supplier is not None:
+            raise ValueError("name-routed checks cannot use configured agent identity")
+        if context is not None and "agent_label" in context:
+            raise ValueError("context.agent_label is reserved for the server")
+        body = {
+            "agent_name": agent_name,
+            "expected_policy_ref": parse_policy_reference(expected_policy_ref),
+            "actions": actions,
+            "resource": resource,
+            "session_id": session_id,
+            "estimated_cost_micros": estimated_cost_micros,
+            "context": context or {},
+        }
+        if client_timestamp is not None:
+            body["client_timestamp"] = _client_timestamp(client_timestamp)
+        timeout = max(self._check_timeout, 6.0) if wait else self._check_timeout
+        raw, response_headers = await asyncio.wait_for(
+            self._request_with_headers(
+                "POST", "/v1/agent-check" + ("?wait=true" if wait else ""),
+                json=body, timeout=timeout,
+                headers={"Idempotency-Key": idempotency_key} if idempotency_key is not None else None,
+            ),
+            timeout=timeout,
+        )
+        raw = _require_dict(raw, "check response")
+        authorization_id = _require_str(raw, "authorization_id")
+        if not authorization_id or authorization_id != authorization_id.strip() or len(authorization_id) > 128:
+            raise AllowlyProtocolError("resolved authorization_id must be a nonempty bounded ID")
+        response = _parse_check_response(
+            raw, expected_authorization_id=authorization_id, expected_actions=actions,
         )
         response.billing_warning = response_headers.get("X-Allowly-Billing-Warning")
         return response

@@ -378,6 +378,12 @@ class PolicyExecutableOperationGrant(TypedDict):
     minimum_evidence_mode: Literal["receipt", "witnessed"]
 
 
+class PolicyInputDescriptions(TypedDict):
+    description: str
+    resource: str
+    fields: dict[str, str]
+
+
 class PolicyAIExtraction(TypedDict):
     sources: list[str]
     instruction: str
@@ -403,6 +409,7 @@ class _PolicyActionRequired(TypedDict):
 
 
 class PolicyActionEntry(_PolicyActionRequired, total=False):
+    input_descriptions: PolicyInputDescriptions
     evidence: dict[str, PolicyEvidenceRequirement]
 
 

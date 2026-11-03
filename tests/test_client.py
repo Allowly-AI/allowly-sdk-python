@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import json
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 import httpx
@@ -102,6 +103,151 @@ SIGNED_ENVELOPE = {"status": "signed", "receipt": SIGNED_RECEIPT}
 @pytest.fixture
 def client():
     return Allowly(api_key="test-key", base_url=BASE)
+
+
+EXPECTED_POLICY_REF = {"policy_id": "support", "policy_version": 1, "definition_sha256": "a" * 64}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_by_agent_sends_name_routing_contract_and_parses_resolved_grant(client):
+    route = respx.post(f"{BASE}/v1/agent-check?wait=true").mock(return_value=httpx.Response(
+        200, json=_check_payload(authorization_id="auth_resolved"),
+        headers={"X-Allowly-Billing-Warning": "near_quota"},
+    ))
+    context = {"amount": 12}
+    result = await client.check_by_agent(
+        expected_policy_ref=EXPECTED_POLICY_REF,
+        agent_name="Support agent", actions=["x"], resource="ticket:one",
+        session_id="session:one", context=context, estimated_cost_micros=0,
+        client_timestamp=datetime(2026, 10, 30, tzinfo=timezone.utc),
+        wait=True, idempotency_key="agent-check-one",
+    )
+    assert route.call_count == 1
+    assert json.loads(route.calls[0].request.content) == {
+        "agent_name": "Support agent", "expected_policy_ref": EXPECTED_POLICY_REF, "actions": ["x"], "resource": "ticket:one",
+        "session_id": "session:one", "context": {"amount": 12},
+        "estimated_cost_micros": 0, "client_timestamp": "2026-10-30T00:00:00Z",
+    }
+    assert route.calls[0].request.headers["Authorization"] == "Bearer test-key"
+    assert route.calls[0].request.headers["Idempotency-Key"] == "agent-check-one"
+    assert "X-Allowly-Agent-Token" not in route.calls[0].request.headers
+    assert route.calls[0].request.extensions["timeout"]["read"] == 6.0
+    assert context == {"amount": 12}
+    assert result.authorization_id == "auth_resolved"
+    assert result.results["x"].decision == "allow"
+    assert result.results["x"].is_fallback is False
+    assert result.billing_warning == "near_quota"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_by_agent_accepts_maximum_resolved_id_without_idempotency_key(client):
+    authorization_id = "x" * 128
+    route = respx.post(f"{BASE}/v1/agent-check").mock(return_value=httpx.Response(
+        200, json=_check_payload(authorization_id=authorization_id),
+    ))
+    result = await client.check_by_agent(expected_policy_ref=EXPECTED_POLICY_REF, agent_name="Support agent", actions=["x"])
+    assert route.call_count == 1
+    assert "Idempotency-Key" not in route.calls[0].request.headers
+    assert result.authorization_id == authorization_id
+    assert result.results["x"].decision == "allow"
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("resolved_id", [None, 17, "", " ", " auth_1", "auth_1 ", "x" * 129])
+async def test_check_by_agent_rejects_malformed_resolved_id(resolved_id):
+    payload = _check_payload()
+    payload["authorization_id"] = resolved_id
+    route = respx.post(f"{BASE}/v1/agent-check").mock(return_value=httpx.Response(200, json=payload))
+    async with Allowly(api_key="test-key", base_url=BASE, fallback_by_action={"x": "fail_open"}) as client:
+        with pytest.raises(AllowlyProtocolError):
+            await client.check_by_agent(expected_policy_ref=EXPECTED_POLICY_REF, agent_name="Support agent", actions=["x"])
+    assert route.call_count == 1
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fault", ["non_object", "missing_id", "action_set", "decision", "receipt", "engine"])
+async def test_check_by_agent_reuses_strict_check_parser(fault):
+    payload = _check_payload()
+    if fault == "non_object":
+        payload = []
+    elif fault == "missing_id":
+        payload.pop("authorization_id")
+    elif fault == "action_set":
+        payload["results"]["another_action"] = payload["results"].pop("x")
+    elif fault == "decision":
+        payload["results"]["x"]["decision"] = "unknown"
+    elif fault == "receipt":
+        payload["results"]["x"]["receipt"] = {"status": "unknown"}
+    else:
+        payload["engine_version"] = "not-an-engine-digest"
+    respx.post(f"{BASE}/v1/agent-check").mock(return_value=httpx.Response(200, json=payload))
+    async with Allowly(api_key="test-key", base_url=BASE, fallback_by_action={"x": "fail_open"}) as client:
+        with pytest.raises(AllowlyProtocolError):
+            await client.check_by_agent(expected_policy_ref=EXPECTED_POLICY_REF, agent_name="Support agent", actions=["x"])
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [401, 404, 408, 422, 429, 503, 524])
+async def test_check_by_agent_propagates_api_errors_without_fallback_or_retry(status):
+    route = respx.post(f"{BASE}/v1/agent-check").mock(return_value=httpx.Response(status, json={}))
+    async with Allowly(api_key="test-key", base_url=BASE, fallback_by_action={"x": "fail_open"}) as client:
+        with pytest.raises(AllowlyAPIError) as error:
+            await client.check_by_agent(expected_policy_ref=EXPECTED_POLICY_REF, agent_name="Support agent", actions=["x"])
+    assert error.value.status == status
+    assert route.call_count == 1
+
+
+@respx.mock
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [httpx.ReadTimeout("timeout"), httpx.ConnectError("unreachable"), httpx.DecodingError("invalid compression")])
+async def test_check_by_agent_never_fails_open_on_transport(failure):
+    route = respx.post(f"{BASE}/v1/agent-check").mock(side_effect=failure)
+    async with Allowly(api_key="test-key", base_url=BASE, fallback_by_action={"x": "fail_open"}) as client:
+        with pytest.raises(type(failure)):
+            await client.check_by_agent(expected_policy_ref=EXPECTED_POLICY_REF, agent_name="Support agent", actions=["x"])
+    assert route.call_count == 1
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_by_agent_enforces_client_deadline_without_fallback():
+    async def slow(request):
+        await asyncio.sleep(1)
+        return httpx.Response(200, json=_check_payload())
+    respx.post(f"{BASE}/v1/agent-check").mock(side_effect=slow)
+    async with Allowly(api_key="test-key", base_url=BASE, check_timeout_ms=5, fallback_by_action={"x": "fail_open"}) as client:
+        with pytest.raises(asyncio.TimeoutError):
+            await client.check_by_agent(expected_policy_ref=EXPECTED_POLICY_REF, agent_name="Support agent", actions=["x"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("configured_identity", ["token", "empty_token", "supplier"])
+async def test_check_by_agent_rejects_identity_without_invoking_supplier(configured_identity):
+    supplier = Mock(return_value="identity-token")
+    options = (
+        {"agent_token_supplier": supplier} if configured_identity == "supplier"
+        else {"agent_token": "" if configured_identity == "empty_token" else "identity-token"}
+    )
+    async with Allowly(api_key="test-key", base_url=BASE, **options) as client:
+        client._http.request = AsyncMock()
+        with pytest.raises(ValueError, match="configured agent identity"):
+            await client.check_by_agent(expected_policy_ref=EXPECTED_POLICY_REF, agent_name="Support agent", actions=["x"])
+        client._http.request.assert_not_called()
+    supplier.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("agent_label", [{"source": "verified"}, None, False, 0, ""])
+async def test_check_by_agent_reserves_server_agent_label(client, agent_label):
+    client._http.request = AsyncMock()
+    with pytest.raises(ValueError, match="context.agent_label"):
+        await client.check_by_agent(expected_policy_ref=EXPECTED_POLICY_REF, agent_name="Support agent", actions=["x"], context={"agent_label": agent_label})
+    client._http.request.assert_not_called()
 
 
 def test_client_rejects_insecure_base_url_by_default():
@@ -2202,3 +2348,38 @@ async def test_get_receipt_acknowledgment_uses_exact_route_and_identity(client):
     )
     assert result.acknowledgment_id == "ack/1"
     assert route.calls[0].request.headers["x-allowly-agent-token"] == "jwt"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pin", [None, {}, {**EXPECTED_POLICY_REF, "policy_version": 0},
+    {**EXPECTED_POLICY_REF, "policy_version": True}, {**EXPECTED_POLICY_REF, "definition_sha256": "A" * 64},
+    {**EXPECTED_POLICY_REF, "definition_sha256": "X" * 64},
+    {**EXPECTED_POLICY_REF, "definition_sha256": "0" * 63},
+    {**EXPECTED_POLICY_REF, "definition_sha256": "0" * 65},
+    {**EXPECTED_POLICY_REF, "latest": True}])
+async def test_check_by_agent_rejects_invalid_policy_pin_before_http(client, pin):
+    client._http.request = AsyncMock()
+    with pytest.raises(AllowlyProtocolError):
+        await client.check_by_agent(agent_name="Support agent", actions=["x"], expected_policy_ref=pin)
+    client._http.request.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_check_by_agent_requires_policy_pin(client):
+    client._http.request = AsyncMock()
+    with pytest.raises(TypeError):
+        await client.check_by_agent(agent_name="Support agent", actions=["x"])
+    client._http.request.assert_not_called()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_check_by_agent_keeps_exact_pin_and_inputs_after_review(client):
+    route = respx.post(f"{BASE}/v1/agent-check").mock(return_value=httpx.Response(200, json=_check_payload()))
+    original = {"agent_name": "Support agent", "actions": ["x"], "expected_policy_ref": EXPECTED_POLICY_REF,
+                "context": {"amount_micros": 0}}
+    await client.check_by_agent(**original, idempotency_key="initial")
+    await client.check_by_agent(**original, idempotency_key="after-review")
+    assert json.loads(route.calls[1].request.content) == json.loads(route.calls[0].request.content)
+    assert json.loads(route.calls[1].request.content)["expected_policy_ref"] == EXPECTED_POLICY_REF
+    assert route.calls[1].request.headers["Idempotency-Key"] == "after-review"
