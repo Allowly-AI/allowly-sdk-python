@@ -22,7 +22,7 @@ from urllib.parse import quote, urlparse
 
 from .types import JwsReceipt
 
-# Offline verification is powered by the local wire-5 reference verifier,
+# Offline verification is powered by the published wire-5 reference verifier,
 # allowly-receipt-format 5.x (import path allowly_receipt_format). It ships as an
 # required dependency so transport and authoring reuse the maintained canonicalizer.
 try:
@@ -45,8 +45,8 @@ try:
     )
 except ImportError as exc:
     raise ImportError(
-        "SEAL and receipt verification require allowly-receipt-format==5.0.0. "
-        "Install this SDK with its required local verifier dependency."
+        "SEAL and receipt verification require allowly-receipt-format==5.1.0. "
+        "Install this SDK with its required verifier dependency."
     ) from exc
 
 DEFAULT_BASE_URL = "https://api.allowly.ai"

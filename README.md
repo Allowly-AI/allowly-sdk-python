@@ -68,7 +68,7 @@ Check integration re-checks with its original authorization; native Execute
 continues its saved operation as described below.
 
 This OPA rebuild requires the published PyPI package
-`allowly-receipt-format==5.0.0` and accepts only receipt wire 5.
+`allowly-receipt-format==5.1.0` and accepts only receipt wire 5.
 Run `uv sync` from this repository; no sibling verifier checkout is required.
 Native continuation requires a runtime that supports
 `/v1/executions/{operation_id}/continue`; upgrading this SDK does not deploy
@@ -125,6 +125,14 @@ Rejected, invalid, mismatched, or unavailable review never permits dispatch.
 MCP middleware ships inside this SDK: `pip install 'allowly[fastmcp]'`, then `from allowly.mcp import AllowlyMCPMiddleware`. In TypeScript, it lives in the separate `@allowly/mcp` package.
 
 ## Author and preview an immutable policy
+
+Action entries may include approved `evidence` requirements keyed by every
+declared field: AI `{sources, instruction}`, deterministic
+`{source, transform: "email_domain", empty_sources}`, or a boolean
+`{all_of: [direct_boolean_field, ...]}`. Requirements are retained in the whole
+definition digest. Omitted evidence stays omitted. Rules still use OR.
+SDK 0.9.0 uses the published verifier 5.1.0 for these policy and evidence
+validation helpers. No sibling checkout or source archive is required.
 
 Policy create/get/list/archive and setup preview/publish require a setup/CLI
 credential, not a runtime API key or an agent token. Use the runtime client for
@@ -614,7 +622,7 @@ integration examples honest and makes SDK gaps visible early.
 ## Offline receipt verification
 
 Use the included verifier to hash SEAL records and verify signed receipts.
-This SDK pins the published `allowly-receipt-format==5.0.0`, which verifies
+This SDK pins the published `allowly-receipt-format==5.1.0`, which verifies
 receipt wire format 5 (the package major equals the wire format). `alg` and
 the key ID are in the signed JWS protected header. The receipt has only
 `protected`, `payload`, and `signature` fields, all base64url strings. Store and

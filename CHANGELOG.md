@@ -2,6 +2,8 @@
 
 ## 0.9.0
 
+- Add Observe event submission and status reads, with policy-defined evidence
+  validation from the published verifier 5.1.0.
 - Add structured `check_by_agent` checks bound to an exact policy reference,
   with self-reported name routing, strict validation and no availability fallback.
 - Add `agent_instructions` to fetch plain-text guidance with runtime credentials.

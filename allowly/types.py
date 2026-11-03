@@ -5,6 +5,7 @@ from typing import Any, Literal, TypedDict, Union
 
 Decision = Literal["allow", "deny", "confirm", "escalate"]
 FallbackMode = Literal["fail_open", "fail_closed"]
+ObserveReportedExecution = Literal["accepted", "sent", "failed", "unknown"]
 SealWebhookStatus = Literal["received", "signing", "sealed", "rejected", "failed"]
 PromptStatus = Literal["pending", "approved", "rejected", "expired", "unknown"]
 ConfirmationAuthorityStatus = Literal["none", "available", "expired", "revoked", "unknown"]
@@ -318,6 +319,24 @@ class PolicyReference(TypedDict):
     definition_sha256: str
 
 
+@dataclass(frozen=True)
+class ObserveEventStatus:
+    event_id: str
+    agent_id: str
+    action: str
+    policy_ref: PolicyReference
+    mode: Literal["observe"]
+    intervention: Literal["none"]
+    reported_execution: ObserveReportedExecution
+    processing_status: Literal["pending", "processing", "complete", "failed"]
+    assessment_status: Literal["not_assessed", "no_violation_found", "violation_detected", "insufficient_evidence"]
+    signing_status: Literal["unavailable", "pending", "signed"]
+    observed_action_id: str | None
+    assessment_id: str | None
+    dashboard_url: str | None
+    last_error: str | None
+
+
 class BasicCondition(TypedDict):
     field: str
     op: Literal["eq", "ne", "gt", "gte", "lt", "lte", "in", "not_in", "exists", "contains_any", "contains_none", "empty"]
@@ -365,6 +384,24 @@ class PolicyInputDescriptions(TypedDict):
     fields: dict[str, str]
 
 
+class PolicyAIExtraction(TypedDict):
+    sources: list[str]
+    instruction: str
+
+
+class PolicyDomainExtraction(TypedDict):
+    source: str
+    transform: Literal["email_domain"]
+    empty_sources: list[str]
+
+
+class PolicyAllOf(TypedDict):
+    all_of: list[str]
+
+
+PolicyEvidenceRequirement = PolicyAIExtraction | PolicyDomainExtraction | PolicyAllOf
+
+
 class _PolicyActionRequired(TypedDict):
     policy: BasicPolicy
     guards: ActionGuards
@@ -373,6 +410,7 @@ class _PolicyActionRequired(TypedDict):
 
 class PolicyActionEntry(_PolicyActionRequired, total=False):
     input_descriptions: PolicyInputDescriptions
+    evidence: dict[str, PolicyEvidenceRequirement]
 
 
 class PolicyDefinition(TypedDict):

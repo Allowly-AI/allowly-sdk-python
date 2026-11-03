@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
-    "allowly-receipt-format==5.0.0",
+    "allowly-receipt-format==5.1.0",
     "cryptography>=50.0.2",
     "httpx>=0.28.1",
 ]
