@@ -15,8 +15,8 @@ Pass the returned text to your agent. It contains the action, resource and field
 schema, descriptions, and exact policy reference for that configured name.
 In both hosted and copied modes, your agent turns free text into structured
 Check JSON; Allowly Check decides permission. Execute only after an `allow`.
-Refresh the instructions after policy changes. This local source method requires
-a runtime supporting `GET /v1/agent-instructions`; earlier published SDKs do not
+Refresh the instructions after policy changes. This method was added in SDK
+0.9.0 and requires a runtime supporting `GET /v1/agent-instructions`; earlier SDKs do not
 gain it. It uses the runtime API key, rejects invalid text responses, and never
 uses an availability fallback.
 
@@ -50,8 +50,8 @@ call `check_by_agent` again with that same name and unchanged inputs, using a
 fresh idempotency key, and execute only a fresh allow. The runtime checks the
 current name assignment; the returned authorization ID links evidence and
 does not replace the named continuation flow. Existing `check` behavior
-and identity-bound authorizations are unchanged. This source addition requires
-a runtime supporting `/v1/agent-check`. Copy the exact policy reference from
+and identity-bound authorizations are unchanged. The named method requires SDK
+0.9.0 or newer and a runtime supporting `/v1/agent-check`. Copy the exact policy reference from
 the generated setup instructions. A policy change requires a refreshed prompt;
 a mismatched reference stops the request before policy evaluation.
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0
+
+- Add structured `check_by_agent` checks bound to an exact policy reference,
+  with self-reported name routing, strict validation and no availability fallback.
+- Add `agent_instructions` to fetch plain-text guidance with runtime credentials.
+- Support policy input descriptions and reconnect read requests once after a
+  dropped response. Preserve wire-5 receipt verification.
+
 ## 0.8.0
 
 - Use verifier 5.0.0 and receipt wire 5 only, preserving the original signed
